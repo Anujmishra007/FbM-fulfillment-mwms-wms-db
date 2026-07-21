@@ -25,6 +25,7 @@
 /* 15-Dec-2025    Sean02      FCR-8269 - tracking no refresh in the UI  */
 /* 12-Feb-2026    Sean03      FCR-8269 - fix not insert transmitlog2    */
 /* 24-Mar-2026    Sean04      UWP-52654 - replace RevertUser with ResetUser*/
+/* 23-Jun-2026    Sean05      FCR-12417 Display UPC instead of SKU      */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_CloseCarton_M](
      @b_Debug           INT            = 0
@@ -419,7 +420,9 @@ BEGIN
    END
 
    EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-        @c_PickSlipNo            = @c_PickSlipNo  
+        @c_StorerKey             = @c_StorerKey   --Sean05
+      , @c_Facility              = @c_Facility    --Sean05
+      , @c_PickSlipNo            = @c_PickSlipNo  
       , @c_TaskBatchID           = @c_TaskBatchNo
       , @c_OrderKey              = @c_OrderKey    
       , @c_DropID                = ''

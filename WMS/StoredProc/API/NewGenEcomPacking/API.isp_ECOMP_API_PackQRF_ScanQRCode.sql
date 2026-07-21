@@ -21,6 +21,7 @@
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /* 24-Dec-2025    Sean02   FCR-8269 - tracking no refresh in the UI     */
 /* 24-Mar-2026    Sean03   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 23-Jun-2026    Sean04    FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_PackQRF_ScanQRCode](
      @b_Debug           INT            = 0
@@ -222,7 +223,9 @@ BEGIN
       END
 
       EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-           @c_PickSlipNo            = @c_PickSlipNo  
+           @c_StorerKey             = @c_StorerKey   --Sean04
+         , @c_Facility              = @c_Facility    --Sean04
+         , @c_PickSlipNo            = @c_PickSlipNo  
          , @c_TaskBatchID           = @c_TaskBatchID 
          , @c_OrderKey              = @c_Orderkey    
          , @c_DropID                = @c_DropID

@@ -20,6 +20,8 @@
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 07-Apr-2026    Sean02   FCR-11940 - TH - Add errcode in message      */
+/* 24-Jun-2026    Sean03   #FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_SearchPackOrder](
      @b_Debug           INT            = 0
@@ -88,6 +90,8 @@ BEGIN
          , @c_sc_Option3                  NVARCHAR(50)   = ''
          , @c_sc_Option4                  NVARCHAR(50)   = ''
          , @c_sc_Option5                  NVARCHAR(50)   = ''
+         , @c_sc_DisplayUPCMode           NVARCHAR(1)    = ''        --Sean03 #FCR-12417
+         , @c_OrderStatusJson             NVARCHAR(MAX)  = ''        --Sean03 #FCR-12417
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -225,10 +229,10 @@ BEGIN
    BEGIN
       SET @n_Continue = 3 
       SET @n_ErrNo = 51201
-      SET @c_ErrMsg = 'No orderkey found.'
+      SET @c_ErrMsg =  CONVERT(char(5),@n_ErrNo)+': '  -- Sean02
+                          + 'No orderkey found.'
       GOTO QUIT
    END
-
 
    SELECT @c_Route         = ISNULL(RTRIM([Route]), '')
          ,@c_OrderRefNo    = ISNULL(RTRIM([ExternOrderKey]), '')
@@ -317,8 +321,70 @@ BEGIN
    END
    --Convert SOStatus and Status (END)
 
+   SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode') -- Sean03 #FCR-12417
+
+   IF @c_sc_DisplayUPCMode = '1' -- Sean03 #FCR-12417
+   BEGIN
+      SET @c_OrderStatusJson = (
+         SELECT PTD.Orderkey As 'OrderKey'
+               ,PTD.Storerkey As 'StorerKey'
+               ,ISNULL(
+                    (SELECT TOP 1 U.UPC
+                     FROM dbo.UPC U WITH (NOLOCK)
+                     INNER JOIN dbo.PACK P WITH (NOLOCK)
+                        ON P.PackKey   = U.PackKey
+                        AND U.UOM      = P.PackUOM3
+                     WHERE U.StorerKey  = PTD.Storerkey
+                       AND U.SKU        = PTD.SKU),
+                    ''
+                )                As 'SKU'
+               ,PTD.QtyAllocated As 'QtyAllocated'
+               ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
+               ,CASE WHEN PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
+               ,S.Descr As 'Description'
+         FROM PACKTASKDETAIL  PTD WITH (NOLOCK)
+         LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON  (PTD.PickSlipNo = PD.PickSlipNo)
+                                                AND (PTD.Storerkey = PD.Storerkey)
+                                                AND (PTD.Sku = PD.Sku)
+         JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU
+         WHERE PTD.TaskBatchNo = @c_TaskBatchID
+         AND   PTD.Orderkey = @c_Orderkey
+         GROUP  BY PTD.Orderkey
+               ,PTD.Storerkey
+               ,PTD.Sku
+               ,PTD.QtyAllocated
+               ,S.Descr
+         FOR JSON PATH
+      )
+   END
+   ELSE
+   BEGIN
+      SET @c_OrderStatusJson = (
+         SELECT PTD.Orderkey As 'OrderKey'
+               ,PTD.Storerkey As 'StorerKey'
+               ,PTD.Sku  As 'SKU'
+               ,PTD.QtyAllocated As 'QtyAllocated'
+               ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
+               ,CASE WHEN  PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
+               ,S.Descr As 'Description'
+         FROM PACKTASKDETAIL  PTD WITH (NOLOCK)
+         LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON  (PTD.PickSlipNo = PD.PickSlipNo)
+                                                AND (PTD.Storerkey = PD.Storerkey)
+                                                AND (PTD.Sku = PD.Sku)
+         JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU
+         WHERE PTD.TaskBatchNo = @c_TaskBatchID
+         AND   PTD.Orderkey = @c_Orderkey
+         GROUP  BY PTD.Orderkey
+               ,PTD.Storerkey
+               ,PTD.Sku
+               ,PTD.QtyAllocated
+               ,S.Descr
+         FOR JSON PATH
+      )
+   END
+
    --when qr code display?
-   SET @c_ResponseString = ISNULL(( 
+   SET @c_ResponseString = ISNULL((
                               SELECT @c_DefaultCartonType                  As 'PackTask.CartonType'
                                     ,@f_CartonWeight                       As 'PackTask.CartonWeight'
                                     ,@c_TrackingNo                         As 'PackTask.TrackingNumber'
@@ -337,26 +403,7 @@ BEGIN
                                        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER))
                                      ) As 'PackTask.OrderInfo'
                                     ,(
-                                       SELECT PTD.Orderkey As 'OrderKey'
-                                             ,PTD.Storerkey As 'StorerKey'
-                                             ,PTD.Sku  As 'SKU'
-                                             ,PTD.QtyAllocated As 'QtyAllocated' 
-                                             ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
-                                             ,CASE WHEN  PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
-                                             ,S.Descr As 'Description' 
-                                       FROM PACKTASKDETAIL  PTD WITH (NOLOCK)   
-                                       LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON  (PTD.PickSlipNo = PD.PickSlipNo)   
-                                                                              AND (PTD.Storerkey = PD.Storerkey)  
-                                                                              AND (PTD.Sku = PD.Sku)  
-                                       JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU   
-                                       WHERE PTD.TaskBatchNo = @c_TaskBatchID  
-                                       AND   PTD.Orderkey = @c_Orderkey    
-                                       GROUP  BY PTD.Orderkey  
-                                             ,PTD.Storerkey  
-                                             ,PTD.Sku  
-                                             ,PTD.QtyAllocated  
-                                             ,S.Descr
-                                       FOR JSON PATH 
+                                       JSON_QUERY(@c_OrderStatusJson)        -- Sean03 #FCR-12417
                                      ) As 'PackTask.OrderStatusList'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')

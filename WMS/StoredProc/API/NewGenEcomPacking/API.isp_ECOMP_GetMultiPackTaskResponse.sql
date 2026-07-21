@@ -17,10 +17,13 @@
 /* Date           Author   Ver   Purposes                               */    
 /* 18-JUL-2023    Alex01   1.0   Initial                                */     
 /* 17-MAY-2024    Alex02   1.4   PAC-342 bug fixed                      */
+/* 21-Apr-2026    Sean01   1.5   #FCR-12417 Display UPC instead of SKU  */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetMultiPackTaskResponse] (
      @c_PickSlipNo            NVARCHAR(10)      = ''
    , @c_TaskBatchID           NVARCHAR(10)      = ''
+   , @c_StorerKey             NVARCHAR(15)      = '' --Sean01
+   , @c_Facility              NVARCHAR(15)      = '' --Sean01
    , @c_OrderKey              NVARCHAR(10)      = ''
    , @c_DropID                NVARCHAR(20)      = ''
    , @b_SkipOrderOutput       INT               = 0
@@ -57,8 +60,8 @@ BEGIN
          , @c_Status             NVARCHAR(10)      = ''
          , @c_SOStatus           NVARCHAR(10)      = ''
          , @c_TrackingNumber     NVARCHAR(40)      = ''
-         , @c_StorerKey          NVARCHAR(15)      = ''
          , @c_PackStatus         NVARCHAR(1)       = ''
+         , @c_sc_DisplayUPCMode  NVARCHAR(1)       = ''  -- Sean01 #FCR-12417
 
          , @n_EstTotalCtn        INT               = 0 
          , @n_LastCartonNo       INT               = 0
@@ -183,8 +186,12 @@ BEGIN
               @c_Orderkey = @c_PHOrderKey
             , @c_OrderStatusJson = @c_OrderStatusJson OUTPUT
             , @c_PickSlipNo = @c_PickSlipNo  --Alex02
+            , @c_StorerKey = @c_StorerKey --Sean01
+            , @c_Facility = @c_Facility --Sean01
       END
    END
+
+   SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode') -- FCR-12417
 
    SET @c_MultiPackResponse = ISNULL(( 
                                  SELECT @c_PickSlipNo          As 'PickSlipNo'
@@ -211,7 +218,12 @@ BEGIN
                                                    ELSE 0 
                                                  END                                            As 'CartonClosed'
                                                 ,(
-                                                   SELECT PD2.SKU                               As 'SKU'
+                                                   -- Sean01 #FCR-12417: Display UPC instead of SKU when EPACKDisplayUPCMode = '1'
+                                                   SELECT CASE
+                                                             WHEN @c_sc_DisplayUPCMode = '1'
+                                                             THEN ISNULL(RTRIM(PD2.UPC), '')
+                                                             ELSE PD2.SKU
+                                                          END                                   As 'SKU'
                                                          ,PD2.QTY                               As 'QTY'
                                                          ,PD2.LOTTABLEVALUE                     As 'LottableValue'
                                                          ,S.STDGROSSWGT                         As 'STDGrossWeight'
