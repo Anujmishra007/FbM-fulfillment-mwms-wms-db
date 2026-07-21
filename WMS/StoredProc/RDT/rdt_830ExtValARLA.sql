@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -21,11 +20,12 @@ GO
 /* Data Modifications:                                                       */
 /*                                                                           */
 /* Updates:                                                                  */
-/* Date         Author   Ver  Purpose                                        */
+/* Date         Author          Ver  Purpose                                        */
 /* 01-04-2026   KMS043,SYO054   1.0  Initial version created                 */
+/* 01-07-2026   KMS043          2.0  Validation of 18 digit SSCC   UWP-61592            */
 /*****************************************************************************/
 
-CREATE OR ALTER   PROCEDURE [RDT].[rdt_830ExtValARLA]
+CREATE OR ALTER     PROCEDURE [RDT].[rdt_830ExtValARLA]
    @nMobile       INT,           
    @nFunc         INT,           
    @cLangCode     NVARCHAR( 3),  
@@ -73,7 +73,7 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF RTRIM(LTRIM(@cDropID)) = ''
+            IF (RTRIM(LTRIM(@cDropID)) = '' ) OR ( LEN(@cDropID)<>18)
             BEGIN
                SET @nErrNo = 271201
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDNeeded
@@ -93,4 +93,3 @@ GO
 
 GRANT EXECUTE ON [RDT].[rdt_830ExtValARLA] TO NSQL 
 GO   
-
