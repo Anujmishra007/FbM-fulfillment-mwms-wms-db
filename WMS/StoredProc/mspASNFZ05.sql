@@ -705,17 +705,17 @@ BEGIN
                 END
             END
         DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-        SELECT O.Orderkey, OD.ExternOrderkey
+        SELECT O.Orderkey, OD.ExternPOKey
         FROM RECEIPT R (NOLOCK)
                  JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
                  JOIN ORDERDETAIL OD (NOLOCK) ON OD.Storerkey = RD.Storerkey
-            AND OD.ExternOrderkey = RD.ExternPOKey
+            AND OD.ExternPOKey = RD.ExternPOKey
             AND OD.Sku = RD.Sku
                  JOIN ORDERS O (NOLOCK) ON OD.Orderkey = O.Orderkey
         WHERE R.Receiptkey = @c_Receiptkey
           AND O.Status <> '9'
         GROUP BY O.Orderkey
-               ,OD.ExternOrderkey
+               ,OD.ExternPOKey
 
         OPEN CUR_ORD
 
