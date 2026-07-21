@@ -21,7 +21,8 @@
 /* 09-JUL-2024    Alex01   #JIRA PAC-344 & PAC-350                      */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
-/************************************************************************/    
+/* 01-Jul-2026    Sean02   #FCR-12417 Display UPC instead of SKU        */
+/************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSerialNumber](
      @b_Debug           INT            = 0
    , @c_Format          VARCHAR(10)    = ''
@@ -77,6 +78,8 @@ BEGIN
          , @b_sp_Success                  INT
          , @n_sp_err                      INT
          , @c_sp_errmsg                   NVARCHAR(250)= ''
+         , @c_sc_DisplayUPCMode           NVARCHAR(1)   = ''  -- #FCR-12417
+         , @c_CartonPackedSKUJson         NVARCHAR(MAX) = NULL -- #FCR-12417
 
    DECLARE @t_PackTaskOrderSts AS TABLE (
          TaskBatchNo          NVARCHAR(10)      NULL
@@ -255,20 +258,42 @@ BEGIN
    END
    
    GEN_RESPONSE:
-   SET @c_ResponseString = ISNULL(( 
+   -- #FCR-12417: Build CartonPackedSKUJson based on DisplayUPCMode
+   SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode')
+
+   IF @c_sc_DisplayUPCMode = '1'
+   BEGIN
+      SET @c_CartonPackedSKUJson = (
+         SELECT ISNULL(RTRIM(PD.UPC), '')  AS 'SKU'
+               ,PD.QTY
+               ,PD.LOTTABLEVALUE  As 'LottableValue'
+               ,S.STDGROSSWGT     As 'STDGrossWeight'
+         FROM [dbo].[PackDetail] PD WITH (NOLOCK)
+         JOIN [dbo].[SKU] S WITH (NOLOCK)
+             ON S.StorerKey = PD.StorerKey AND S.SKU = PD.SKU
+         WHERE PD.PickSlipNo = @c_PickSlipNo
+         FOR JSON PATH
+      )
+   END
+   ELSE
+   BEGIN
+      SET @c_CartonPackedSKUJson = (
+         SELECT PD.SKU
+               ,PD.QTY
+               ,PD.LOTTABLEVALUE  As 'LottableValue'
+               ,S.STDGROSSWGT     As 'STDGrossWeight'
+         FROM [dbo].[PackDetail] PD WITH (NOLOCK)
+         JOIN [dbo].[SKU] S WITH (NOLOCK)
+             ON S.StorerKey = PD.StorerKey AND S.SKU = PD.SKU
+         WHERE PD.PickSlipNo = @c_PickSlipNo
+         FOR JSON PATH
+      )
+   END
+
+   SET @c_ResponseString = ISNULL((
                               SELECT CAST ( @b_RespSuccess AS BIT )   AS 'Success'
-                                    ,( 
-                                       SELECT PD.SKU                 As 'SKU'
-                                             ,PD.QTY                 As 'QTY'
-                                             ,PD.LOTTABLEVALUE       As 'LottableValue'
-                                             ,S.STDGROSSWGT          As 'STDGrossWeight'
-                                       FROM [dbo].[PackDetail] PD WITH (NOLOCK)
-                                       JOIN [dbo].[SKU] S WITH (NOLOCK) 
-                                       ON (PD.PickSlipNo = @c_PickSlipNo 
-                                          AND S.StorerKey = PD.StorerKey
-                                          AND S.SKU = PD.SKU )
-                                       WHERE PickSlipNo = @c_PickSlipNo
-                                       FOR JSON PATH 
+                                    ,(
+                                       JSON_QUERY(@c_CartonPackedSKUJson)  -- #FCR-12417
                                      ) AS 'PackTask.CartonPackedSKU'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')
