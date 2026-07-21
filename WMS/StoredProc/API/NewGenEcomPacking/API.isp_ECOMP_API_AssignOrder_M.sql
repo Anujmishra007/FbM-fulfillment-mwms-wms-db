@@ -24,6 +24,8 @@
 /* 07-May-2025    Alex03   #UWP-34051 - Bug Fixes                       */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 07-Apr-2026    Sean02   FCR-11940 - TH - Add errcode in message      */
+/* 14-May-2026    Sean03   #FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_AssignOrder_M](
      @b_Debug           INT            = 0
@@ -178,7 +180,8 @@ BEGIN
    BEGIN
       SET @n_Continue = 3 
       SET @n_ErrNo = 51801
-      SET @c_ErrMsg = 'No OrderKey found.'
+      SET @c_ErrMsg = CONVERT(char(5),@n_ErrNo)+': '  -- Sean02
+                          + 'No orderkey found.'
       GOTO QUIT
    END
 
@@ -442,7 +445,9 @@ BEGIN
    END --IF @n_IsExists = 1
 
    EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-           @c_PickSlipNo            = @c_PickSlipNo  
+           @c_StorerKey             = @c_StorerKey   --Sean03
+         , @c_Facility              = @c_Facility    --Sean03
+         , @c_PickSlipNo            = @c_PickSlipNo  
          , @c_TaskBatchID           = @c_NewTaskBatchID 
          , @c_OrderKey              = @c_NewOrderKey    
          , @c_DropID                = @c_DropID

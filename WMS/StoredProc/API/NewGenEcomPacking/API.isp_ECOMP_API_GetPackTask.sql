@@ -1,4 +1,3 @@
-
 /************************************************************************/              
 /* Store procedure: [API].[isp_ECOMP_API_GetPackTask]                   */              
 /* Creation Date: 13-FEB-2023                                           */
@@ -602,4 +601,4 @@ BEGIN
       END      
       RETURN      
    END
-END -- Procedure  
+END -- Procedure
