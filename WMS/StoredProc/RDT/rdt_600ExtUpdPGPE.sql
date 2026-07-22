@@ -57,12 +57,6 @@ BEGIN
 
    DECLARE @cStickering    NVARCHAR( 20)
 
-   -- Handling transaction
-   DECLARE @nTranCount INT
-   SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN
-   SAVE TRAN rdt_600ExtUpdPGPE
-
    IF @nFunc = 600 -- Normal receiving
    BEGIN
       IF @nStep = 4 -- Scan SKU
@@ -93,7 +87,7 @@ BEGIN
          BEGIN CATCH
             SET @nErrNo = 275058
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdStickerFail
-            GOTO RollBackTran
+            GOTO Quit
          END CATCH
       END
 
@@ -145,7 +139,7 @@ BEGIN
                BEGIN CATCH
                   SET @nErrNo = 275059
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdPrintedFail
-                  GOTO RollBackTran
+                  GOTO Quit
                END CATCH
 
                -- Common params
@@ -165,21 +159,13 @@ BEGIN
                   @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO RollBackTran
+                  GOTO Quit
             END
          END
       END
    END
 
-   COMMIT TRAN rdt_600ExtUpdPGPE
-   GOTO Quit
-
-RollBackTran:
-   ROLLBACK TRAN rdt_600ExtUpdPGPE
-Fail:
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount
-      COMMIT TRAN
 END
 GO
 
