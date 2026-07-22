@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author     Purposes                                */
 /* 2026-06-24 1.0.0  NickT      FCR-13319 Created                       */
+/* 2026-07-22 1.0.1  Jackc      FCR-13319 Post Pick status is 3         */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP28 (
@@ -102,7 +103,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF ISNULL(@cStatus, '') <> '5'
+               IF ISNULL(@cStatus, '') <> '3' --V1.0.1 Pick status is 3
                BEGIN
                   SET @nErrNo = 271252
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong pick status
@@ -131,7 +132,7 @@ BEGIN
                   FROM dbo.PickDetail WITH(NOLOCK)
                   WHERE StorerKey = @cStorerKey
                      AND DropID = @cPackedUCCNo
-                     AND Status = '5'
+                     AND Status = '3' --V1.0.1 Post pick status is 3
                      AND WaveKey IS NOT NULL
                      AND WaveKey <> ''
                   ORDER BY PickDetailKey
