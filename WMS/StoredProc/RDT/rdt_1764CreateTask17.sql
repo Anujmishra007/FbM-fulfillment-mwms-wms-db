@@ -17,6 +17,7 @@ GO
 /* 2026-01-15 1.0.0  JCH507     FCR-10031 created on base logic                     */
 /* 2026-03-04 1.0.1  JCH507     FCR-10031 V1.4,1.5: Logic to create ASTMV           */
 /* 2026-06-24 1.0.2  JCH507     UWP-59810 Only create new tasks if task status = 9  */
+/* 2026-07-22 1.0.3  Dennis     UWP-60524 Fix ASTMV FromID to use per-task ToID     */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask17] (
@@ -63,6 +64,7 @@ BEGIN
           ,@cCreateNextTaskSP NVARCHAR(30)
           ,@cSQL              NVARCHAR(1000)
           ,@cSQLParam         NVARCHAR(1000)
+          ,@cTaskToID         NVARCHAR(18)
    
    -- Init var
    SET @nErrNo = 0
@@ -247,16 +249,16 @@ BEGIN
          DECLARE @cFinalLOCPAZone NVARCHAR(10) = ''
 
          SET @curRPLog = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOMQty, Wavekey
+            SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOMQty, Wavekey, ToID
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE ListKey = @cListKey
                AND TaskType = 'RPF' -- V1.0.1
                AND Status = '9' --V1.0.2
                AND TransitCount = 0 -- Original task
                AND Qty > 0
-               AND ReasonKey = '' -- do not include full short task 
+               AND ReasonKey = '' -- do not include full short task
          OPEN @curRPLog
-         FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey
+         FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey, @cTaskToID
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Check if this UCC should generate ASTMV task
@@ -312,7 +314,7 @@ BEGIN
                TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, CaseID, AreaKey, UOMQty,
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
-               @cNewTaskDetailKey, CASE WHEN @bIsASTMV = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
+               @cNewTaskDetailKey, CASE WHEN @bIsASTMV = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cTaskToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
                'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
@@ -328,7 +330,7 @@ BEGIN
                   SET
                      Status = '5'
                   WHERE Storerkey = @cStorerkey
-				         AND DropID = @cCaseID
+                     AND DropID = @cCaseID
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 256508
@@ -338,7 +340,7 @@ BEGIN
             END
 
             SET @cNewTaskDetailKey = ''
-            FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey
+            FETCH NEXT FROM @curRPLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey, @cTaskToID
          END
       END
       ELSE
@@ -357,16 +359,16 @@ BEGIN
          DECLARE @cFinalLOCPAZone2 NVARCHAR(10) = ''
 
          SET @curRPTLog = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-            SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOMQty, WaveKey
+            SELECT StorerKey, SKU, LOT, QTY, FinalLOC, FinalID, CaseID, TaskDetailKey, UOMQty, WaveKey, ToID
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE ListKey = @cListKey
                AND TaskType = 'RPF' -- V1.0.1
                AND Status = '9' -- V1.0.2
                AND TransitCount = 0 -- Original task
                AND Qty > 0
-               AND ReasonKey = '' -- do not include full short task 
+               AND ReasonKey = '' -- do not include full short task
          OPEN @curRPTLog
-         FETCH NEXT FROM @curRPTLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey
+         FETCH NEXT FROM @curRPTLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey, @cTaskToID
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Check if this UCC should generate ASTMV task
@@ -422,7 +424,7 @@ BEGIN
                TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, CaseID, AreaKey, UOMQty,
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, SourceKey, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
-               @cNewTaskDetailKey, CASE WHEN @bIsASTMV2 = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
+               @cNewTaskDetailKey, CASE WHEN @bIsASTMV2 = 1 THEN 'ASTMV' ELSE 'ASTTPA' END, '0', '', @cToLOC, @cTaskToID, @cFinalLOC, @cFinalID, @nQTY, @cCaseID, @cToLOCAreaKey, @nUOMQty,
                'PP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount, @cSourceType, @cOrgTaskKey, @cTaskWaveKey, @cPriority, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
@@ -438,7 +440,7 @@ BEGIN
                   SET
                      Status = '5'
                   WHERE Storerkey = @cStorerkey
-				         AND DropID = @cCaseID
+                     AND DropID = @cCaseID
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 256509
@@ -448,14 +450,14 @@ BEGIN
             END
 
             SET @cNewTaskDetailKey = ''
-            FETCH NEXT FROM @curRPTLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey
+            FETCH NEXT FROM @curRPTLog INTO @cStorerKey, @cSKU, @cLOT, @nQTY, @cFinalLOC, @cFinalID, @cCaseID, @cOrgTaskKey, @nUOMQty, @cTaskWaveKey, @cTaskToID
          END
       END
    END
    ELSE
-   BEGIN 
+   BEGIN
       IF @nDebugFlag = 1
-               SELECT 'Transit task'
+         SELECT 'Transit task'
       -- Insert transit task
       INSERT INTO dbo.TaskDetail (
          TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
