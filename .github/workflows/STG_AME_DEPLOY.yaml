@@ -1,4 +1,4 @@
-name: Stage APA DEPLOY
+​name: Stage AME DEPLOY
 
 on:
   workflow_dispatch:
@@ -9,18 +9,9 @@ on:
         type: choice
         options:
           - ALL
-          - VNMWMS
-          - IDNWMS
-          - MYSWMS
-          - CHNWMS
-          - HKGWMS
-          - PAKWMS
-          - TWNWMS
-          - THAWMS
-          - AUSWMS
-          - INDWMS
-          - SDRWMS
-          - JPNWMS
+          - SAT5DWMS
+          - SANWMS
+
 permissions: write-all
 
 env:
@@ -29,7 +20,7 @@ env:
   OWNER: ${{ github.repository_owner }}
   WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
   REPO: ${{ github.event.repository.name }}
-  ENV_CODE: stage-apa
+  ENV_CODE: stage-ame
   WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
   WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
 
@@ -57,7 +48,7 @@ jobs:
             write-output '# ERROR : Deployment was initiated using a branch(${{ github.ref_name }}) instead of a tag.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
             write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
             write-output '❌ **Error:**  stage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-            throw "tage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment."
+            throw "stage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment."
            }
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,7 +118,7 @@ jobs:
                 ####################### Deployment version is higher than Current version ########################
                 if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
                  {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                   write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   continue
                  }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
                  {
@@ -147,7 +138,7 @@ jobs:
                 $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
                 $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
                 $changed_files_string = $changed_files_list -join ","
-                
+
                 if($changed_files_string -ne '')
                  {
                   $obj = New-Object -TypeName PSObject
@@ -172,7 +163,7 @@ jobs:
             }
           }else{
               if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stage.json"}else{throw "WMSDB does not exist in stage.json"}
-              
+
               write-output "## $($DATBASE_NAME) database deployment status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
@@ -302,7 +293,7 @@ jobs:
       - name: print matrix values for testing test
         run: echo "APPROVED"
   DEPLOY:
-    runs-on: stage-apa-vm-management-agent
+    runs-on: stage-ame-vm-management-agent
     needs: [INIT_DEPLOY, APPROVAL]
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
     environment:
@@ -362,7 +353,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
+          notification-summary: Stage AME - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
           notification-color: 09ACF3
       - name: Run the DB script
         id: run-db-script
@@ -397,7 +388,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
+          notification-summary: Stage AME - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
           notification-color: 09ACF3
 
       - name: Deployment Started Notification
@@ -406,5 +397,5 @@ jobs:
         with:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
+          notification-summary: Stage AME - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
