@@ -621,9 +621,9 @@ BEGIN
             ,td.Lottable13
             ,td.Lottable14
             ,td.Lottable15
-            ,s.ManufacturerSku
-            ,s.RetailSku
-            ,s.AltSku
+            ,ISNULL(s.ManufacturerSku,'')
+            ,ISNULL(s.RetailSku,'')
+            ,ISNULL(s.AltSku,'')
       FROM #TMP_ORDDTL td
           JOIN dbo.SKU s (NOLOCK) ON  td.Storerkey = s.Storerkey
           AND td.Sku = s.Sku
