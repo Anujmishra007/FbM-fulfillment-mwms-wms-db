@@ -1,4 +1,4 @@
-​name: Stage AME DEPLOY
+name: Stage AME DEPLOY
 
 on:
   workflow_dispatch:
