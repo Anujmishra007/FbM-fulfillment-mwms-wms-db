@@ -204,8 +204,10 @@ BEGIN
          , @c_ValidateAction         NVARCHAR(60) = ''   --ML02
          , @c_ValidateStep           NVARCHAR(30) = ''   --ML02
          , @c_WarningMsg             NVARCHAR(250)= ''   --ML02
-         , @c_ResourceLockName       NVARCHAR(255)       --ML04
-         , @n_LockResult             INT                 --ML04
+         , @c_ResourceLockName       NVARCHAR(255)= ''   --ML04
+         , @n_LockResult             INT          = 0    --ML04
+         , @n_SKUxLOC_Cnt            INT          = 0    --ML04
+         , @n_ReplenTask_Cnt         INT          = 0    --ML04
 
    DECLARE @b_success INT,
            @n_err INT,
@@ -214,9 +216,7 @@ BEGIN
    SET @c_Facility = @c_Zone01
 
    --ML04-S
-   SET @c_Storerkey = ISNULL(RTRIM(UPPER(@c_Storerkey)),'')
-   SET @c_Facility  = ISNULL(RTRIM(UPPER(@c_Facility)),'')
-   SET @c_ResourceLockName = 'LOCK_' + @c_SP_Name +'/'+ @c_Storerkey +'/'+ @c_Facility
+   SET @c_ResourceLockName = UPPER('LOCK_' + ISNULL(RTRIM(@c_SP_Name),'') +'/'+ ISNULL(RTRIM(@c_Storerkey),'') +'/'+ ISNULL(RTRIM(@c_Facility),''))
 
    EXEC @n_LockResult = sp_getapplock @Resource = @c_ResourceLockName, @LockMode = N'Exclusive', @LockOwner = N'Session', @LockTimeout = 0, @DbPrincipal = 'public'
 
@@ -275,6 +275,7 @@ BEGIN
         , @n_LocTolerance       = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='LocTolerance'    THEN Long END),'') AS FLOAT), 1)   --ML02
         , @n_CartonTolerance    = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='CartonTolerance' THEN Long END),'') AS FLOAT), 0.9) --ML02
         , @n_PalletTolerance    = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='PalletTolerance' THEN Long END),'') AS FLOAT), 1)   --ML02
+        , @b_debug              = CASE WHEN @b_debug=1 THEN @b_debug ELSE ISNULL(MAX(CASE WHEN Code = 'Debug' AND Short IN ('1','Y') THEN 1 END),0) END
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = 'REPLENCFG'
       AND Code2 = @c_SP_Name
@@ -1014,6 +1015,7 @@ BEGIN
                      , 0
                      , @c_UCCNo
                      )
+               SET @n_ReplenTask_Cnt = @n_ReplenTask_Cnt + 1
             END -- if from qty > 0
          END -- while CUR_LOTxLOCxID_REPLEN
 
@@ -1023,6 +1025,17 @@ BEGIN
 
       CLOSE CUR_LOT
       DEALLOCATE CUR_LOT
+
+      --ML04-S
+      SET @n_SKUxLOC_Cnt = @n_SKUxLOC_Cnt + 1
+      IF @b_debug = 1
+      BEGIN
+         SET @c_SQL = 'SELECT n_SKUxLOC_Cnt = ' + ISNULL(CONVERT(NVARCHAR(10), @n_SKUxLOC_Cnt)   ,'NULL')
+                    +   ', n_ReplenTask_Cnt = ' + ISNULL(CONVERT(NVARCHAR(10), @n_ReplenTask_Cnt),'NULL')
+         EXEC(@c_SQL)
+      END
+      --ML04-E
+
    END -- while CUR_ReplenSkuLoc
 
    CLOSE CUR_ReplenSkuLoc
