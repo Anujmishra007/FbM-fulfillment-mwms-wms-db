@@ -23,11 +23,14 @@
 /* 29-DEC-2023 Alex02   1.2   Filter with PackTask table                */
 /* 09-FEB-2024 Alex03   1.3   PAC-326 sort by packed sku                */
 /* 17-MAY-2024 Alex04   1.4   PAC-342 bug fixed                         */
+/* 14-MAY-2026 Sean01   1.5   #FCR-12417 Display UPC instead of SKU     */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetOrderStatus] (
      @c_Orderkey             NVARCHAR(10)  
    , @c_OrderStatusJson      NVARCHAR(MAX)      = ''  OUTPUT
    , @c_PickSlipNo           NVARCHAR(10)       = ''
+   , @c_StorerKey            NVARCHAR(15)       = ''
+   , @c_Facility             NVARCHAR(15)       = ''
 )
 AS    
 BEGIN    
@@ -51,7 +54,7 @@ BEGIN
          , @c_Status             NVARCHAR(10)      = ''
          , @c_SOStatus           NVARCHAR(10)      = ''
          , @c_TrackingNo         NVARCHAR(40)      = ''
-         , @c_StorerKey          NVARCHAR(15)      = ''
+         , @c_sc_DisplayUPCMode  NVARCHAR(1)       = '' -- #FCR-12417
 
    SET @c_OrderStatusJson          = ''
    SET @c_Orderkey               = ISNULL(RTRIM(@c_Orderkey), '')
@@ -62,6 +65,8 @@ BEGIN
       QTY         INT            
    )
 
+   SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode') -- FCR-12417
+
    IF @c_Orderkey <> ''
    BEGIN
       IF @c_PickSlipNo <> ''
@@ -71,8 +76,53 @@ BEGIN
          FROM PACKDETAIL (NOLOCK) 
          WHERE PickSlipNo = @c_PickSlipNo
       END
-      
-      SET @c_OrderStatusJson = (
+
+      IF @c_sc_DisplayUPCMode = '1' -- FCR-12417
+      BEGIN
+         SET @c_OrderStatusJson = (
+                                 SELECT PTD.Orderkey           As 'OrderKey'
+                                       ,PTD.Storerkey          As 'StorerKey'
+                                       ,ISNULL(
+                                          (SELECT TOP 1 U.UPC
+                                             FROM dbo.UPC U WITH (NOLOCK)
+                                             INNER JOIN dbo.PACK P WITH (NOLOCK)
+                                                ON P.PackKey   = U.PackKey
+                                                AND U.UOM      = P.PackUOM3   
+                                             WHERE U.StorerKey  = PTD.Storerkey
+                                             AND U.SKU        = PTD.SKU),
+                                          PTD.SKU
+                                       )                       As 'SKU'
+                                       ,PTD.QtyAllocated       As 'QtyAllocated' 
+                                       ,ISNULL(SUM(PD.Qty),0)  As 'QtyPacked'
+                                       ,CASE WHEN  PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
+                                       ,S.Descr As 'Description' 
+                                 FROM PACKTASKDETAIL  PTD WITH (NOLOCK)   
+                                 --Alex04 (Begin)  *PackTaskDetail.PickSlipNo could be blank
+                                 --LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON  
+                                 --                                           (PTD.PickSlipNo = PD.PickSlipNo)  
+                                 --                                       AND (PTD.Storerkey = PD.Storerkey)  
+                                 --                                       AND (PTD.Sku = PD.Sku) 
+                                 LEFT JOIN @t_PackDetail PD ON (PTD.Storerkey = PD.Storerkey)  
+                                                            AND (PTD.Sku = PD.Sku) 
+                                 --Alex04 (End)
+                                 JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU 
+                                 WHERE PTD.Orderkey = @c_Orderkey    
+                                 --Alex02 Begin
+                                 AND EXISTS ( SELECT 1 FROM [dbo].[PackTask] PT WITH (NOLOCK) 
+                                    WHERE PT.TaskBatchNo = PTD.TaskBatchNo AND PT.OrderKey = PTD.OrderKey )
+                                 --Alex02 End
+                                 GROUP  BY PTD.Orderkey  
+                                       ,PTD.Storerkey  
+                                       ,PTD.Sku  
+                                       ,PTD.QtyAllocated  
+                                       ,S.Descr
+                                 ORDER BY CASE WHEN PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END --Alex03
+                                 FOR JSON PATH
+                               )
+      End
+      ELSE
+      BEGIN
+         SET @c_OrderStatusJson = (
                                  SELECT PTD.Orderkey           As 'OrderKey'
                                        ,PTD.Storerkey          As 'StorerKey'
                                        ,PTD.Sku                As 'SKU'
@@ -103,6 +153,9 @@ BEGIN
                                  ORDER BY CASE WHEN PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END --Alex03
                                  FOR JSON PATH
                                )
+      END
+      
+      
    END
 
    SET @c_OrderStatusJson = CASE WHEN ISNULL(RTRIM(@c_OrderStatusJson), '') = '' THEN '[]' ELSE @c_OrderStatusJson END

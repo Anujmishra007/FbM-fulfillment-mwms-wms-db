@@ -21,6 +21,7 @@
 /* 20-Jul-2023    Alex01   removed hardcoded GiftWrapping SP            */
 /* 10-Oct-2024    Alex02   #JIRA PAC-358 CCTV Integration               */
 /* 29-Sep-2025    Sean01   FCR-8297 CN IKEA Initialize Est Ctn          */
+/* 21-Apr-2026    Sean02   #FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTask_M](
      @b_Debug            INT            = 0
@@ -426,8 +427,10 @@ BEGIN
    END
    
    --Alex01 CAll SP to retrieve MultiPackTask JSON
-   EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-        @c_PickSlipNo            = @c_PickSlipNo  
+   EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse]
+        @c_StorerKey             = @c_StorerKey   --Sean02
+      , @c_Facility              = @c_Facility    --Sean02
+      , @c_PickSlipNo            = @c_PickSlipNo  
       , @c_TaskBatchID           = @c_TaskBatchID 
       , @c_OrderKey              = @c_Orderkey    
       , @c_DropID                = @c_DropID

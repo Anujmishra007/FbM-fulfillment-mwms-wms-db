@@ -64,6 +64,14 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   -- Restore pallet ID when framework cleared V_ID after prior receipt confirm
+   IF ISNULL(@cToID, '') = ''
+   BEGIN
+       SELECT @cToID = LTRIM(RTRIM(C_String3))
+       FROM rdt.RDTMOBREC WITH (NOLOCK)
+       WHERE Mobile = @nMobile
+   END
+
    DECLARE  @cUserDefine01       NVARCHAR( 60),
             @TargetDate          DATETIME,
             @FirstWeekDay        DATETIME,
@@ -71,9 +79,6 @@ BEGIN
             @Week                INT,
             @Year                INT,
             @WeekYear            VARCHAR(4)
-
-
-
 
    SET DATEFIRST 1 -- Monday as first day
 
@@ -88,6 +93,31 @@ BEGIN
    IF (ISNULL(@cItemClass,'') = 'POSM')
    BEGIN
       GOTO Receive
+   END
+
+   -- Determine correct MIN DOT BEFORE date conversion
+   -- First tire on pallet: MIN DOT defaults to PCS DOT
+   IF ISNULL(@cLottable02, '') = '' AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+   BEGIN
+      SET @cLottable02 = @cLottable07
+   END
+   -- PCS DOT older than existing MIN DOT (same year): this row also uses PCS DOT as MIN DOT
+   ELSE IF ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+        AND ISNULL(@cLottable02, '') <> '' AND LEN(@cLottable02) = 4
+   BEGIN
+      DECLARE @nPCSDOT_W_Cfm INT
+      DECLARE @nPCSDOT_Y_Cfm INT
+      DECLARE @nMINDOT_W_Cfm INT
+      DECLARE @nMINDOT_Y_Cfm INT
+      SET @nPCSDOT_W_Cfm = TRY_CAST(LEFT(@cLottable07, 2) AS INT)
+      SET @nPCSDOT_Y_Cfm = TRY_CAST(RIGHT(@cLottable07, 2) AS INT)
+      SET @nMINDOT_W_Cfm = TRY_CAST(LEFT(@cLottable02, 2) AS INT)
+      SET @nMINDOT_Y_Cfm = TRY_CAST(RIGHT(@cLottable02, 2) AS INT)
+      IF @nPCSDOT_Y_Cfm IS NOT NULL AND @nMINDOT_Y_Cfm IS NOT NULL
+         AND @nPCSDOT_Y_Cfm = @nMINDOT_Y_Cfm AND @nPCSDOT_W_Cfm < @nMINDOT_W_Cfm
+      BEGIN
+         SET @cLottable02 = @cLottable07
+      END
    END
 
    SET @WeekYear = @cLottable02

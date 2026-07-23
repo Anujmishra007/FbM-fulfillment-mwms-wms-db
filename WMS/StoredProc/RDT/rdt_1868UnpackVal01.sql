@@ -10,6 +10,8 @@ GO
 /*                                                                      */
 /* Date         Rev   Author      Purposes                              */
 /* 2026-02-19   1.0   NYE018      FCR-10102  validation using sku       */
+/* 2026-07-22   1.1   NYE018      FCR-14008 move SKU lookup before      */
+/*                           SerialNo status check so @cSKU is populated*/
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1868UnpackVal01 (
@@ -49,16 +51,16 @@ BEGIN
         GOTO Quit
     END
 
-    IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE SerialNo = @cSerialNo AND Storerkey=@cStorerkey AND Status NOT IN(1,6) )
+    SELECT @cSKU = V_SKU
+    FROM rdt.rdtMobRec WITH (NOLOCK)
+    WHERE Mobile = @nMobile
+
+    IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE SerialNo = @cSerialNo AND Storerkey=@cStorerkey AND SKU=@cSKU  AND Status NOT IN(1,6) )
     BEGIN
         SET @nErrNo = 259402
         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')   --259402^SerialNo is not valid
         GOTO Quit
-    END  
-
-    SELECT @cSKU = V_SKU 
-    FROM rdt.rdtMobRec WITH (NOLOCK) 
-    WHERE Mobile = @nMobile
+    END
 
     IF ISNULL(@cSKU, '') <> ''
     BEGIN

@@ -97,7 +97,7 @@ BEGIN
                 WHERE ReceiptKey = @cReceiptKey
                 AND StorerKey = @cStorerKey
                 AND SKU = @cSKU
-                ORDER BY ReceiptLineNumber
+                ORDER BY CASE WHEN ISNULL(Lottable06, '') <> '' THEN 0 ELSE 1 END, ReceiptLineNumber
             END
         END
 

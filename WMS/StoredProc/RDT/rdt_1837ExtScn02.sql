@@ -10,6 +10,8 @@ GO
 /* Date        Rev   Author     Purposes                                */
 /* 2026-01-22  1.0   Dennis     FCR-10136                               */
 /* 2026-07-13  1.1   Dennis     UWP-60992 Fix dup pallet in diff PPSLOC */
+/* 2026-07-21  1.2   Dennis     UWP-61932 Fallback PENDAUDIT check to   */
+/*                              PackInfo_AuditLog when no PackInfo data  */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1837ExtScn02] (
    @nMobile      INT,           
@@ -1137,11 +1139,20 @@ BEGIN
                   JOIN WorkOrderDetail WOD (NOLOCK) ON PD.OrderKey = WOD.Externworkorderkey AND PD.OrderLineNumber = WOD.Externlineno AND WOD.reason LIKE '%VAS%'
                   WHERE PD.ID = @cPalletID AND PD.Status = '5' AND PD.StorerKey = @cStorerKey)
                   OR --B2B PALLET TO OUTBOUND AUDIT
-                  EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)
-                  JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
-                  JOIN PICKHEADER PH (NOLOCK) ON O.OrderKey = PH.OrderKey AND O.StorerKey = PH.StorerKey
-                  JOIN PACKINFO PI (NOLOCK) ON PI.PickSlipNo = PH.PickHeaderKey AND CartonStatus = 'PENDAUDIT'
-                  WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey)
+                  EXISTS (
+                     SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                     JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey
+                     JOIN PICKHEADER PH (NOLOCK) ON O.OrderKey = PH.OrderKey AND O.StorerKey = PH.StorerKey
+                     WHERE PD.ID = @cPalletID AND PD.STATUS = '5' AND PD.StorerKey = @cStorerKey
+                     AND (
+                        EXISTS (SELECT 1 FROM PACKINFO PI (NOLOCK)
+                                WHERE PI.PickSlipNo = PH.PickHeaderKey AND PI.CartonStatus = 'PENDAUDIT')
+                        OR (
+                           EXISTS (SELECT 1 FROM PACKINFO_AUDITLOG PAL (NOLOCK)
+                                       WHERE PAL.PickSlipNo = PH.PickHeaderKey AND PAL.CartonStatus = 'PENDAUDIT')
+                        )
+                     )
+                  )
                   OR --UPS Label
                   EXISTS (SELECT 1 FROM PICKDETAIL PD (NOLOCK)
                   JOIN ORDERS O (NOLOCK) ON PD.OrderKey = O.OrderKey AND PD.StorerKey = O.StorerKey AND O.DocType = 'N' AND O.ShipperKey = 'UPS'

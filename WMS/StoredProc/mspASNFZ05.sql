@@ -523,7 +523,7 @@ BEGIN
       ,  C_City
       ,  C_State
       ,  C_Zip
-      ,'IN'
+      ,  ISNULL(C_ISOCntryCode,'')
       ,  C_Vat
       ,  Facility
       ,  CountryOfOrigin

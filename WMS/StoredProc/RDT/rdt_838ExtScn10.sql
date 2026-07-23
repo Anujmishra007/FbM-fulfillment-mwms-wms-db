@@ -16,6 +16,7 @@ GO
 /* 2026-06-30  1.0.0  JackC      FCR-12984 Created                         */
 /* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic            */
 /* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic*/
+/* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic        */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10] (
@@ -2356,6 +2357,7 @@ BEGIN
                   --V1.2.0 start
                   -- Get length, width, height from cartonization table
                   SELECT
+                     @fCartonCube = ISNULL([Cube], 0),--v1.2.1
                      @fCartonWeight = ISNULL(CartonWeight, 0),
                      @fCartonLength = ISNULL(CartonLength, 0),
                      @fCartonWidth = ISNULL(CartonWidth, 0),
@@ -2467,7 +2469,7 @@ BEGIN
                   END
                END
 
-               SET @fCartonCube = CAST( @cCube AS FLOAT)
+               --SET @fCartonCube = CAST( @cCube AS FLOAT)--v1.2.1
                SELECT @fCartonQty = SUM(qty) FROM packDetail WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo AND cartonNo = @nCartonNo AND storerKey = @cStorerKey --(cc02)
 
                IF @nDebugFlag = 1
