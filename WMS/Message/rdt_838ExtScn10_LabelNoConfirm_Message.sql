@@ -11,5 +11,7 @@ execute rdt.rdtAddMsg 272706, 10, '272706^GenTransLogFail',         'us_english'
 execute rdt.rdtAddMsg 272707, 10, '272707^InvMarshalling',          'us_english', 838, 0, '272707: Invalid Marshalling lane'
 execute rdt.rdtAddMsg 272708, 10, '272708^InsPKDFailed',            'us_english', 838, 0, '272708: Insert pick detail failed'
 execute rdt.rdtAddMsg 272709, 10, '272709^UpdPKDFailed',            'us_english', 838, 0, '272709: Update pick detail failed'
+execute rdt.rdtAddMsg 272710, 10, '272710^GenTransLogFail',         'us_english', 838, 0, '272710: Generate ECOM transmit log failed (WSAEOSHIPLBL)'
+execute rdt.rdtAddMsg 272711, 10, '272711^OrderNotFound',           'us_english', 838, 0, '272711: OrderKey not found'
 
 select * from rdt.rdtmsg (nolock) where message_id between 272701 and 272750

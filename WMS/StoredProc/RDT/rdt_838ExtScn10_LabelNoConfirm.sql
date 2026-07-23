@@ -15,6 +15,7 @@ GO
 /* Date        Rev    Author     Purposes                                              */
 /* 2026-07-06  1.0.0  JackC      FCR-12984 Move inv to marshalling lane and send IML   */
 /* 2026-07-11  1.0.1  JackC      FCR-12984 Update IML parameters                       */
+/* 2026-07-23  1.0.2  JackC      FCR-12984 New IML trigger requirement                 */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10_LabelNoConfirm] (
@@ -60,7 +61,9 @@ BEGIN
       @cMoveQTYAlloc    NVARCHAR(  1),
       @cMoveQTYPick     NVARCHAR(  1),
       @cInterModalVehicle NVARCHAR( 30),
-      @cSendIMLFlag     NVARCHAR(  1) = '',
+      @cSendRTLIMLFlag  NVARCHAR(  1) = '',
+      @cSendECOMIMLFlag NVARCHAR(  1) = '',
+      @cPackHdrOrderKey NVARCHAR( 10),
       @cUserName        NVARCHAR( 18),
       @nRowCount        INT = 0,
       @nCounter         INT,
@@ -201,33 +204,51 @@ BEGIN
       SELECT 'MoveList', * FROM @tMoveList
 
    --set sendIMLFlag
+   -- Get InterModalVehicle for all wave types
+   SELECT TOP 1
+      @cInterModalVehicle = OD.InterModalVehicle
+   FROM dbo.PackDetail PD WITH (NOLOCK)
+   JOIN dbo.WAVE        WITH (NOLOCK) ON PD.RefNo      = WAVE.WaveKey
+   JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WAVE.WaveKey = WD.WaveKey
+   JOIN dbo.ORDERS     OD WITH (NOLOCK) ON WD.OrderKey  = OD.OrderKey
+   WHERE PD.PickSlipNo = @cPickSlipNo
+     AND PD.CartonNo   = @nCartonNo
+   ORDER BY OD.OrderKey
 
    IF @cWaveType = 'ECOM'
-      SET @cSendIMLFlag = 'Y'
-   ELSE
-   BEGIN 
-      SET @nRowCount = 0
-      SELECT TOP 1 
-         @cInterModalVehicle = OD.InterModalVehicle
-      FROM dbo.PackDetail PD WITH (NOLOCK)
-      JOIN dbo.WAVE WITH (NOLOCK) ON PD.RefNo = WAVE.WaveKey
-      JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON wave.WaveKey = wd.WaveKey
-      JOIN dbo.ORDERS OD WITH (NOLOCK) ON WD.OrderKey = OD.OrderKey
-      WHERE PD.PickSlipNo = @cPickSlipNo
-         AND PD.CartonNo = @nCartonNo
-      ORDER BY OD.OrderKey
-      
-      SET @nRowCount = @@ROWCOUNT
+   BEGIN
+      IF @cInterModalVehicle = 'VA'
+      BEGIN
+         -- Case 1: WSAEOSHIPLBL
+         SELECT TOP 1 @cPackHdrOrderKey = OrderKey
+         FROM dbo.PackHeader WITH (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
 
-      IF @nRowCount > 0 AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) 
-                                    WHERE LISTNAME = 'AEOTMSLBL' 
-                                       AND StorerKey = @cStorerKey 
-                                       AND Code = @cInterModalVehicle )
-         SET @cSendIMLFlag = 'Y'
+         IF ISNULL(@cPackHdrOrderKey, '') = ''
+         BEGIN
+            SET @nErrNo = 272711
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --PackHeaderNotFound
+            GOTO Quit
+         END
+
+         SET @cSendECOMIMLFlag = 'Y'
+      END
+      ELSE
+         SET @cSendRTLIMLFlag = 'Y'  -- Case 2: WSSOTMSGENLBL
    END
+   ELSE IF @cWaveType = 'RTL'
+   BEGIN
+      IF EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                 WHERE LISTNAME  = 'AEOTMSLBL'
+                   AND StorerKey = @cStorerKey
+                   AND Code      = @cInterModalVehicle)
+         SET @cSendRTLIMLFlag = 'Y'  -- Case 2: WSSOTMSGENLBL
+   END
+   -- else: no IML
 
    IF @nDebugFlag = 1
-      SELECT 'SendIMLFlag', @cSendIMLFlag, @cWaveType AS WaveType, @cInterModalVehicle AS InterModalVehicle
+      SELECT 'SendIMLFlags', @cSendECOMIMLFlag AS SendECOMIMLFlag, @cSendRTLIMLFlag AS SendRTLIMLFlag,
+             @cWaveType AS WaveType, @cInterModalVehicle AS InterModalVehicle
 
    SET @nTranCount = @@TRANCOUNT
    IF @nTranCount = 0
@@ -331,27 +352,52 @@ BEGIN
       END CATCH
    END -- move inventory
 
-   IF @cSendIMLFlag = 'Y'
+   -- Case 1: ECOM + VA -> WSAEOSHIPLBL
+   IF @cSendECOMIMLFlag = 'Y'
    BEGIN
       IF @nDebugFlag = 1
-         SELECT 'Generating Transmit Log for IML', @cLabelNo AS LabelNo
+         SELECT 'Generating ECOM Transmit Log for IML (WSAEOSHIPLBL)', @cPackHdrOrderKey AS OrderKey
 
-      EXEC dbo.ispGenTransmitLog2   
-         @c_TableName      = 'WSSOTMSGENLBL',   
-         @c_Key1           = @cPickSlipNo,   
-         @c_Key2           = @cLabelNo, 
-         @c_Key3           = @cStorerKey,   
-         @c_TransmitBatch  = '',   
-         @b_success        = @bSuccess    OUTPUT,   
-         @n_err            = @nErrNo      OUTPUT,   
-         @c_errmsg         = @cErrMsg     OUTPUT  
+      EXEC dbo.ispGenTransmitLog2
+         @c_TableName     = 'WSAEOSHIPLBL',
+         @c_Key1          = @cPackHdrOrderKey,
+         @c_Key2          = '',
+         @c_Key3          = @cStorerKey,
+         @c_TransmitBatch = '',
+         @b_success       = @bSuccess OUTPUT,
+         @n_err           = @nErrNo   OUTPUT,
+         @c_errmsg        = @cErrMsg  OUTPUT
 
       IF @bSuccess <> 1
-      BEGIN  
-         SET @nErrNo = CASE WHEN @nErrNo = 0 THEN 272706 ELSE @nErrNo END  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen TLOG2 Fail  
-         GOTO RollBackTran  
-      END  
+      BEGIN
+         SET @nErrNo  = CASE WHEN @nErrNo = 0 THEN 272710 ELSE @nErrNo END
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --GenECOMTransLogFail
+         GOTO RollBackTran
+      END
+   END
+
+   -- Case 2: ECOM non-VA / RTL -> WSSOTMSGENLBL
+   IF @cSendRTLIMLFlag = 'Y'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Generating RTL Transmit Log for IML (WSSOTMSGENLBL)', @cLabelNo AS LabelNo
+
+      EXEC dbo.ispGenTransmitLog2
+         @c_TableName     = 'WSSOTMSGENLBL',
+         @c_Key1          = @cPickSlipNo,
+         @c_Key2          = @cLabelNo,
+         @c_Key3          = @cStorerKey,
+         @c_TransmitBatch = '',
+         @b_success       = @bSuccess OUTPUT,
+         @n_err           = @nErrNo   OUTPUT,
+         @c_errmsg        = @cErrMsg  OUTPUT
+
+      IF @bSuccess <> 1
+      BEGIN
+         SET @nErrNo  = CASE WHEN @nErrNo = 0 THEN 272706 ELSE @nErrNo END
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --GenTransLogFail
+         GOTO RollBackTran
+      END
    END
 
    IF @nTranCount = 0
