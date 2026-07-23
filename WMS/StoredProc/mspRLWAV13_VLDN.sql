@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-07  Wan      1.0   Remove raise Error, CR v8.6                 */
+/* 2026-07-23  Wan      1.0   Remove raise Error, CR v8.6, CR v8.9        */
 /**************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]       
@@ -43,16 +43,18 @@ BEGIN
 
          , @c_SourceType         NVARCHAR(30)   = 'mspRLWAV13'
  
+         , @c_Channel_b          NVARCHAR(20)   = ''                                --(Wan)
          , @c_Client             NVARCHAR(20)   = ''
          , @c_AreaKey            NVARCHAR(10)   = ''  
          , @c_Sku                NVARCHAR(20)   = ''
          , @c_Loc                NVARCHAR(10)   = ''
+         , @c_CartonGroup        NVARCHAR(10)   = ''                                --(Wan)
          , @n_CUBEUOM3           FLOAT          = 0.00         
 
          , @c_SQL                NVARCHAR(4000) = ''
          , @c_SQLParms           NVARCHAR(4000) = ''
 
-   DECLARE @t_CL             TABLE
+   DECLARE @t_CL                 TABLE
          (  [RowID]              INT               IDENTITY(1,1) PRIMARY KEY                   
          ,  [LISTNAME]           [nvarchar](10)    NULL     
          ,  [Code]               [nvarchar](30)    NULL  
@@ -180,7 +182,8 @@ BEGIN
 
    IF @n_Continue = 1
    BEGIN
-      SELECT @c_Client = ISNULL(w.UserDefine05,'')
+      SELECT @c_Channel_b = ISNULL(w.UserDefine03,'')                               --(Wan)
+            ,@c_Client   = ISNULL(w.UserDefine05,'')
       FROM WAVE w (NOLOCK)
       WHERE w.Wavekey = @c_Wavekey
 
@@ -346,6 +349,45 @@ BEGIN
 
    IF @n_Continue = 1
    BEGIN
+      SET @c_Sku = ''
+      SET @n_CUBEUOM3 = 0.00
+      SET @c_CartonGroup = 'AEO_PACKAG'
+
+      IF @c_Channel_b = 'ECOM'
+      BEGIN 
+         SET @c_CartonGroup = 'AEO_ECOMM'
+      END
+      ELSE IF @c_Client = 'COPP'
+      BEGIN
+         SET @c_CartonGroup = 'AEO_COPPEL'
+      END
+      
+      SELECT TOP 1 
+               @c_Sku = pw.Sku
+            ,  @n_CUBEUOM3 = p.CUBEUOM3
+      FROM #PICKDETAIL_WIP AS pw  
+      JOIN dbo.SKU  AS s WITH (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.Sku = pw.Sku  
+      JOIN dbo.Pack AS p WITH (NOLOCK) ON p.Packkey = s.Packkey  
+      WHERE pw.UOM > '2'
+      AND   EXISTS ( SELECT 1 
+                     FROM Cartonization cz (NOLOCK)  
+                     WHERE cz.CartonizationGroup = @c_CartonGroup
+                     AND cz.Cube < p.CubeUOM3
+                     )
+      ORDER BY p.CUBEUOM3
+
+      IF @c_Sku > ''    
+      BEGIN 
+            SET @n_Continue = 3    
+            SET @n_Err = 63070   
+            SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                           + 'Sku''s CubeUOM3 > Client Carton Cube. Sku: ' 
+                           + @c_Sku + ' . (mspRLWAV13_VLDN)' 
+      END  
+   END
+
+   IF @n_Continue = 1
+   BEGIN
       SET @c_Loc = ''
       SET @c_AreaKey = ''
       SELECT TOP 1 
@@ -365,7 +407,7 @@ BEGIN
       IF @c_Loc > ''  
       BEGIN    
          SET @n_Continue = 3    
-         SET @n_Err = 63070    
+         SET @n_Err = 63080    
          SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
                         + 'Area''s priotiry not setup. Check Areakey setup and Area_Mezza codelkup setup'
                         + '. From Loc: ' + @c_Loc 
