@@ -1009,7 +1009,7 @@ BEGIN
       -- Validate weight
       IF CHARINDEX( 'W', @cPackInfo) <> 0
       BEGIN
-         IF rdt.rdtIsValidQty( @cWeight, 21) = 0 OR LEN( @cWeight) > 6 OR CAST( @cWeight AS FLOAT) NOT BETWEEN 0 AND 99999
+         IF rdt.rdtIsValidQty( @cWeight, 21) = 0 OR LEN( @cWeight) > 6 OR ISNULL( TRY_CAST( @cWeight AS FLOAT), -1) NOT BETWEEN 0 AND 99999
          BEGIN
             SET @nErrNo = 274864
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Bad Weight
