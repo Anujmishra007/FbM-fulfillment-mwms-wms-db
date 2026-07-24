@@ -449,8 +449,8 @@ BEGIN
    BEGIN
       DECLARE @cLabelNoBarcode NVARCHAR(MAX)
 
-      SET @cLabelNo        = LEFT( @cMobBarcode, 20)
-      SET @cLabelNoBarcode = LEFT( @cMobBarcode, 2000)
+      SET @cLabelNo        = @cInField02
+      SET @cLabelNoBarcode = @cInField02
 
       -- Validate not empty
       IF @cLabelNo = ''
@@ -898,17 +898,29 @@ BEGIN
       END
 
       -- Navigate when all scanned
-      IF @nTotalCarton = @nScanCarton AND @cCloseMBOL = '1'
+      IF @nTotalCarton = @nScanCarton
       BEGIN
-         SET @cOutField01 = @cCBOLKey -- CBOL display
-         SET @cOutField02 = ''        -- Option input
-
-         SET @nScn  = @nScn + 2
-         SET @nStep = @nStep + 2
-         GOTO Quit
+         IF @cCloseMBOL = '1'
+         BEGIN
+            -- All scanned + CloseMBOL active: go to close screen
+            SET @cOutField01 = @cCBOLKey
+            SET @cOutField02 = ''
+            SET @nScn  = @nScn + 2
+            SET @nStep = @nStep + 2
+            GOTO Quit
+         END
+         ELSE
+         BEGIN
+            -- All scanned + CloseMBOL NOT active: back to CBOL screen
+            SET @cCBOLKey    = ''
+            SET @cOutField01 = ''
+            SET @nScn  = @nScn - 1
+            SET @nStep = @nStep - 1
+            GOTO Quit
+         END
       END
 
-      -- Stay on current screen (loop back for next scan)
+      -- SCANNED <> TOTAL: stay on current screen for next scan
       SET @cOutField01 = @cCBOLKey  -- CBOL display
       SET @cOutField02 = ''          -- clear input
       SET @cMobBarcode = ''
@@ -1179,21 +1191,22 @@ BEGIN
       SET @cFieldAttr05 = ''
 
       -- Navigate based on scan vs total
-      IF @nTotalCarton = @nScanCarton AND @cCloseMBOL = '1'
+      IF @nTotalCarton = @nScanCarton
       BEGIN
-         SET @cOutField01 = @cCBOLKey
-         SET @cOutField02 = ''
-         SET @nScn  = @nScn + 1
-         SET @nStep = @nStep + 1
-         GOTO Quit
-      END
-
-      IF @nTotalCarton = @nScanCarton AND @cCloseMBOL <> '1'
-      BEGIN
-         -- All scanned, no close MBOL: back to CBOL screen
-         SET @cOutField01 = ''
-         SET @nScn  = @nScn - 2
-         SET @nStep = @nStep - 2
+         IF @cCloseMBOL = '1'
+         BEGIN
+            SET @cOutField01 = @cCBOLKey
+            SET @cOutField02 = ''
+            SET @nScn  = @nScn + 1
+            SET @nStep = @nStep + 1
+         END
+         ELSE
+         BEGIN
+            -- All scanned, no CloseMBOL: back to CBOL screen
+            SET @cOutField01 = ''
+            SET @nScn  = @nScn - 2
+            SET @nStep = @nStep - 2
+         END
          GOTO Quit
       END
 
@@ -1252,19 +1265,43 @@ BEGIN
             GOTO Quit
          END
 
-         -- Update all MBOLs in CBOL
-         BEGIN TRY
-            UPDATE dbo.MBOL WITH (ROWLOCK) SET
-               Status   = @cConfirmStatus,
-               EditWho  = @cUserName,
-               EditDate = GETDATE()
+         -- Update all MBOLs in CBOL via cursor (primary key update, full rollback on any failure)
+         DECLARE @cCurMBOLKey NVARCHAR(10)
+         DECLARE cur_MBOL CURSOR LOCAL FAST_FORWARD FOR
+            SELECT MBOLKey
+            FROM dbo.MBOL WITH (NOLOCK)
             WHERE CBOLKey = @cCBOLKey
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 274871
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close MBOL Err
-            GOTO Quit
-         END CATCH
+
+         BEGIN TRANSACTION
+
+         OPEN cur_MBOL
+         FETCH NEXT FROM cur_MBOL INTO @cCurMBOLKey
+
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            BEGIN TRY
+               UPDATE dbo.MBOL WITH (ROWLOCK) SET
+                  Status   = @cConfirmStatus,
+                  EditWho  = @cUserName,
+                  EditDate = GETDATE()
+               WHERE MBOLKey = @cCurMBOLKey
+            END TRY
+            BEGIN CATCH
+               CLOSE cur_MBOL
+               DEALLOCATE cur_MBOL
+               ROLLBACK TRANSACTION
+               SET @nErrNo = 274871
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close MBOL Err
+               GOTO Quit
+            END CATCH
+
+            FETCH NEXT FROM cur_MBOL INTO @cCurMBOLKey
+         END
+
+         CLOSE cur_MBOL
+         DEALLOCATE cur_MBOL
+
+         COMMIT TRANSACTION
 
          -- Extended update
          IF @cExtendedUpdateSP <> ''
@@ -1310,12 +1347,10 @@ BEGIN
       SET @nStep = @nStep - 3
    END
 
-   IF @nInputKey = 0 -- ESC
+   IF @nInputKey = 0 -- ESC: force user to choose, stay on same screen
    BEGIN
-      SET @cCBOLKey    = ''
-      SET @cOutField01 = ''
-      SET @nScn  = @nScn - 3
-      SET @nStep = @nStep - 3
+      SET @nErrNo = 274873
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Choose 1 or 2
    END
 
    IF @cExtScnSP <> ''
@@ -1334,11 +1369,51 @@ Step 5. Screen = 6944
 ********************************************************************************/
 Step_5:
 BEGIN
-   -- On ENTER or ESC: go back to CBOL screen
-   SET @cCBOLKey    = ''
-   SET @cOutField01 = ''
-   SET @nScn  = @nScn - 4
-   SET @nStep = @nStep - 4
+   IF @nInputKey = 1 -- ENTER: acknowledge, back to CBOL screen
+   BEGIN
+      SET @cCBOLKey    = ''
+      SET @cOutField01 = ''
+      SET @nScn  = @nScn - 4
+      SET @nStep = @nStep - 4
+   END
+
+   IF @nInputKey = 0 -- ESC: dismiss message, back to LabelNo scan screen
+   BEGIN
+      -- Recalc stats for correct display on Screen 2
+      SELECT @nScanCarton = COUNT(URNNo)
+      FROM RDT.RDTSCANTOTRUCK WITH (NOLOCK)
+      WHERE RefNo = @cCBOLKey
+
+      IF @cCheckPickDetailDropID = '1'
+         SELECT @nTotalCarton = COUNT(DISTINCT PD.DropID)
+         FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON MD.OrderKey = PD.OrderKey
+         JOIN dbo.MBOL M WITH (NOLOCK) ON MD.MBOLKey = M.MBOLKey
+         WHERE M.CBOLKey = @cCBOLKey
+      ELSE IF @cCheckPackDetailDropID = '1'
+         SELECT @nTotalCarton = COUNT(DISTINCT PD.DropID)
+         FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
+         JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON MD.OrderKey = PH.OrderKey
+         JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+         JOIN dbo.MBOL M WITH (NOLOCK) ON MD.MBOLKey = M.MBOLKey
+         WHERE M.CBOLKey = @cCBOLKey
+      ELSE
+         SELECT @nTotalCarton = COUNT(DISTINCT PD.LabelNo)
+         FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
+         JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON MD.OrderKey = PH.OrderKey
+         JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+         JOIN dbo.MBOL M WITH (NOLOCK) ON MD.MBOLKey = M.MBOLKey
+         WHERE M.CBOLKey = @cCBOLKeyl
+
+      SET @cOutField01 = @cCBOLKey
+      SET @cOutField02 = ''
+      SET @cMobBarcode = ''
+      SET @cOutField03 = @cLabelNo  -- last scanned
+      SET @cOutField04 = CAST( @nScanCarton  AS NVARCHAR( 10))
+      SET @cOutField05 = CAST( @nTotalCarton AS NVARCHAR( 10))
+      SET @nScn  = @nScn - 3
+      SET @nStep = @nStep - 3
+   END
 END
 GOTO Quit
 

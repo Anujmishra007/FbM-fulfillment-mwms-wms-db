@@ -31,3 +31,4 @@ execute rdt.rdtAddMsg 274869, 10, '274869 Need Option  ', 'us_english', 928
 execute rdt.rdtAddMsg 274870, 10, '274870 Inv Option   ', 'us_english', 928
 execute rdt.rdtAddMsg 274871, 10, '274871 ClseMBOLErr  ', 'us_english', 928
 execute rdt.rdtAddMsg 274872, 10, '274872 CnfrmStsNtMn ', 'us_english', 928
+execute rdt.rdtAddMsg 274873, 10, '274873 Choose 1 or 2', 'us_english', 928
