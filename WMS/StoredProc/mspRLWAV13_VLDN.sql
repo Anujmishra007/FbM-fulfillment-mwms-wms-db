@@ -19,7 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
-/* 2026-07-23  Wan      1.0   Remove raise Error, CR v8.6, CR v8.9        */
+/* 2026-07-24  Wan      1.0   Remove raise Error, CR v8.6, UWP-61665      */
 /**************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]       
@@ -368,7 +368,7 @@ BEGIN
       FROM #PICKDETAIL_WIP AS pw  
       JOIN dbo.SKU  AS s WITH (NOLOCK) ON s.StorerKey = pw.Storerkey AND s.Sku = pw.Sku  
       JOIN dbo.Pack AS p WITH (NOLOCK) ON p.Packkey = s.Packkey  
-      WHERE pw.UOM > '2'
+      WHERE pw.UOM >= '2'                                                           --(Wan)
       AND   EXISTS ( SELECT 1 
                      FROM Cartonization cz (NOLOCK)  
                      WHERE cz.CartonizationGroup = @c_CartonGroup
@@ -378,11 +378,11 @@ BEGIN
 
       IF @c_Sku > ''    
       BEGIN 
-            SET @n_Continue = 3    
-            SET @n_Err = 63070   
-            SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
-                           + 'Sku''s CubeUOM3 > Client Carton Cube. Sku: ' 
-                           + @c_Sku + ' . (mspRLWAV13_VLDN)' 
+         SET @n_Continue = 3    
+         SET @n_Err = 63070   
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                        + 'Sku''s CubeUOM3 > Client Carton Cube. Sku: ' 
+                        + @c_Sku + ' . (mspRLWAV13_VLDN)' 
       END  
    END
 
