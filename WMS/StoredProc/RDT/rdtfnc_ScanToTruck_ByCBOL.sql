@@ -1403,7 +1403,7 @@ BEGIN
          JOIN dbo.PACKHEADER PH WITH (NOLOCK) ON MD.OrderKey = PH.OrderKey
          JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
          JOIN dbo.MBOL M WITH (NOLOCK) ON MD.MBOLKey = M.MBOLKey
-         WHERE M.CBOLKey = @cCBOLKeyl
+         WHERE M.CBOLKey = @cCBOLKey
 
       SET @cOutField01 = @cCBOLKey
       SET @cOutField02 = ''
