@@ -13,6 +13,7 @@ GO
 /*          9=Skip task and submit reallocation via QCommander          */
 /* Date       Rev   Author   Purposes                                   */
 /* 2025-12-20 1.0   CYU027   FCR-9678                                   */
+/* 2026-07-22 1.1   Dennis   UWP-61800 Remove Scn 6918 ToLoc logic     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn05] (
@@ -193,6 +194,8 @@ BEGIN
          END
          IF @nCurrentStep = 3 AND @nNextStep = 1 -- Jump to ToLoc input screen
          BEGIN
+            SET @nErrNo = 0 
+            SET @cErrMsg = ''
             SET @nAfterScn  = 6918
             SET @nAfterStep = 99
             SET @cOutField01 = ''
@@ -637,7 +640,6 @@ BEGIN
                      ' AND PD.StorerKey = @cStorerKey ' +
                      ' AND PD.LOC = @cLOC ' +
                      ' AND PD.ID  = @cID ' +
-                     ' AND PD.SKU = @cSKU ' +
                      ' AND PD.QTY > 0 '
 
                   SET @cSQLCommonParam =
@@ -680,6 +682,7 @@ BEGIN
 
                      WHILE @@FETCH_STATUS = 0
                      BEGIN
+                        SELECT @cSKU = SKU FROM dbo.UCC (NOLOCK) WHERE UCCNo = @cUCCNo AND StorerKey = @cStorerKey
                         EXEC RDT.rdt_Move
                            @nMobile     = @nMobile,
                            @cLangCode   = @cLangCode,
