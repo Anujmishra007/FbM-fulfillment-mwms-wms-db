@@ -23,6 +23,7 @@ EXECUTE rdt.rdtAddScn 6941, 'ENG',
    @cLine04 = 'LABELNO/DROPID:',
    @cLine05 = '%20i02',
    @cLine06 = '%20d03',
+   @cLine07 = '%20d15',
    @cLine08 = 'SCANNED: %20d04',
    @cLine09 = 'TOTAL  : %20d05',
    @cLine14 = '%e'
