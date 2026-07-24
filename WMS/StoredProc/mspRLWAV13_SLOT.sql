@@ -19,6 +19,7 @@ GO
 /*                                                                        */    
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
+/* 2026-07-24  Wan      1.0   UWP-61665:Avoid Infinity Loop if CubeUOM3=0 */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_Slot]        
@@ -475,7 +476,12 @@ BEGIN
                SET @n_QtyTotal = 0.00
                SET @n_CBMTotal = 0.00
                SET @n_CBMLeftToFill = @n_CartonCube
-               
+
+               IF @n_CubeUOM3 = 0.00                                                --(Wan)
+               BEGIN
+                  SET @n_CubeUOM3 = @n_CBMLeftToFill 
+               END
+                              
                IF @c_Code_Rule > ''
                BEGIN
                   SET @n_QtyLimit = 0
