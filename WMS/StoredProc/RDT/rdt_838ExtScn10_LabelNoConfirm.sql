@@ -208,9 +208,12 @@ BEGIN
    SELECT TOP 1
       @cInterModalVehicle = OD.InterModalVehicle
    FROM dbo.PackDetail PD WITH (NOLOCK)
-   JOIN dbo.WAVE        WITH (NOLOCK) ON PD.RefNo      = WAVE.WaveKey
-   JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WAVE.WaveKey = WD.WaveKey
-   JOIN dbo.ORDERS     OD WITH (NOLOCK) ON WD.OrderKey  = OD.OrderKey
+   JOIN dbo.PickDetail PKD WITH (NOLOCK) 
+   ON PD.StorerKey = PKD.StorerKey
+      AND PD.LabelNo = PKD.CaseID 
+      AND PKD.Status = @cPickStatus
+      AND PKD.Qty > 0
+   JOIN dbo.ORDERS     OD WITH (NOLOCK) ON PKD.OrderKey  = OD.OrderKey
    WHERE PD.PickSlipNo = @cPickSlipNo
      AND PD.CartonNo   = @nCartonNo
    ORDER BY OD.OrderKey
@@ -230,11 +233,14 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --PackHeaderNotFound
             GOTO Quit
          END
-
          SET @cSendECOMIMLFlag = 'Y'
+         SET @cSendRTLIMLFlag = 'N'
       END
       ELSE
+      BEGIN
+         SET @cSendECOMIMLFlag = 'N'
          SET @cSendRTLIMLFlag = 'Y'  -- Case 2: WSSOTMSGENLBL
+      END
    END
    ELSE IF @cWaveType = 'RTL'
    BEGIN
@@ -242,7 +248,10 @@ BEGIN
                  WHERE LISTNAME  = 'AEOTMSLBL'
                    AND StorerKey = @cStorerKey
                    AND Code      = @cInterModalVehicle)
+      BEGIN
+         SET @cSendECOMIMLFlag = 'N'
          SET @cSendRTLIMLFlag = 'Y'  -- Case 2: WSSOTMSGENLBL
+      END
    END
    -- else: no IML
 
