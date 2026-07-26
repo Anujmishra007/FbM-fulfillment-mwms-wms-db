@@ -5,11 +5,11 @@
 
 exec rdt.rdtdropmsg 273651, 273700
 
-execute rdt.rdtAddMsg 273651, 10, '273651^Pack detail not found',                  'us_english', 838, 0, '273651 Pack detail not found'
-execute rdt.rdtAddMsg 273652, 10, '273652^Insufficient qty to split',              'us_english', 838, 0, '273652 Insufficient qty to split'
-execute rdt.rdtAddMsg 273653, 10, '273653^PackInfo not found',                     'us_english', 838, 0, '273653 PackInfo not found'
-execute rdt.rdtAddMsg 273654, 10, '273654^Insert PackDetail failed',               'us_english', 838, 0, '273654 Insert PackDetail failed'
-execute rdt.rdtAddMsg 273655, 10, '273655^Insufficient qty to split',              'us_english', 838, 0, '273655 Insufficient qty to split'
+execute rdt.rdtAddMsg 273651, 10, '273651^PackDtl not found',                      'us_english', 838, 0, '273651 Pack detail not found'
+execute rdt.rdtAddMsg 273652, 10, '273652^Insuff qty split',                       'us_english', 838, 0, '273652 Insufficient qty to split'
+execute rdt.rdtAddMsg 273653, 10, '273653^PackInfo missing',                       'us_english', 838, 0, '273653 PackInfo not found'
+execute rdt.rdtAddMsg 273654, 10, '273654^Ins PackDtl fail',                       'us_english', 838, 0, '273654 Insert PackDetail failed'
+execute rdt.rdtAddMsg 273655, 10, '273655^Insuff qty split',                       'us_english', 838, 0, '273655 Insufficient qty to split'
 execute rdt.rdtAddMsg 273656, 10, '273656^Update original PackDetail failed',      'us_english', 838, 0, '273656 Update original PackDetail failed'
 execute rdt.rdtAddMsg 273657, 10, '273657^Insert PackInfo failed',                 'us_english', 838, 0, '273657 Insert PackInfo failed'
 execute rdt.rdtAddMsg 273658, 10, '273658^Insert PickDetail failed',               'us_english', 838, 0, '273658 Insert PickDetail failed'

@@ -76,7 +76,6 @@ BEGIN
    DECLARE @n_RowQty             INT
    DECLARE @n_SplitQty           INT
    DECLARE @c_PhysicalDropID     NVARCHAR(20)
-   DECLARE @c_fn838LabelNo       NVARCHAR(20)  -- reserved; no longer used in split path
 
    SET @nErrNo    = 0
    SET @cErrMsg   = ''
@@ -139,7 +138,7 @@ BEGIN
                   SAVE TRANSACTION rdt_838ExtUpd37_Step2
 
                SELECT @n_NewCartonNo = ISNULL(MAX(CartonNo), 0) + 1
-               FROM dbo.PACKDETAIL WITH (UPDLOCK)
+               FROM dbo.PACKDETAIL WITH (NOLOCK)
                WHERE PickSlipNo = @cPickSlipNo
 
                SET @c_NewLabelNo = ''
