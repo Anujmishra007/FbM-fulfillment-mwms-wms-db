@@ -110,7 +110,7 @@ BEGIN
                )
                BEGIN
                   SET @nErrNo  = 273651
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Pack detail not found
                   GOTO Quit
                END
 
@@ -127,8 +127,8 @@ BEGIN
                   WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @n_OrigCartonNo
                )
                BEGIN
-                  SET @nErrNo  = 273653
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @nErrNo  = 273652
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insufficient qty to split
                   GOTO Quit
                END
 
@@ -151,8 +151,8 @@ BEGIN
                -- GS1 label format: SUSR5 + keycount (may be alphanumeric)
                IF ISNULL(@c_NewLabelNo, '') = ''
                BEGIN
-                  SET @nErrNo  = 273654
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @nErrNo  = 273653
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- PackInfo not found
                   GOTO RollBackTran_Step2
                END
 
@@ -173,8 +173,8 @@ BEGIN
                   )
                END TRY
                BEGIN CATCH
-                  SET @nErrNo  = 273655
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @nErrNo  = 273654
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail failed
                   GOTO RollBackTran_Step2
                END CATCH
 
@@ -240,8 +240,8 @@ BEGIN
 
                IF @n_OrigExpQty < @nQTY
                BEGIN
-                  SET @nErrNo  = 273652
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @nErrNo  = 273655
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insufficient qty to split
                   GOTO Quit
                END
 
@@ -310,7 +310,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273656
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Update original PackDetail failed
                   GOTO RollBackTran_Step4
                END CATCH
 
@@ -351,7 +351,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273657
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Insert PackInfo failed
                   GOTO RollBackTran_Step4
                END CATCH
 
@@ -392,13 +392,15 @@ BEGIN
 
                   IF @b_Success <> 1
                   BEGIN
+                     SET @nErrNo  = 273665
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Get PICKDETAIL key failed
                      CLOSE cur_PD
                      DEALLOCATE cur_PD
                      IF XACT_STATE() = 1
                         ROLLBACK TRANSACTION rdt_838ExtUpd37_PD
                      ELSE IF XACT_STATE() = -1 AND @n_TranCount_PD = 0
                         ROLLBACK TRANSACTION
-                     GOTO AfterCursorPD
+                     GOTO AfterCursorPD    
                   END
 
                   BEGIN TRY
@@ -439,7 +441,7 @@ BEGIN
                         ELSE
                         BEGIN
                            SET @nErrNo  = 273658
-                           SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                           SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Insert PICKDETAIL failed
                            GOTO RollBackTran_Step4
                         END
                      END
@@ -454,6 +456,7 @@ BEGIN
                          EditWho  = @c_UserName,
                          EditDate = GETDATE()
                      WHERE PickDetailKey = @c_OldPickDetailKey
+                       AND Qty           >= @n_SplitQty
                   END TRY
                   BEGIN CATCH
                      CLOSE cur_PD
@@ -461,13 +464,17 @@ BEGIN
                      IF XACT_STATE() = -1
                      BEGIN
                         SET @nErrNo  = 273659
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Update original PICKDETAIL failed
                         GOTO RollBackTran_Step4
                      END
                      ELSE IF XACT_STATE() = 1
                         ROLLBACK TRANSACTION rdt_838ExtUpd37_PD
                      GOTO AfterCursorPD
                   END CATCH
+
+                  SET @nQTY = @nQTY - @n_SplitQty
+                  IF @nQTY <= 0 
+                     BREAK
 
                   FETCH NEXT FROM cur_PD INTO @c_OldPickDetailKey, @n_RowQty
                END
@@ -557,7 +564,7 @@ BEGIN
                IF @b_Success = 0
                BEGIN
                   SET @nErrNo  = 273660
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Generate UCC label failed
                   GOTO Quit
                END
 
@@ -572,7 +579,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273661
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackDetail failed
                   GOTO Quit
                END CATCH
 
@@ -589,7 +596,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273662
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PickDetail failed
                   GOTO Quit
                END CATCH
 
@@ -612,7 +619,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273663
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo failed
                   GOTO Quit
                END CATCH
 
@@ -645,7 +652,7 @@ BEGIN
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 273664
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Update TaskDetail failed
                   GOTO Quit
                END CATCH
 
