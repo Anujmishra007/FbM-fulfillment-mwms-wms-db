@@ -45,8 +45,8 @@ BEGIN
       @cLabelNo                     NVARCHAR(20) = '',
       @cPackedWaveKey               NVARCHAR(10) = '',
       @cPackedUCCNo                 NVARCHAR(20) = '',
-      @cIntermodalVehicle           NVARCHAR(20) = '',
-      @cConsigneeKey                NVARCHAR(10) = '',
+      @cIntermodalVehicle           NVARCHAR(30) = '',
+      @cConsigneeKey                NVARCHAR(15) = '',
       @cOrderType                   NVARCHAR(10) = '',
       @cPickSlipNo                  NVARCHAR(18) = '',
       @cLoc                         NVARCHAR(10) = '',
@@ -308,7 +308,7 @@ BEGIN
                      IF EXISTS(SELECT 1
                               FROM dbo.DropIDDetail WITH(NOLOCK)
                               WHERE DropID = @cDropID
-                                 AND UserDefine01 <> @cIntermodalVehicle)
+                                 AND ISNULL(UserDefine01, '') <> @cIntermodalVehicle)
                      BEGIN
                         SET @nErrNo = 271259
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different Intermodal Vehicle
@@ -320,7 +320,7 @@ BEGIN
                      IF EXISTS(SELECT 1
                               FROM dbo.DropIDDetail WITH(NOLOCK)
                               WHERE DropID = @cDropID
-                                 AND UserDefine02 <> @cWaveKey)
+                                 AND ISNULL(UserDefine02, '') <> @cWaveKey)
                      BEGIN
                         SET @nErrNo = 271260
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different WaveKey
@@ -330,7 +330,7 @@ BEGIN
                      IF EXISTS(SELECT 1
                               FROM dbo.DropIDDetail WITH(NOLOCK)
                               WHERE DropID = @cDropID
-                                 AND UserDefine03 <> @cConsigneeKey)
+                                 AND ISNULL(UserDefine03, '') <> @cConsigneeKey)
                      BEGIN
                         SET @nErrNo = 271261
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Different ConsigneeKey
