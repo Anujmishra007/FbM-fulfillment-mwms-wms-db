@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.2                                                          */    
+/* Version: 2.3                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -37,6 +37,8 @@ GO
 /*                            by Areakey (WL11)                          */
 /* 18-May-2026 WLChooi  2.2   UWP-56880 Consolidate Picking task for same*/
 /*                            caseid, Remove WL08 (WL12)                 */
+/* 22-Jul-2026 WLChooi  2.3   FCR-14782 Do not hold CPK for UOM2 CONVEYOR*/
+/*                            RPF/ASTTPA. Keep hold for UOM6 (WL13)      */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -564,16 +566,29 @@ BEGIN
 
       --WL02: If open RPF/ASTTPA task within Wavekey, set CPK to H
       --WL03: If one CaseID is on-hold, hold other tasks with same CaseID
+      --WL13: If RPF UOM 2, direct to conveyor, do not hold CPK tasks
+      --WL13 S
+      ;WITH TASK AS ( SELECT TD.Taskdetailkey
+                           , TD.TaskType
+                           , TD.UOM
+                      FROM TASKDETAIL TD (NOLOCK)
+                      WHERE TD.Wavekey = @c_Wavekey
+                      AND TD.TaskType IN ('RPF', 'ASTTPA')
+                      AND TD.[Status] NOT IN ('X', '9')
+                    )
       UPDATE tw
       SET [Status] = 'H'
       FROM #TASKDETAIL_WIP tw
       WHERE [Status] = '0'
       AND ( EXISTS ( SELECT 1
-                     FROM TASKDETAIL TD (NOLOCK)
-                     WHERE TD.Wavekey = @c_Wavekey
-                     AND TD.TaskType IN ('RPF', 'ASTTPA')
-                     AND TD.[Status] NOT IN ('X', '9')
+                     FROM TASK TD
+                     WHERE TD.TaskType = 'RPF'
+                     AND TD.UOM <> '2'
                    )
+            OR EXISTS ( SELECT 1
+                        FROM TASK TD
+                        WHERE TD.TaskType = 'ASTTPA'
+                      )
             OR EXISTS ( SELECT 1
                         FROM #TASKDETAIL_WIP TD
                         WHERE TD.CaseID = tw.CaseID
@@ -581,6 +596,7 @@ BEGIN
                         AND TD.[Status] = 'H'
                       )
           )
+      --WL13 E
    END
 
    IF @n_Continue = 1
