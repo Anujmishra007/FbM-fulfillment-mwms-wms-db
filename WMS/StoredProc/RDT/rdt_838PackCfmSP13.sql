@@ -13,6 +13,7 @@ GO
 /* Date       Rev      Author      Purposes                                     */
 /* 2026-07-08 1.0.0    JACKC       FCR-12984. Created                           */
 /* 2026-07-09 1.0.1    JACKC       FCR-12984. Consider B2C single               */
+/* 2026-07-27 1.0.2    JACKC       FCR-12984. Archive PackDetail.DropID         */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP13] (
@@ -74,6 +75,14 @@ BEGIN
       PickDetailKey NVARCHAR( 18)
    )
 
+   --V1.0.2
+   DECLARE @tPackDetail TABLE (
+      PickSlipNo NVARCHAR( 10) NOT NULL,
+      CartonNo   INT           NOT NULL,
+      LabelNo    NVARCHAR( 20) NOT NULL,
+      LabelLine  NVARCHAR(  5) NOT NULL
+   )
+
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
    SET @cZone = ''      
@@ -114,9 +123,12 @@ BEGIN
          AND Status = @cPickStatus
 
          SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND DropID = @cFromDropID
+         FROM dbo.PackDetail PD WITH (NOLOCK)
+         JOIN dbo.PackHeader PH WITH (NOLOCK) --V1.0.2
+            ON (PD.PickSlipNo = PH.PickSlipNo)
+            AND PH.Status = '0'
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cFromDropID
 
          IF @nDebugFlag = 1
             SELECT 'FromDropID PickQty and PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
@@ -139,7 +151,7 @@ BEGIN
             END CATCH
 
             IF EXISTS(SELECT 1 FROM @tPickDetail)
-               SET @cUpdPKDFlag = 'Y'
+               SET @cUpdPKDFlag = 'Y' --Archive FromDropID
          END
          ELSE
          BEGIN
@@ -186,7 +198,7 @@ BEGIN
             END CATCH
 
             IF EXISTS(SELECT 1 FROM @tPickDetail)
-               SET @cUpdPKDFlag = 'Y'
+               SET @cUpdPKDFlag = 'Y' --Archive FromDropID
          END
          ELSE
          BEGIN
@@ -357,11 +369,11 @@ BEGIN
    BEGIN TRAN  -- Begin our own transaction      
    SAVE TRAN rdt_838PackCfmSP13 -- For rollback or commit only our own transaction
 
-   IF @cUpdPKDFlag = 'Y'
+   IF @cUpdPKDFlag = 'Y' --Archive FromDropID
    BEGIN
       IF @nDebugFlag = 1
       BEGIN
-         SELECT 'Start update PickDetail', @cPickSlipNo AS PickSlipNo, @cFromDropID AS FromDropID
+         SELECT 'Start archive FromDropID', @cPickSlipNo AS PickSlipNo, @cFromDropID AS FromDropID, @cB2CSingleFlag AS B2CSingleFlag, @cB2CSingleLabelNo AS B2CSingleLabelNo
          SELECT * FROM @tPickDetail
       END
 
@@ -395,7 +407,41 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO RollBackTran
       END CATCH
-   END -- upd pickdetail
+
+      --V1.0.2 start
+      --Archive FromDropID in PackDetail
+      BEGIN TRY
+         INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+         SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+         FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE DropID = @cFromDropID
+            AND (LabelNo = CASE WHEN @cB2CSingleFlag = 'Y' THEN @cB2CSingleLabelNo ELSE LabelNo END)
+            AND StorerKey  = @cStorerKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273258
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK)
+         SET PD.DropID   = LEFT('ARC' + @cFromDropID, 20),
+             PD.EditDate = GETDATE(),
+             PD.EditWho  = SUSER_SNAME()
+         FROM dbo.PackDetail PD
+         JOIN @tPackDetail tPD ON (PD.PickSlipNo = tPD.PickSlipNo
+                                AND PD.CartonNo  = tPD.CartonNo
+                                AND PD.LabelNo   = tPD.LabelNo
+                                AND PD.LabelLine = tPD.LabelLine)
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273259
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UpdPackDtlDropIDFail
+         GOTO RollBackTran
+      END CATCH
+      --V1.0.2 end
+   END --Archive FromDropID
 
    -- Pack confirm      
    IF @cPackConfirm = 'Y'      

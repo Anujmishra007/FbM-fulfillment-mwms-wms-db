@@ -17,6 +17,7 @@ GO
 /* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic            */
 /* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic*/
 /* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic        */
+/* 2026-07-27  1.2.2  JackC      FCR-12984 Get Packed Qty from open PSNO   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10] (
@@ -759,8 +760,11 @@ BEGIN
                AND Status = @cPickStatus
 
             SELECT @nTotalPackQty = SUM(Qty)
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackHeader PH WITH (NOLOCK) --V1.2.2
+               ON (PD.PickSlipNo = PH.PickSlipNo)
+               AND PH.Status = '0'
+            WHERE PD.StorerKey = @cStorerKey
                AND DropID = @cFromDropID
 
             SET @nRemainingPackQty = ISNULL(@nTotalPickQty,0) - ISNULL(@nTotalPackQty,0)

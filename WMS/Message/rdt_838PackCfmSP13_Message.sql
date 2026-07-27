@@ -9,5 +9,7 @@ execute rdt.rdtAddMsg 273254, 10, '273254^UpdPKDStatusFail', 'us_english', 838, 
 execute rdt.rdtAddMsg 273255, 10, '273255^UpdPHdrStatusFail',      'us_english', 838, 0, '273255: Update PackHeader Status failed'
 execute rdt.rdtAddMsg 273256, 10, '273256^InsB2CSPickDtlFail',     'us_english', 838, 0, '273256: Insert @tPickDetail failed (B2C Single)'
 execute rdt.rdtAddMsg 273257, 10, '273257^B2CSPackQty>ExpPackQty', 'us_english', 838, 0, '273257: PackQty > ExpPackQty (B2C Single over-pack)'
+execute rdt.rdtAddMsg 273258, 10, '273258^InsPackDtlKeyFail',      'us_english', 838, 0, '273258: Insert @tPackDetail keys failed'
+execute rdt.rdtAddMsg 273259, 10, '273259^UpdPackDtlDropIDFail',   'us_english', 838, 0, '273259: Update PackDetail DropID (ARCH) failed'
 
 select * from rdt.rdtmsg (nolock) where message_id between 273251 and 273300
