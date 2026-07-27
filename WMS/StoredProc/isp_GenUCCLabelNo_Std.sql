@@ -28,7 +28,8 @@ GO
 /* Date         Author  Ver.  Purposes                                  */
 /* 13-MAY-2016  Wan01   1.1   Add Call CustomSP                         */  
 /* 06-JUN-2017  Wan02   1.2   WMS-1816 - CN_DYSON_Exceed_ECOM PACKING   */
-/*                            Fixed                                     */  
+/*                            Fixed                                     */ 
+/* 21-Jul-2025  AndyWu01  1.2   FCR-14446 AEO V2  add additional logic  */ 
 /************************************************************************/
 
 CREATE PROC isp_GenUCCLabelNo_Std (
@@ -69,6 +70,9 @@ BEGIN
    @nEvenCnt       INT,
    @nOdd           INT,
    @nEven          INT
+
+   DECLARE @c_Option5         NVARCHAR(1000)       --AndyWu01
+         , @c_SSCCForAEOMX    NVARCHAR(1) = 'N'    --AndyWu01
 
    SELECT @b_success = 1, @c_errmsg='', @n_err=0 
 
@@ -134,75 +138,109 @@ BEGIN
       IF LEN(@cVAT) <> 9 
          SET @cVAT = RIGHT('000000000' + RTRIM(LTRIM(@cVAT)), 9)
 
-      --(Wan01) - Fixed if not numeric
-      IF ISNUMERIC(@cVAT) = 0 
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 60000
-         SET @c_errmsg = 'NSQL ' + CONVERT(NCHAR(5),@n_Err) + ': Vat is not a numeric value. (isp_GenUCCLabelNo_Std)'
-         GOTO QUIT
-      END 
-      --(Wan02) - Fixed if not numeric
+      --AndyWu01 START
+      SELECT @c_Option5 = SC.Option5 FROM dbo.fnc_GetRight2('', @cStorerkey,'','GenUCCLabelNoConfig') AS SC
 
-      SELECT @cPackNo_Long = Long 
-      FROM  CODELKUP (NOLOCK)
-      WHERE ListName = 'PACKNO'
-      AND Code = @cStorerkey
-     
-      IF ISNULL(@cPackNo_Long,'') = ''
-         SET @cKeyname = 'TBLPackNo'
-      ELSE
-         SET @cKeyname = 'PackNo' + LTRIM(RTRIM(@cPackNo_Long))
-          
-      EXECUTE nspg_getkey
-      @cKeyname ,
-      7,
-      @c_nCounter     Output ,
-      @b_success      = @b_success output,
-      @n_err          = @n_err output,
-      @c_errmsg       = @c_errmsg output,
-      @b_resultset    = 0,
-      @n_batch        = 1
-         
-      SET @cLabelNo = @cIdentifier + @cPacktype + RTRIM(@cVAT) + RTRIM(@c_nCounter) --+ @nCheckDigit
+	  SELECT @c_SSCCForAEOMX = dbo.fnc_GetParamValueFromString ('@c_SSCCForAEOMX', @c_option5, @c_SSCCForAEOMX)
 
-      SET @nOdd = 1
-      SET @nOddCnt = 0
-      SET @nTotalOddCnt = 0
-      SET @nTotalCnt = 0
+	  IF @c_SSCCForAEOMX = 'Y'
+	  BEGIN
+         SET @cIdentifier = '102'
 
-      WHILE @nOdd <= 20 
-      BEGIN
-         SET @nOddCnt = CAST(SUBSTRING(@cLabelNo, @nOdd, 1) AS INT)
-         SET @nTotalOddCnt = @nTotalOddCnt + @nOddCnt
-         SET @nOdd = @nOdd + 2
-      END
+		 EXEC isp_getucckey
+              @cStorerkey,
+              6,
+              @c_nCounter OUTPUT ,
+              @b_success  OUTPUT,
+              @n_err      OUTPUT,
+              @c_errmsg   OUTPUT,
+              0,
+              1
 
-      SET @nTotalCnt = (@nTotalOddCnt * 3) 
-   
-      SET @nEven = 2
-      SET @nEvenCnt = 0
-      SET @nTotalEvenCnt = 0
+         IF RTRIM(@c_nCounter) = '999999'
+         BEGIN
+           SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 60201
+           SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Label Running No. is reached MAX (isp_GenUCCLabelNo)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+           SELECT @b_success = 0
+           GOTO Quit
+         END
 
-      WHILE @nEven <= 20 
-      BEGIN
-         SET @nEvenCnt = CAST(SUBSTRING(@cLabelNo, @nEven, 1) AS INT)
-         SET @nTotalEvenCnt = @nTotalEvenCnt + @nEvenCnt
-         SET @nEven = @nEven + 2
-      END
+         SET @cLabelNo = @cIdentifier + RTRIM(@c_nCounter)
+	  END
+	  ELSE
+	  BEGIN
+	  --AndyWu01 END
 
-      SET @nAdd = 0
-      SET @nRemain = 0
-      SET @nCheckDigit = 0
-
-      SET @nAdd = @nTotalCnt + @nTotalEvenCnt
-      SET @nRemain = @nAdd % 10
-      SET @nCheckDigit = 10 - @nRemain
-
-      IF @nCheckDigit = 10 
+         --(Wan01) - Fixed if not numeric
+         IF ISNUMERIC(@cVAT) = 0 
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 60000
+            SET @c_errmsg = 'NSQL ' + CONVERT(NCHAR(5),@n_Err) + ': Vat is not a numeric value. (isp_GenUCCLabelNo_Std)'
+            GOTO QUIT
+         END 
+         --(Wan02) - Fixed if not numeric
+	     
+         SELECT @cPackNo_Long = Long 
+         FROM  CODELKUP (NOLOCK)
+         WHERE ListName = 'PACKNO'
+         AND Code = @cStorerkey
+	     
+         IF ISNULL(@cPackNo_Long,'') = ''
+            SET @cKeyname = 'TBLPackNo'
+         ELSE
+            SET @cKeyname = 'PackNo' + LTRIM(RTRIM(@cPackNo_Long))
+             
+         EXECUTE nspg_getkey
+         @cKeyname ,
+         7,
+         @c_nCounter     Output ,
+         @b_success      = @b_success output,
+         @n_err          = @n_err output,
+         @c_errmsg       = @c_errmsg output,
+         @b_resultset    = 0,
+         @n_batch        = 1
+            
+         SET @cLabelNo = @cIdentifier + @cPacktype + RTRIM(@cVAT) + RTRIM(@c_nCounter) --+ @nCheckDigit
+	     
+         SET @nOdd = 1
+         SET @nOddCnt = 0
+         SET @nTotalOddCnt = 0
+         SET @nTotalCnt = 0
+	     
+         WHILE @nOdd <= 20 
+         BEGIN
+            SET @nOddCnt = CAST(SUBSTRING(@cLabelNo, @nOdd, 1) AS INT)
+            SET @nTotalOddCnt = @nTotalOddCnt + @nOddCnt
+            SET @nOdd = @nOdd + 2
+         END
+	     
+         SET @nTotalCnt = (@nTotalOddCnt * 3) 
+	     
+         SET @nEven = 2
+         SET @nEvenCnt = 0
+         SET @nTotalEvenCnt = 0
+	     
+         WHILE @nEven <= 20 
+         BEGIN
+            SET @nEvenCnt = CAST(SUBSTRING(@cLabelNo, @nEven, 1) AS INT)
+            SET @nTotalEvenCnt = @nTotalEvenCnt + @nEvenCnt
+            SET @nEven = @nEven + 2
+         END
+	     
+         SET @nAdd = 0
+         SET @nRemain = 0
          SET @nCheckDigit = 0
-
-      SET @cLabelNo = ISNULL(RTRIM(@cLabelNo), '') + CAST(@nCheckDigit AS NVARCHAR( 1))
+	     
+         SET @nAdd = @nTotalCnt + @nTotalEvenCnt
+         SET @nRemain = @nAdd % 10
+         SET @nCheckDigit = 10 - @nRemain
+	     
+         IF @nCheckDigit = 10 
+            SET @nCheckDigit = 0
+	     
+         SET @cLabelNo = ISNULL(RTRIM(@cLabelNo), '') + CAST(@nCheckDigit AS NVARCHAR( 1))
+      END --AndyWu01
    END   -- GenUCCLabelNoConfig
    ELSE
    BEGIN
@@ -233,5 +271,3 @@ GO
 
 GRANT EXECUTE ON isp_GenUCCLabelNo_Std to nSQL
 GO
-
-
