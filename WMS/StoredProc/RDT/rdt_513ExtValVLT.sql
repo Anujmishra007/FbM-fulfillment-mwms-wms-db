@@ -163,10 +163,26 @@ BEGIN
             (SELECT 1 FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE id = @cToID AND (qty > 0 OR PendingMoveIN > 0) AND id <> '' AND StorerKey = @cStorerKey 
             AND ((loc <> @cToLoc AND NOT EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE @cToLoc = loc AND Facility = @cFacility AND LoseId = 1 AND LocationType IN ('PICK','CASE'))) 
             OR sku <> @cSKU) AND (SELECT SUM(qty) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE ID = @cToID AND SKU = @cSKU AND StorerKey = @cStorerKey) <> @nQTY)
+			
+		 BEGIN
+		    IF NOT EXISTS
+		    (
+			    SELECT 1 
+			    FROM dbo.LOC WITH (NOLOCK) 
+			    WHERE loc = @cToLoc 
+			       AND Facility = @cFacility 
+				   AND EXISTS (SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQMBSVAL' AND CODE = LocationType AND SHORT = 1)
+		    )
+		    OR 
+		    (
+			   (SELECT ISNULL(SUM(qty), 0) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE ID = @cFromID AND SKU = @cSKU AND StorerKey = @cStorerKey) <> @nQTY
+			   AND @cFromID = @cToID
+		    )
          BEGIN
-            SET @nErrNo = 217906
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateID
-         END
+               SET @nErrNo = 217906
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateID
+            END
+	     END
             
          --If target LPN ID is NOT blank AND target location is NOT pick face AND lot on the target LPN of the SKU that is moved is different, than move
          --is NOT allowed to avoid creating LPNs with multiple lots on it.
