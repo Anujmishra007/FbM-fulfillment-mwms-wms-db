@@ -188,7 +188,9 @@ BEGIN
 						AND Status <> '9'
 					)
 					BEGIN
-						UPDATE LOTxLOCxID SET PendingMoveIN = 0 WHERE ID = @cPalletId AND Loc = @cSuggToLoc AND QTY = 0 AND PendingMoveIN > 0
+						UPDATE LOTxLOCxID WITH (ROWLOCK)
+						SET PendingMoveIN = 0 
+						WHERE ID = @cPalletId AND Loc = @cSuggToLoc AND QTY = 0 AND PendingMoveIN > 0
 					END
 
 					-- Roll back or commit depending on confirmation result
