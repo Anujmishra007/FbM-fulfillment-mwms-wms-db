@@ -119,6 +119,7 @@ BEGIN
       ,  UserDefine01       NVARCHAR(20)   NULL       DEFAULT ('')
       ,  UserDefine02       NVARCHAR(20)   NULL       DEFAULT ('')
       ,  UserDefine06       DATETIME       NULL
+      ,  UserDefine07       DATETIME       NULL
       ,  B_contact1         NVARCHAR(30)   NULL
       ,  B_Contact2         NVARCHAR(30)   NULL
       ,  B_Company          NVARCHAR(45)   NULL
@@ -353,6 +354,7 @@ BEGIN
                   ,  Userdefine01
                   ,  UserDefine02
                   ,  Userdefine06
+                  ,  Userdefine07
                   ,  B_Contact1
                   ,  B_Contact2
                   ,  B_Company
@@ -388,6 +390,7 @@ BEGIN
                   ,  Userdefine01       = PO.PlaceOfLoading
                   ,  UserDefine02       = PO.placeOfDischarge
                   ,  UserDefine06         = PO.EditDate
+                  ,  UserDefine07     = RH.Userdefine07
                   ,  B_Contact1         = PO.BuyerName
                   ,  B_Contact2         = PO.BuyerAddress1
                   ,  B_Company          = PO.BuyerAddress2
@@ -493,6 +496,7 @@ BEGIN
       ,  UserDefine01
       ,  UserDefine02
       ,  UserDefine06
+      ,  UserDefine07
       ,  B_contact1
       ,  B_Contact2
       ,  B_Company
@@ -532,6 +536,7 @@ BEGIN
       ,  UserDefine01
       ,  UserDefine02
       ,  UserDefine06
+      ,  UserDefine07
       ,  B_contact1
       ,  B_Contact2
       ,  B_Company
