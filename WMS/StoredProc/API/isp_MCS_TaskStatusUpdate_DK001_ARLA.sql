@@ -27,9 +27,10 @@ GO
 /* 25-03-2026   VMA237   1.0  Initial version created                        */
 /* 25-06-2026   VMA01	 1.1  "NoLoad" process update                        */
 /*							  + SP rename to macth TCO standard naming       */
+/* 13-07-2026   VMA02	 1.2  "OCCUPIED" process update                      */
 /*																			 */
 /*****************************************************************************/
-CREATE OR ALTER             PROC [dbo].[isp_MCS_TaskStatusUpdate_DK001_ARLA]
+CREATE OR ALTER PROC [dbo].[isp_MCS_TaskStatusUpdate_DK001_ARLA]
 (
     @cPalletId         NVARCHAR(30),
     @cTaskId           NVARCHAR(10),
@@ -60,7 +61,8 @@ BEGIN
 	DECLARE @cLangCode      NVARCHAR(3);
 	DECLARE @cFromLoc		NVARCHAR(18);
 	DECLARE @cSuggToLoc		NVARCHAR(18);
-	DECLARE @nTranCount INT;
+	DECLARE @nTranCount		INT;
+	DECLARE @c_Remark		NVARCHAR (255); --(VMA02)
 
 	-- Default integration user and output values
     SET @cUserName			= 'MCS_TASK_STS_UPD';
@@ -104,13 +106,14 @@ BEGIN
 				BEGIN
 					SET @nErrNo = 51052
 					SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- BadTaskDtlKey 
+					SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 				END
 				
 				-- Putaway task: confirm task and complete stock movement
 				IF @cTaskType = 'PAF'
 				BEGIN
 
-					SET @nMobile			= '';
+					SET @nMobile			= NULL;
 					SET @nFunc				= 1797;
 					SET @cLangCode			=  'ENG';
 
@@ -129,14 +132,15 @@ BEGIN
 					-- If actual drop location differs from suggested location, overwrite ToLoc before confirmation
 					IF ISNULL(@cActualDropLoc, '') <> ISNULL(@cSuggToLoc, '')
 					BEGIN
-					   UPDATE dbo.TaskDetail SET
-					      ToLoc = @cActualDropLoc
+					   UPDATE dbo.TaskDetail WITH (ROWLOCK)
+					   SET ToLoc = @cActualDropLoc
 					   WHERE TaskDetailKey = @cTaskDetailKey
 
 					   IF @@ERROR <> 0
 					   BEGIN
 						   SET @nErrNo = 79364
 						   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- OverWrite Fail
+						   SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 
 						   IF @nTranCount = 0
 						   BEGIN
@@ -152,7 +156,7 @@ BEGIN
 					END
 					
 					-- Save received status into TaskDetail.Message02 for completed updates
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET Message02 = @cStatus,
 						EditDate = GETDATE(),
 						EditWho = @cUserName
@@ -184,7 +188,9 @@ BEGIN
 						AND Status <> '9'
 					)
 					BEGIN
-						UPDATE LOTxLOCxID SET PendingMoveIN = 0 WHERE ID = @cPalletId AND Loc = @cSuggToLoc AND QTY = 0 AND PendingMoveIN > 0
+						UPDATE LOTxLOCxID WITH (ROWLOCK)
+						SET PendingMoveIN = 0 
+						WHERE ID = @cPalletId AND Loc = @cSuggToLoc AND QTY = 0 AND PendingMoveIN > 0
 					END
 
 					-- Roll back or commit depending on confirmation result
@@ -238,6 +244,7 @@ BEGIN
 					BEGIN
 						SET @nErrNo = 79364
 						SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- OverWrite Fail
+						SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 
 						IF @nTranCount = 0
 						BEGIN
@@ -252,12 +259,12 @@ BEGIN
 					END
 
 					-- Save received status into TaskDetail.Message02 for completed updates
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET Message02 = @cStatus,
 						EditDate = GETDATE(),
 						EditWho = @cUserName,
 						-- Correct Status from 0 to 5, rdt_TM_PalletPick_Confirm expects status not to be 0
-						[Status] = CASE WHEN @cTaskStatus = 0 THEN 5 ELSE @cTaskStatus END
+						[Status] = CASE WHEN @cTaskStatus = '0' THEN '5' ELSE @cTaskStatus END
 					WHERE TaskDetailKey = @cTaskDetailKey;
 
 					-- For FPK tasks, actual drop location must match suggested location
@@ -307,7 +314,7 @@ BEGIN
             ELSE
             BEGIN
                 -- Save received status into TaskDetail.Message02 for non-completed updates
-                UPDATE dbo.TaskDetail
+                UPDATE dbo.TaskDetail WITH (ROWLOCK)
                 SET Message02 = @cStatus,
                     EditDate = GETDATE(),
                     EditWho = @cUserName
@@ -321,21 +328,61 @@ BEGIN
 					RETURN;
 				END
 
-				-- Occupied: suspend task and store actual drop location in Message03
+				-- Occupied: suspend task,  store actual drop location in Message03
+				-- and place destination location on hold (for Putaway task only)
 				IF UPPER(ISNULL(@cStatus, '')) = 'OCCUPIED'
 				BEGIN
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET [Status] = 'S',
-						Message03 = @cActualDropLoc,
+						Message03 = ISNULL(@cActualDropLoc,''),
 						EditDate = GETDATE(),
 						EditWho = @cUserName
 					WHERE TaskDetailKey = @cTaskDetailKey;
+
+					IF ( --(VMA02) - START
+						@cTaskType = 'PAF'
+					)
+					BEGIN
+						SET @c_Remark = '"' + @cSuggToLoc +'" is occupied. '
+															+ 'Task # '+ @cTaskDetailKey
+
+						EXECUTE [WM].[lsp_Inventoryhold_Wrapper] 
+								   @c_StorerKey		= @cStorerKey
+								  ,@c_SKU = NULL
+								  ,@c_lot = NULL
+								  ,@c_Loc = @cSuggToLoc
+								  ,@c_ID = NULL
+								  ,@c_lottable01 = NULL
+								  ,@c_lottable02 = NULL
+								  ,@c_lottable03 = NULL
+								  ,@dt_lottable04 = NULL
+								  ,@dt_lottable05 = NULL
+								  ,@c_lottable06 = NULL
+								  ,@c_lottable07 = NULL
+								  ,@c_lottable08 = NULL
+								  ,@c_lottable09 = NULL
+								  ,@c_lottable10 = NULL
+								  ,@c_lottable11 = NULL
+								  ,@c_lottable12 = NULL
+								  ,@dt_lottable13 = NULL
+								  ,@dt_lottable14 = NULL
+								  ,@dt_lottable15 = NULL
+								  ,@c_Status = '2060'
+								  ,@c_Hold = '1'
+								  ,@c_Remark = @c_Remark
+								  ,@b_Success = @bSuccess OUTPUT
+								  ,@n_Err = @nErrNo OUTPUT
+								  ,@c_ErrMsg = @cErrMsg OUTPUT
+								  ,@c_UserName = @cUserName
+								  ,@c_UCCNo = NULL
+						END --(VMA02) - END
+
 				END
 
 				-- NoLoad: suspend task and place source location on hold (for full pallet pick task only)
 				IF UPPER(ISNULL(@cStatus, '')) = 'NOLOAD'
 				BEGIN
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET [Status] = 'S',
 						EditDate = GETDATE(),
 						EditWho = @cUserName
@@ -345,7 +392,7 @@ BEGIN
 						@cTaskType = 'FPK'
 					)
 					BEGIN
-						DECLARE @c_Remark NVARCHAR (255) = 'LPN# ' + @cPalletId + ' is missing there. '
+						SET @c_Remark = 'LPN# ' + @cPalletId + ' is missing there. '
 															+ 'Task # '+ @cTaskDetailKey
 
 						EXECUTE [WM].[lsp_Inventoryhold_Wrapper] 
@@ -467,5 +514,5 @@ BEGIN
     END CATCH
 END
 
-GRANT EXECUTE ON dbo.isp_MCS_TaskStatusUpdate TO NSQL
+GRANT EXECUTE ON dbo.isp_MCS_TaskStatusUpdate_DK001_ARLA TO NSQL
 GO
