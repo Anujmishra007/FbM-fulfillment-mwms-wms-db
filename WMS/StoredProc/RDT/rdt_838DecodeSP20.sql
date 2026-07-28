@@ -53,13 +53,9 @@ BEGIN
          IF @nInputKey = 1
          BEGIN
 
-            DECLARE @bSuccess       INT
             DECLARE @cUPC           NVARCHAR( 30)
-            DECLARE @cSKUTemp       NVARCHAR( 20)
-            DECLARE @nUPCQty        INT
             DECLARE @cPUOM          NVARCHAR( 10)
             DECLARE @cRefNo2        NVARCHAR( 30)
-            DECLARE @cPUOM_Desc     NVARCHAR( 10)
             DECLARE @nPUOM_Div      INT
             DECLARE @nScannedUOMQty INT
             DECLARE @nTotalUOMQty   INT
@@ -67,44 +63,44 @@ BEGIN
             DECLARE @nEndIndex      INT
 
             SELECT @cUPC = LEFT( @cBarcode, 30)
+            SET @cPUOM = ''
+            SET @nQTY = 0
+            SET @cSKU = ''
 
-            SELECT 
-               @cPUOM_Desc = UOM,
-               @cSKUTemp = Sku
-            FROM dbo.UPC WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND UPC = @cUPC
+            SELECT TOP 1
+               @cPUOM = PD.UOM,
+               @nPUOM_Div = ISNULL(TRY_CAST(
+                     CASE PD.UOM
+                        WHEN '2' THEN Pack.CaseCNT
+                        WHEN '3' THEN Pack.InnerPack
+                        WHEN '6' THEN Pack.QTY
+                        WHEN '1' THEN Pack.Pallet
+                        WHEN '4' THEN Pack.OtherUnit1
+                        WHEN '5' THEN Pack.OtherUnit2
+                        ELSE -1
+                     END
+                  AS INT), 1),
+               @cSKU = UPC.sku
+            FROM dbo.SKU SKU WITH (NOLOCK)
+            INNER JOIN dbo.UPC WITH(NOLOCK) ON SKU.sku = UPC.sku AND SKU.StorerKey = UPC.StorerKey
+            INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+            INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) ON PD.SKU = UPC.SKU AND PD.StorerKey = UPC.StorerKey
+            WHERE SKU.StorerKey = @cStorerKey
+               AND UPC.UPC = @cUPC
+               AND PD.DropID = @cFromDropID
+               AND PD.UOM = CASE UPC.UOM
+                        WHEN Pack.PackUOM1 THEN '2' -- Case
+                        WHEN Pack.PackUOM2 THEN '3' -- Inner pack
+                        WHEN Pack.PackUOM3 THEN '6' -- Master unit
+                        WHEN Pack.PackUOM4 THEN '1' -- Pallet
+                        WHEN Pack.PackUOM8 THEN '4' -- Other unit 1
+                        WHEN Pack.PackUOM9 THEN '5' -- Other unit 2
+                        ELSE ''
+                  END
+            ORDER BY PickDetailKey
 
-            IF @@ROWCOUNT > 0 AND ISNULL(@cSKUTemp, '') <> '' AND ISNULL(@cPUOM_Desc, '') <> ''
+            IF @@ROWCOUNT > 0 AND ISNULL(@cPUOM, '') <> '' AND ISNULL(@nPUOM_Div, -1) <> -1
             BEGIN
-               SELECT @cPUOM = 
-                     ISNULL(TRY_CAST(
-                        CASE @cPUOM_Desc
-                           WHEN Pack.PackUOM1 THEN '2' -- Case
-                           WHEN Pack.PackUOM2 THEN '3' -- Inner pack
-                           WHEN Pack.PackUOM3 THEN '6' -- Master unit
-                           WHEN Pack.PackUOM4 THEN '1' -- Pallet
-                           WHEN Pack.PackUOM8 THEN '4' -- Other unit 1
-                           WHEN Pack.PackUOM9 THEN '5' -- Other unit 2
-                           ELSE '6'
-                        END
-                        AS NVARCHAR(10)), ''),
-                     @nPUOM_Div = ISNULL(TRY_CAST(
-                        CASE @cPUOM_Desc
-                           WHEN Pack.PackUOM1 THEN Pack.CaseCNT
-                           WHEN Pack.PackUOM2 THEN Pack.InnerPack
-                           WHEN Pack.PackUOM3 THEN Pack.QTY
-                           WHEN Pack.PackUOM4 THEN Pack.Pallet
-                           WHEN Pack.PackUOM8 THEN Pack.OtherUnit1
-                           WHEN Pack.PackUOM9 THEN Pack.OtherUnit2
-                           ELSE 1
-                        END
-                        AS INT), 1)
-               FROM dbo.SKU SKU WITH (NOLOCK)
-               INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
-               WHERE SKU.StorerKey = @cStorerKey
-                  AND SKU.SKU = @cSKUTemp
-
                SET @cPUOM = ISNULL(@cPUOM, '1') -- Default to 1 if UOM not found, available values: 1, 2, 6
                SET @nPUOM_Div = ISNULL(@nPUOM_Div, 1) -- Default to 1 if UOM division not found, available values depend on the pack configuration
                SET @nPUOM_Div = IIF(@nPUOM_Div = 0, 1, @nPUOM_Div)
@@ -113,7 +109,8 @@ BEGIN
                FROM dbo.PickDetail PD WITH (NOLOCK)
                WHERE PD.StorerKey = @cStorerKey
                   AND PD.DropID = @cFromDropID
-                  AND Status = '5'
+                  AND PD.Status = '5'
+                  AND PD.SKU = @cSKU
                   AND PD.UOM = @cPUOM
                GROUP BY PD.UOM
 
@@ -123,6 +120,7 @@ BEGIN
                FROM dbo.PackDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cFromDropID
+                  AND SKU = @cSKU
                   AND PickslipNo = @cPickSlipNo
                ORDER BY ADDDate ASC
 
@@ -146,33 +144,14 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No UPC quantity to pack
                   GOTO Quit
                END
+
+               SET @nQTY = @nPUOM_Div
             END
-
-            IF EXISTS(SELECT 1 FROM dbo.UPC WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND UPC = @cUPC)
+            ELSE
             BEGIN
-               -- Get SKU
-               EXEC rdt.rdt_GetSKU
-                  @cStorerKey  = @cStorerKey
-                  ,@cSKU        = @cUPC      OUTPUT
-                  ,@bSuccess    = @bSuccess  OUTPUT
-                  ,@nErr        = @nErrNo    OUTPUT
-                  ,@cErrMsg     = @cErrMsg   OUTPUT
-                  ,@nUPCQTY     = @nUPCQty   OUTPUT
-
-               IF @bSuccess <> 1
-               BEGIN
-                  IF @nErrNo <> 0
-                     GOTO Quit
-                  ELSE
-                  BEGIN
-                     SET @nErrNo = 264701
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get UPC data failed
-                     GOTO Quit
-                  END
-               END
-
-               SET @cSKU = @cUPC
-               SET @nQTY = @nUPCQty
+               SET @nErrNo = 264703
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No matched UPC found
+               GOTO Quit
             END
          END
       END
