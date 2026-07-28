@@ -12,6 +12,8 @@ GO
 /* 21/03/2024   1.0   PPA374   Check that LPN will NOT breach max pallet */
 /* 15/07/2024   1.1   PPA374   Check pick, PA AND replen                 */
 /* 18/10/2024   1.2   PPA374   Adding checks for shelf AND cons          */
+/* 28/10/2024   1.3.0 WSE016   UWP-26437                                 */
+/* 27/07/2026   1.4   PPA374   Updating duplicate val to allow some locs */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_513ExtValVLT] (
@@ -257,7 +259,7 @@ BEGIN
       END
    END
 END
-
+	
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
