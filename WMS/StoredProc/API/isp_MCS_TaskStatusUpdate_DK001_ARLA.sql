@@ -106,13 +106,14 @@ BEGIN
 				BEGIN
 					SET @nErrNo = 51052
 					SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- BadTaskDtlKey 
+					SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 				END
 				
 				-- Putaway task: confirm task and complete stock movement
 				IF @cTaskType = 'PAF'
 				BEGIN
 
-					SET @nMobile			= '';
+					SET @nMobile			= NULL;
 					SET @nFunc				= 1797;
 					SET @cLangCode			=  'ENG';
 
@@ -131,14 +132,15 @@ BEGIN
 					-- If actual drop location differs from suggested location, overwrite ToLoc before confirmation
 					IF ISNULL(@cActualDropLoc, '') <> ISNULL(@cSuggToLoc, '')
 					BEGIN
-					   UPDATE dbo.TaskDetail SET
-					      ToLoc = @cActualDropLoc
+					   UPDATE dbo.TaskDetail WITH (ROWLOCK)
+					   SET ToLoc = @cActualDropLoc
 					   WHERE TaskDetailKey = @cTaskDetailKey
 
 					   IF @@ERROR <> 0
 					   BEGIN
 						   SET @nErrNo = 79364
 						   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- OverWrite Fail
+						   SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 
 						   IF @nTranCount = 0
 						   BEGIN
@@ -154,7 +156,7 @@ BEGIN
 					END
 					
 					-- Save received status into TaskDetail.Message02 for completed updates
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET Message02 = @cStatus,
 						EditDate = GETDATE(),
 						EditWho = @cUserName
@@ -240,6 +242,7 @@ BEGIN
 					BEGIN
 						SET @nErrNo = 79364
 						SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- OverWrite Fail
+						SET @cErrMsg = @cErrMsg + '(isp_MCS_TaskStatusUpdate_DK001_ARLA)'
 
 						IF @nTranCount = 0
 						BEGIN
@@ -254,12 +257,12 @@ BEGIN
 					END
 
 					-- Save received status into TaskDetail.Message02 for completed updates
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET Message02 = @cStatus,
 						EditDate = GETDATE(),
 						EditWho = @cUserName,
 						-- Correct Status from 0 to 5, rdt_TM_PalletPick_Confirm expects status not to be 0
-						[Status] = CASE WHEN @cTaskStatus = 0 THEN 5 ELSE @cTaskStatus END
+						[Status] = CASE WHEN @cTaskStatus = '0' THEN '5' ELSE @cTaskStatus END
 					WHERE TaskDetailKey = @cTaskDetailKey;
 
 					-- For FPK tasks, actual drop location must match suggested location
@@ -309,7 +312,7 @@ BEGIN
             ELSE
             BEGIN
                 -- Save received status into TaskDetail.Message02 for non-completed updates
-                UPDATE dbo.TaskDetail
+                UPDATE dbo.TaskDetail WITH (ROWLOCK)
                 SET Message02 = @cStatus,
                     EditDate = GETDATE(),
                     EditWho = @cUserName
@@ -327,7 +330,7 @@ BEGIN
 				-- and place destination location on hold (for Putaway task only)
 				IF UPPER(ISNULL(@cStatus, '')) = 'OCCUPIED'
 				BEGIN
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET [Status] = 'S',
 						Message03 = ISNULL(@cActualDropLoc,''),
 						EditDate = GETDATE(),
@@ -377,7 +380,7 @@ BEGIN
 				-- NoLoad: suspend task and place source location on hold (for full pallet pick task only)
 				IF UPPER(ISNULL(@cStatus, '')) = 'NOLOAD'
 				BEGIN
-					UPDATE dbo.TaskDetail
+					UPDATE dbo.TaskDetail WITH (ROWLOCK)
 					SET [Status] = 'S',
 						EditDate = GETDATE(),
 						EditWho = @cUserName
