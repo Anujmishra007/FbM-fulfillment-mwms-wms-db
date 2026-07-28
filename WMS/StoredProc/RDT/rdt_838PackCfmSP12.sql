@@ -16,6 +16,7 @@ GO
 /* 2026-04-08 1.2    NLT013      FCR-11343. Update Packheader for single        */
 /* 2026-04-14 1.3    JackC       FCR-12450 Update PKD status & merge duplicates */
 /* 2026-05-08 1.3.1  JackC       UWP-55429 Hotfix for PICK-TRF config on Prod   */
+/* 2026-07-28 1.4    NYE018      FCR-13548 B2C Single: only PackHeader Status=0 */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
@@ -325,20 +326,27 @@ BEGIN
    BEGIN
       IF @cPackByFromDropID = '1' AND ISNULL(@cFromDropID, '') <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 
-            FROM dbo.PackDetail WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cFromDropID
-               AND Qty <> ExpQty
-               AND ExpQty > 0)
+         -- FCR-13548: Only consider PackHeader with Status = 0 for B2CSingle
+      IF NOT EXISTS( SELECT 1
+            FROM dbo.PackDetail PD WITH(NOLOCK)
+            INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+            WHERE PD.StorerKey = @cStorerKey
+               AND PH.StorerKey = @cStorerKey
+               AND PD.DropID = @cFromDropID
+               AND PD.Qty <> PD.ExpQty
+               AND PD.ExpQty > 0
+               AND PH.Status = '0')
          BEGIN
             SET @cPackConfirm = 'Y'
 
             INSERT INTO @tPickSlipNo (PickSlipNo)
-            SELECT PickSlipNo 
-            FROM dbo.PackDetail WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cFromDropID
+            SELECT DISTINCT PD.PickSlipNo
+            FROM dbo.PackDetail PD WITH(NOLOCK)
+            INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+            WHERE PD.StorerKey = @cStorerKey
+               AND PH.StorerKey = @cStorerKey
+               AND PD.DropID = @cFromDropID
+               AND PH.Status = '0'
          END
          ELSE
          BEGIN
