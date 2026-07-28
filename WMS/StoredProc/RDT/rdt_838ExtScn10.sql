@@ -521,7 +521,7 @@ BEGIN
                      Loc, --FromLoc
                      ID, --FromID
                      @cPackSTGLoc, --Toloc
-                     '', --ToID
+                     ID, --ToID
                      SKU, 
                      LOT, 
                      SUM(QTY),

@@ -4,15 +4,16 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_838ExtVal41                                     */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purposes: Customized  validation for AEO MEX packing (Fn 838)        */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 2026/06/30 1.0  Jackc       FCR-12984 Created                        */
-/************************************************************************/
+/**********************************************************************************/
+/* Store procedure: rdt_838ExtVal41                                               */
+/* Copyright      : Maersk                                                        */
+/*                                                                                */
+/* Purposes: Customized  validation for AEO MEX packing (Fn 838)                  */
+/*                                                                                */
+/* Date       Rev    Author      Purposes                                         */
+/* 2026/06/30 1.0.0  Jackc       FCR-12984 Created                                */
+/* 2026/07/28 1.0.1  Jackc       FCR-12984 Add one more condition skip validation */
+/**********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal41 (
    @nMobile          INT,
@@ -59,6 +60,7 @@ BEGIN
       @cPickUoM            NVARCHAR( 10),
       @cWaveType           NVARCHAR( 20),
       @cWaveSubType        NVARCHAR( 20),
+      @cDropIDLoc          NVARCHAR( 10),   
       @nRowCount           INT
 
    IF @nFunc = 838
@@ -79,11 +81,13 @@ BEGIN
             -- Fetch WaveKey and UoM for this DropID
             SELECT TOP 1
                @cWaveKey = ISNULL( WaveKey, ''),
-               @cPickUom = UOM
+               @cPickUom = UOM,
+               @cDropIDLoc = ISNULL( Loc, '')
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey 
                AND DropID = @cFromDropID
                AND Status = @cPickStatus
+            ORDER BY PickDetailKey DESC
 
             SET @nRowCount = @@ROWCOUNT
 
@@ -116,7 +120,8 @@ BEGIN
 
             -- Skip PTW validation for Wholesale UCC (ML, UoM=2) or ECOM single-order
             IF NOT ( ( @cWaveType = 'WHSLE' AND @cWaveSubType = 'ML' AND @cPickUom = '2' )
-                  OR ( @cWaveType = 'ECOM'  AND @cWaveSubType = 'S' ) )
+                  OR ( @cWaveType = 'ECOM'  AND @cWaveSubType = 'S' ) 
+                  OR (@cPickUOM = '2' AND @cDropIDLoc = 'STGVASML')) --V1.0.1
             BEGIN
                IF NOT EXISTS (SELECT 1 FROM rdt.RDTPTLPIECELOG WITH (NOLOCK) WHERE CartonID = @cFromDropID)
                BEGIN
