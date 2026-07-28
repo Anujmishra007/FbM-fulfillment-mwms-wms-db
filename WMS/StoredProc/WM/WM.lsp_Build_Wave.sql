@@ -553,7 +553,7 @@ AS
          ,  ParmBuildType     NVARCHAR(20)
          ,  TableName         SYSNAME
          ,  ColName           SYSNAME
-         ,  ColType           SYSNAME
+         ,  ColType           SYSNAME NOT NULL DEFAULT ('')
       );
 
       INSERT INTO #tBuildSort (RowNum, FieldName, Operator, ParmBuildType, TableName, ColName)
