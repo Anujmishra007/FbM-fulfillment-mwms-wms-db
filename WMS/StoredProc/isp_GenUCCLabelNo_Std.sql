@@ -145,7 +145,8 @@ BEGIN
 
 	  IF @c_SSCCForAEOMX = 'Y'
 	  BEGIN
-         SET @cIdentifier = '102'
+         SET @cIdentifier = '10'
+		 SET @cPacktype = '2'  
 
 		 EXEC isp_getucckey
               @cStorerkey,
@@ -155,7 +156,8 @@ BEGIN
               @n_err      OUTPUT,
               @c_errmsg   OUTPUT,
               0,
-              1
+              1,
+			  0
 
          IF RTRIM(@c_nCounter) = '999999'
          BEGIN
@@ -165,7 +167,7 @@ BEGIN
            GOTO Quit
          END
 
-         SET @cLabelNo = @cIdentifier + RTRIM(@c_nCounter)
+         SET @cLabelNo = @cIdentifier + @cPacktype + RTRIM(@c_nCounter)
 	  END
 	  ELSE
 	  BEGIN
