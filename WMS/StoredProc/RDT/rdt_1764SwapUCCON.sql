@@ -12,7 +12,7 @@ GO
 /* 2026-07-10 1.0  PSJ036    RITM8891302 Created                              */  
 /******************************************************************************/  
   
-ALTER OR CREATE     PROCEDURE [RDT].[rdt_1764SwapUCCON]  
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1764SwapUCCON]  
    @nMobile          INT,  
    @nFunc            INT,  
    @cLangCode        NVARCHAR( 3),  
@@ -47,9 +47,9 @@ BEGIN
       @cOriginalTaskLot          NVARCHAR( 10),  
       @nOriginalTaskQTY          INT,  
   
-   @cLabelNo      NVARCHAR( 20), --PackDetail PSJ036 REV1.0  
-   @cPickSlipNo     NVARCHAR( 20), --PackDetail PSJ036 REV1.0  
-   @cPackHeaderStatus   NVARCHAR(  1), --Status PackHeader PSJ036 REV1.0  
+      @cLabelNo      NVARCHAR( 20), --PackDetail PSJ036 REV1.0  
+      @cPickSlipNo     NVARCHAR( 20), --PackDetail PSJ036 REV1.0  
+      @cPackHeaderStatus   NVARCHAR(  1), --Status PackHeader PSJ036 REV1.0  
   
       @cScannedUCC               NVARCHAR( 20),  
       @cScannedUCCLoc            NVARCHAR( 10),  
@@ -103,7 +103,7 @@ BEGIN
   
    IF EXISTS( SELECT 1 FROM rdt.rdtRPFLog WITH (NOLOCK) WHERE UCCNo = @cScannedUCC)  
    BEGIN  
-      SET @nErrNo = 270700  
+      SET @nErrNo = 275851  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC scanned  
       GOTO Fail  
    END  
@@ -145,11 +145,9 @@ BEGIN
       AND StorerKey = @cStorerKey  
    SELECT @nRowCount = @@ROWCOUNT  
   
-  
-  
    IF @nRowCount = 0  
    BEGIN  
-      SET @nErrNo = 270724  
+      SET @nErrNo = 275875  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Scanned UCC does not exist  
       GOTO Fail  
    END  
@@ -157,7 +155,7 @@ BEGIN
    -- Check multi SKU UCC  
    IF @nRowCount > 1  
    BEGIN  
-      SET @nErrNo = 270725  
+      SET @nErrNo = 275876  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Scanned UCC contains multiple SKUs  
       GOTO Fail  
    END  
@@ -172,14 +170,14 @@ BEGIN
   
    IF @cScannedUCCStatus NOT IN ('1', '3')  
    BEGIN  
-      SET @nErrNo = 270701  
+      SET @nErrNo = 275852  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC status is not valid for swap  
       GOTO Fail  
    END  
      
    IF @cPackHeaderStatus = '9'  --PSJ036 REV1.0 Pack Header Status  
    BEGIN  
-      SET @nErrNo = 270726  
+      SET @nErrNo = 275877  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC status is not valid for swap  
       GOTO Fail  
    END  
@@ -187,28 +185,28 @@ BEGIN
    -- Only same Loc, ID, SKU, Qty and Lot are allowed for swap  
    IF @cOriginalTaskFromLoc <> @cScannedUCCLoc  
    BEGIN  
-      SET @nErrNo = 270702  
+      SET @nErrNo = 275853  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Loc does not match  
       GOTO Fail  
    END  
   
    IF @cOriginalTaskSKU <> @cScannedUCCSKU  
    BEGIN  
-      SET @nErrNo = 270703  
+      SET @nErrNo = 275854  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- SKU does not match  
       GOTO Fail  
    END  
   
    IF @cOriginalTaskLot <> @cScannedUCCLot  
    BEGIN  
-      SET @nErrNo = 270704  
+      SET @nErrNo = 275855  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LOT does not match  
       GOTO Fail  
    END  
   
    IF @nOriginalTaskQTY <> @nScannedUCCQTY  
    BEGIN  
-      SET @nErrNo = 270705  
+      SET @nErrNo = 275856  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- QTY does not match  
       GOTO Fail  
    END  
@@ -235,7 +233,7 @@ BEGIN
                   AND Status <> '0'  
                   AND DropID IS NOT NULL  
                   AND DropID = @cScannedUCC)  
-   OR EXISTS(SELECT 1  --PSJ036 REV1.0 Pack Header Status = 0, but ExpQty = Qty  
+      OR EXISTS(SELECT 1  --PSJ036 REV1.0 Pack Header Status = 0, but ExpQty = Qty  
                FROM dbo.PackDetail WITH(NOLOCK)  
                WHERE StorerKey = @cStorerKey  
                   AND ExpQty = Qty  
@@ -243,7 +241,7 @@ BEGIN
                   AND DropID = @cScannedUCC  
                   AND SKU = @cScannedUCCSKU)   
    BEGIN  
-      SET @nErrNo = 270706  
+      SET @nErrNo = 275857  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UCC is locked by other task  
       GOTO Fail  
    END  
@@ -277,7 +275,7 @@ BEGIN
                AND CaseID = @cOriginalTaskUCC  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270707  
+            SET @nErrNo = 275858  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Unlock UCC from RPF task failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -295,7 +293,7 @@ BEGIN
                   ,@cTaskDetailKey = @cTaskDetailKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270721  
+            SET @nErrNo = 275867  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Exec rdt_Putaway_PendingMoveIn failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -328,7 +326,7 @@ BEGIN
             INNER JOIN @tPickDetails#1 TPD ON PD.PickDetailKey = TPD.PickDetailKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270708  
+            SET @nErrNo = 275859  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Unlock UCC from FCP PickDetail failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -356,7 +354,7 @@ BEGIN
             INNER JOIN @tTaskDetails#1 TTD ON TD.TaskDetailKey = TTD.TaskDetailKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270709  
+            SET @nErrNo = 275860  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Unlock UCC from FCP task failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -396,7 +394,7 @@ BEGIN
                INNER JOIN @tTaskDetails#2 TTD ON TD.TaskDetailKey = TTD.TaskDetailKey  
             END TRY  
             BEGIN CATCH  
-               SET @nErrNo = 270710  
+               SET @nErrNo = 275861  
                SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Allocate task UCC to other RPF task failed  
                GOTO ROLLBACK_TRAN  
             END CATCH  
@@ -420,7 +418,7 @@ BEGIN
                      ,@cTaskDetailKey = @cTaskdetailKeyTemp  
             END TRY  
             BEGIN CATCH  
-               SET @nErrNo = 270722  
+               SET @nErrNo = 275872  
                SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  FExec rdt_Putaway_PendingMoveIn failed  
                GOTO ROLLBACK_TRAN  
             END CATCH  
@@ -459,7 +457,7 @@ BEGIN
             END  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270711  
+            SET @nErrNo = 275862  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Unallocate scanned UCC from PickDetail failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -483,7 +481,7 @@ BEGIN
             END  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270712  
+            SET @nErrNo = 275863  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Allocate task UCC to other PickDetail failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -510,7 +508,7 @@ BEGIN
             END  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270720  
+            SET @nErrNo = 275871  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Allocate task UCC to other FCP TaskDetail failed  
             GOTO ROLLBACK_TRAN  
          END CATCH   
@@ -540,7 +538,7 @@ BEGIN
             END  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270727  
+            SET @nErrNo = 275878  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Allocate task UCC to other PackDetail failed  
             GOTO ROLLBACK_TRAN  
          END CATCH --PSJ036 REV1.0 END  
@@ -573,7 +571,7 @@ BEGIN
                   ,@cMoveQTYAlloc = @cMoveQTYAlloc  
             END TRY  
             BEGIN CATCH  
-               SET @nErrNo = 270722  
+               SET @nErrNo = 275872  
                SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  FExec rdt_Putaway_PendingMoveIn failed  
                GOTO ROLLBACK_TRAN  
             END CATCH  
@@ -602,7 +600,7 @@ BEGIN
             AND (CaseID IS NULL OR CaseID = '')  
       END TRY  
       BEGIN CATCH  
-         SET @nErrNo = 270713  
+         SET @nErrNo = 275864  
          SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  Allocate scanned UCC to RPF task failed  
          GOTO ROLLBACK_TRAN  
       END CATCH  
@@ -631,7 +629,7 @@ BEGIN
          END  
       END TRY  
       BEGIN CATCH  
-         SET @nErrNo = 270714  
+         SET @nErrNo = 275865  
          SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  Allocate scanned UCC to PickDetail failed  
          GOTO ROLLBACK_TRAN  
       END CATCH  
@@ -656,7 +654,7 @@ BEGIN
          END  
       END TRY  
       BEGIN CATCH  
-         SET @nErrNo = 270715  
+         SET @nErrNo = 275866  
          SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  Allocate scanned UCC to TaskDetail failed  
          GOTO ROLLBACK_TRAN  
       END CATCH  
@@ -680,7 +678,7 @@ BEGIN
                ,@cMoveQTYAlloc = @cMoveQTYAlloc  
       END TRY  
       BEGIN CATCH  
-         SET @nErrNo = 270716  
+         SET @nErrNo = 275873  
          SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  Fail to lock scanned UCC to RFPutaway  
          GOTO ROLLBACK_TRAN  
       END CATCH  
@@ -708,7 +706,7 @@ BEGIN
                AND StorerKey = @cStorerKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270717  
+            SET @nErrNo = 275868  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --  Update scanned UCC to 3 failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -727,7 +725,7 @@ BEGIN
                AND StorerKey = @cStorerKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270723  
+            SET @nErrNo = 275874  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --   Update scanned UCC to 1 failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -746,7 +744,7 @@ BEGIN
                AND StorerKey = @cStorerKey  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270718  
+            SET @nErrNo = 275869  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') --   Update original task UCC to 1 failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
@@ -765,7 +763,7 @@ BEGIN
                AND Status = '1'  
          END TRY  
          BEGIN CATCH  
-            SET @nErrNo = 270719  
+            SET @nErrNo = 275870  
             SET @cErrMsg = rdt.rdtGetMessage( @nErrNo, @cLangCode, 'DSP') -- Update original task UCC to 3 failed  
             GOTO ROLLBACK_TRAN  
          END CATCH  
