@@ -12,6 +12,7 @@ GO
 /* 2026-07-13  1.1   Dennis     UWP-60992 Fix dup pallet in diff PPSLOC */
 /* 2026-07-21  1.2   Dennis     UWP-61932 Fallback PENDAUDIT check to   */
 /*                              PackInfo_AuditLog when no PackInfo data  */
+/* 2026-07-29  1.3   Dennis     UWP-62713 Fix ReasonKey PICK0 to SHORT0 */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_1837ExtScn02] (
    @nMobile      INT,           
@@ -309,7 +310,7 @@ BEGIN
                         ON PD.TaskDetailKey = TD.TaskDetailKey
                      WHERE PD.StorerKey = @cStorerKey
                        AND PD.CaseID    = @cCartonID
-                       AND (TD.ReasonKey IN ('SIZE','PICK0') OR TD.Message01 = 'POST-HOSP')
+                       AND (TD.ReasonKey IN ('SIZE','SHORT0') OR TD.Message01 = 'POST-HOSP')
                        AND TD.Status    = 'X'
                   )
                      SET @bSizeException = 1
