@@ -20,6 +20,7 @@ GO
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
 /* 2026-07-24  Wan      1.0   Remove raise Error, CR v8.6, UWP-61665      */
+/* 2026-07-28                 CR v9.0 ToLoc for UOM ='2'                  */
 /**************************************************************************/ 
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_VLDN]       
@@ -278,7 +279,7 @@ BEGIN
          ,   cl.UDF05  
          ,   cl.Code2  
       FROM CODELKUP cl (NOLOCK)  
-      WHERE cl.Listname = 'AREA_MEZZA'
+      WHERE cl.Listname IN ('AREA_MEZZA','CHANNELSTG')                              --(Wan)
       AND   cl.Storerkey= @c_Storerkey
    END
 
@@ -302,7 +303,7 @@ BEGIN
          SET @n_Err = 63040    
          SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
                         + 'Max UCC setup not found: ' 
-                        + @c_Sku + ' . (mspRLWAV13_VLDN)'                                                                                                
+                        + @c_Sku + '. (mspRLWAV13_VLDN)'                                                                                                
       END  
    END
 
@@ -334,7 +335,7 @@ BEGIN
             SET @n_Err = 63050    
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
                            + 'Sku''s CubeUOM3 = 0.00. Sku: ' 
-                           + @c_Sku + ' . (mspRLWAV13_VLDN)'                                                                                                
+                           + @c_Sku + '. (mspRLWAV13_VLDN)'                                                                                                
          END
          ELSE
          BEGIN
@@ -342,7 +343,7 @@ BEGIN
             SET @n_Err = 63060    
             SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
                            + 'Sku''s CubeUOM3 > Max Tote CBM. Sku: ' 
-                           + @c_Sku + ' . (mspRLWAV13_VLDN)' 
+                           + @c_Sku + '. (mspRLWAV13_VLDN)' 
          END                  
       END  
    END
@@ -382,7 +383,7 @@ BEGIN
          SET @n_Err = 63070   
          SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
                         + 'Sku''s CubeUOM3 > Client Carton Cube. Sku: ' 
-                        + @c_Sku + ' . (mspRLWAV13_VLDN)' 
+                        + @c_Sku + '. (mspRLWAV13_VLDN)' 
       END  
    END
 
@@ -412,7 +413,98 @@ BEGIN
                         + 'Area''s priotiry not setup. Check Areakey setup and Area_Mezza codelkup setup'
                         + '. From Loc: ' + @c_Loc 
                         + ', Areakey: ' + @c_AreaKey 
-                        + ' . (mspRLWAV13_VLDN)'                                                                                                
+                        + '. (mspRLWAV13_VLDN)'                                                                                                
+      END  
+   END
+   
+   IF @n_Continue = 1                                                               --(Wan)
+   BEGIN
+      SET @c_Loc = ''
+      SELECT TOP 1 
+               @c_Loc = pw.Loc
+            ,  @c_AreaKey = ad.Areakey               
+      FROM #PICKDETAIL_WIP AS pw  
+      JOIN LOC l (NOLOCK) ON l.loc = pw.loc
+      JOIN Areadetail ad (NOLOCK) ON ad.putawayzone = l.PutawayZone
+      WHERE pw.UOM > '2'
+      AND NOT EXISTS (SELECT 1                                                   
+                        FROM @t_CL cl  
+                        JOIN LOC l (NOLOCK) ON l.loc = cl.UDF01
+                        WHERE cl.ListName = 'AREA_MEZZA'
+                        AND   cl.Code = ad.Areakey
+                        AND   cl.Storerkey= pw.Storerkey
+                        AND   l.Facility  = @c_Facility   
+                       )
+
+      IF @c_Loc > ''  
+      BEGIN    
+         SET @n_Continue = 3    
+         SET @n_Err = 63090    
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                        + 'Invalid ToLoc for Loose pick.'
+                        + '. From Loc: ' + @c_Loc 
+                        + ', Areakey: ' + @c_AreaKey 
+                        + '. (mspRLWAV13_VLDN)'                                                                                                
+      END  
+   END
+
+   IF @n_Continue = 1                                                                     
+   BEGIN
+      SET @c_Loc = ''
+      SET @c_AreaKey = ''
+      SELECT TOP 1 
+               @c_Loc = pw.Loc
+      FROM #PICKDETAIL_WIP AS pw  
+      WHERE pw.UOM = '2'
+      AND NOT EXISTS (  SELECT 1                                                  
+                        FROM @t_CL cl  
+                        JOIN LOC l (NOLOCK) ON l.loc = cl.UDF04
+                        WHERE cl.ListName = 'CHANNELSTG'
+                        AND   cl.Storerkey= pw.Storerkey
+                        AND   cl.UDF01 = @c_Channel_b
+                        AND   cl.UDF02 = @c_Client
+                        AND   cl.UDF03 = pw.UOM
+                        AND   l.Facility = @c_Facility
+                     )
+
+      IF @c_Loc > ''  
+      BEGIN    
+         SET @n_Continue = 3    
+         SET @n_Err = 63100    
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                        + 'Invalid to Loc setup for UCC'
+                        + '. From Loc: ' + @c_Loc 
+                        + '. (mspRLWAV13_VLDN)'                                                                                                
+      END  
+   END
+
+   IF @n_Continue = 1                                                               --(Wan)      
+   BEGIN
+      SET @c_Loc = ''
+      SET @c_AreaKey = ''
+      SELECT TOP 1 
+               @c_Loc = pw.Loc
+      FROM #PICKDETAIL_WIP AS pw  
+      WHERE pw.UOM = '2'
+      AND NOT EXISTS (  SELECT 1                                                  
+                        FROM @t_CL cl  
+                        JOIN LOC l (NOLOCK) ON l.loc = cl.UDF04
+                        WHERE cl.ListName = 'CHANNELSTG'
+                        AND   cl.Storerkey= pw.Storerkey
+                        AND   cl.UDF01 = @c_Channel_b
+                        AND   cl.UDF02 = @c_Client
+                        AND   cl.UDF03 = pw.UOM
+                        AND   l.Facility = @c_Facility
+                     )
+
+      IF @c_Loc > ''  
+      BEGIN    
+         SET @n_Continue = 3    
+         SET @n_Err = 63100    
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(NCHAR(5),@n_Err) + ': '
+                        + 'Invalid to Loc setup for UCC'
+                        + '. From Loc: ' + @c_Loc 
+                        + '. (mspRLWAV13_VLDN)'                                                                                                
       END  
    END
 
