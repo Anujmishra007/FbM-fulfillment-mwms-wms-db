@@ -20,6 +20,7 @@ GO
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
 /* 2026-07-07  Wan      1.0   FCR-12980: CR v8.5 - v8.7                   */
+/* 2026-07-29                 CR v9.0 ToLoc for UOM ='2'                  */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_FCP]        
    @c_Wavekey     NVARCHAR(10)
@@ -43,6 +44,9 @@ BEGIN
          , @c_SourceType         NVARCHAR(30)= 'mspRLWAV13'
          , @c_UserName           NVARCHAR(128) = ''
 
+         , @c_Channel_b          NVARCHAR(20)= ''                                   --(Wan)
+         , @c_Client             NVARCHAR(20)= ''                                   --(Wan)  
+         
          , @c_Orderkey           NVARCHAR(10)= ''
          , @c_Loadkey            NVARCHAR(10)= ''
          , @c_TaskdetailKey      NVARCHAR(10)= ''
@@ -76,8 +80,8 @@ BEGIN
          , @c_AreaKey            NVARCHAR(10)= '' 
          , @c_LinkTaskToPick_SQL NVARCHAR(1000)= '' 
          , @c_PickDetailKey      NVARCHAR(10)= ''
-         , @c_PickDetailKey_New  NVARCHAR(10)= ''         
-
+         , @c_PickDetailKey_New  NVARCHAR(10)= '' 
+ 
          , @n_TransitCount       INT         = 0  
          , @n_LocLevel           INT         = 0
          , @n_LocLevel_P         INT         = 0
@@ -197,9 +201,21 @@ BEGIN
          FROM #PICKDETAIL_WIP AS pw
       END
       
-      SELECT @c_Priority_Wave = w.Userdefine04
+      IF @c_Facility = ''                                                           --(Wan01)
+      BEGIN
+         SELECT TOP 1 @c_Facility = o.Facility
+         FROM #PICKDETAIL_WIP AS pw
+         JOIN ORDERS o (NOLOCK) ON o.Orderkey = pw.Orderkey
+      END  
+          
+      SELECT @c_Channel_B     = w.UserDefine03                                      --(Wan)
+            ,@c_Priority_Wave = w.Userdefine04
+            ,@c_Client        = w.UserDefine05                                      --(Wan)
       FROM WAVE AS w (NOLOCK)
       WHERE w.Wavekey = @c_Wavekey
+
+      SET @c_Channel_B = ISNULL(@c_Channel_B,'')                                    --(Wan)   
+      SET @c_Client = ISNULL(@c_Client,'')                                          --(Wan)
 
       IF @c_Priority_Wave NOT BETWEEN '0' AND '9'
       BEGIN
@@ -247,8 +263,9 @@ BEGIN
          ,   cl.UDF05   
          ,   cl.Code2  
       FROM CODELKUP cl (NOLOCK)  
-      WHERE cl.Listname = 'AREA_MEZZA'
+      WHERE cl.Listname IN ('AREA_MEZZA','CHANNELSTG')                              --(Wan)
       AND   cl.Storerkey= @c_Storerkey
+      ORDER BY cl.Listname                                                          --(Wan)
 
       SELECT @n_MaxCapaci_LPN = cl.UDF01
             ,@n_MaxCapaci_Tote= cl.UDF02
@@ -325,18 +342,30 @@ BEGIN
             SET @c_RefTaskkey = @c_Taskdetail_RPF
             SET @c_TaskStatus = 'H'
          END
-
+         
+         SET @c_ToLoc = ''                                                          --(Wan)
          SELECT @c_ToLoc = cl.UDF01
                ,@c_Priority_Area = cl.UDF02
          FROM @t_CL cl
+         JOIN Loc l (NOLOCK) ON l.Loc = cl.UDF01                                    --(Wan)
          WHERE cl.ListName = 'AREA_MEZZA'
          AND   cl.Code = @c_AreaKey
          AND   cl.Storerkey = @c_Storerkey
-
-         --IF @c_UOM = '2'                                                          --(Wan)                     
-         --BEGIN
-         --   SET @c_ToLoc = 'AEOSTGPICK'
-         --END
+         AND   l.Facility = @c_Facility                                             --(Wan)   
+ 
+         IF @c_UOM = '2'                                                           --(Wan)                                                                               
+         BEGIN
+            SET @c_ToLoc = ''
+            SELECT @c_ToLoc = cl.UDF04
+            FROM @t_CL cl
+            JOIN Loc l (NOLOCK) ON l.Loc = cl.UDF04
+            WHERE cl.ListName = 'CHANNELSTG'
+            AND   cl.Storerkey= @c_Storerkey
+            AND   cl.UDF01 = @c_Channel_b
+            AND   cl.UDF02 = @c_Client
+            AND   cl.UDF03 = @c_UOM
+            AND   l.Facility = @c_Facility
+         END
                                 
          IF ISNULL(@c_Toloc,'') = ''  
          BEGIN           
