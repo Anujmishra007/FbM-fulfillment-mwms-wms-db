@@ -389,7 +389,7 @@ BEGIN
                   ,  CountryDestination = PO.DestinationCountry
                   ,  Userdefine01       = PO.PlaceOfLoading
                   ,  UserDefine02       = PO.placeOfDischarge
-                  ,  UserDefine06         = PO.EditDate
+                  ,  UserDefine06         = RH.UserDefine06
                   ,  UserDefine07     = RH.Userdefine07
                   ,  B_Contact1         = PO.BuyerName
                   ,  B_Contact2         = PO.BuyerAddress1
