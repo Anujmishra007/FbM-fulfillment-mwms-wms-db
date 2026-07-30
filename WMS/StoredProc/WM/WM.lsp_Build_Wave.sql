@@ -606,7 +606,7 @@ AS
          --(Dilip21) End
          -- Get Column Type
          --(Wan05) - START
-         SET @c_TableName = ''
+         --SET @c_TableName = ''
          IF CHARINDEX('.', @c_FieldName, 1) = 0
          BEGIN
             IF @c_FieldName = 'SKU_TOTAL_OPENQTY'
