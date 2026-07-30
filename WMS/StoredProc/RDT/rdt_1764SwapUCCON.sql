@@ -175,12 +175,20 @@ BEGIN
       GOTO Fail  
    END  
      
-   IF @cPackHeaderStatus = '9'  --PSJ036 REV1.0 Pack Header Status  
-   BEGIN  
-      SET @nErrNo = 275877  
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC status is not valid for swap  
-      GOTO Fail  
-   END  
+   IF EXISTS(
+      SELECT 1
+      FROM dbo.PackDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.PackHeader PH WITH (NOLOCK)
+         ON PD.PickSlipNo = PH.PickSlipNo AND PD.StorerKey = PH.StorerKey
+      WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cScannedUCC
+         AND PH.Status = '9'
+   )
+   BEGIN
+      SET @nErrNo = 275877
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC status is not valid for swap
+      GOTO Fail
+   END
   
    -- Only same Loc, ID, SKU, Qty and Lot are allowed for swap  
    IF @cOriginalTaskFromLoc <> @cScannedUCCLoc  
