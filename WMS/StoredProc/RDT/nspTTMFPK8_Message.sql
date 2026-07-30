@@ -1,0 +1,5 @@
+EXECUTE rdt.rdtDropMsg 275950, 275960
+
+EXECUTE rdt.rdtAddMsg 275950, 10, '275950^UPDTaskDtlFail',     'us_english', 1770, 0, '275950 UPD TaskDtl Fail'
+
+SELECT * FROM rdt.RDTMsg WITH (NOLOCK) WHERE Message_ID BETWEEN 275950 AND 275960
