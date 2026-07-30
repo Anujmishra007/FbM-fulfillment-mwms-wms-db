@@ -74,7 +74,7 @@ BEGIN
    DECLARE @cSQLParam          NVARCHAR( MAX)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
 
-   DECLARE @cTempSKU           NCHAR( 20)
+   DECLARE @cTempSKU           NVARCHAR( 20)
    DECLARE @nTempQTY           INT
    DECLARE @cTempLottable01    NVARCHAR( 18)
    DECLARE @cTempLottable02    NVARCHAR( 18)
@@ -313,6 +313,27 @@ BEGIN
             SELECT 'Get Next SKU', @cTempSKU AS SKU, @cTempLottableCode AS LottableCode
       END
 
+      -- Verify LottableCode has definition in rdtLottableCode for current function
+      IF NOT EXISTS (
+         SELECT TOP 1 1
+         FROM rdt.rdtLottableCode WITH (NOLOCK)
+         WHERE LottableCode = @cTempLottableCode
+            AND Function_ID = @nFunc
+            AND StorerKey   = @cStorerKey)
+      BEGIN
+         IF NOT EXISTS (
+            SELECT TOP 1 1
+            FROM rdt.rdtLottableCode WITH (NOLOCK)
+            WHERE LottableCode = @cTempLottableCode
+               AND Function_ID = 0
+               AND StorerKey   = @cStorerKey)
+         BEGIN
+            SET @nErrNo = 275353
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- LottableCode not configured
+            GOTO Quit
+         END
+      END
+
       /************************************** Get QTY and lottables *********************************/
       DECLARE @cSelect  NVARCHAR( MAX) = ''
       DECLARE @cFrom    NVARCHAR( MAX) = ''
@@ -335,6 +356,16 @@ BEGIN
          @cOrderBy OUTPUT,
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
+
+      -- Verify Lottable07 (PCS DOT) and Lottable02 (MIN DOT) are visible in rdtLottableCode
+      -- These are required for the fixed DOT ORDER BY; if absent @cGroupBy will not contain them
+      -- and ORDER BY on non-grouped columns would cause a SQL error
+      IF CHARINDEX('Lottable07', ISNULL(@cSelect, '')) = 0 OR CHARINDEX('Lottable02', ISNULL(@cSelect, '')) = 0
+      BEGIN
+         SET @nErrNo = 275354
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Lottable07/02 not visible
+         GOTO Quit
+      END
 
       -- Override ORDER BY: oldest PCS DOT (Lottable07) first, then MIN DOT (Lottable02), then smallest PickDetailKey
       -- DOT format XXYY (XX=week, YY=year) — RIGHT(2) extracts year for correct chronological sort
@@ -462,31 +493,38 @@ BEGIN
          '@dLottable14 DATETIME      OUTPUT, ' +
          '@dLottable15 DATETIME      OUTPUT  '
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-         @cPickSlipNo = @cPickSlipNo,
-         @cOrderKey   = @cOrderKey,
-         @cLoadKey    = @cLoadKey,
-         @cLOC        = @cLOC,
-         @cID         = @cID,
-         @cSKU        = @cTempSKU,
-         @cStatus     = @cPickConfirmStatus,
-         @cPickZone   = @cPickZone,
-         @nQTY        = @nTempQTY        OUTPUT,
-         @cLottable01 = @cTempLottable01 OUTPUT,
-         @cLottable02 = @cTempLottable02 OUTPUT,
-         @cLottable03 = @cTempLottable03 OUTPUT,
-         @dLottable04 = @dTempLottable04 OUTPUT,
-         @dLottable05 = @dTempLottable05 OUTPUT,
-         @cLottable06 = @cTempLottable06 OUTPUT,
-         @cLottable07 = @cTempLottable07 OUTPUT,
-         @cLottable08 = @cTempLottable08 OUTPUT,
-         @cLottable09 = @cTempLottable09 OUTPUT,
-         @cLottable10 = @cTempLottable10 OUTPUT,
-         @cLottable11 = @cTempLottable11 OUTPUT,
-         @cLottable12 = @cTempLottable12 OUTPUT,
-         @dLottable13 = @dTempLottable13 OUTPUT,
-         @dLottable14 = @dTempLottable14 OUTPUT,
-         @dLottable15 = @dTempLottable15 OUTPUT
+      BEGIN TRY
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @cPickSlipNo = @cPickSlipNo,
+            @cOrderKey   = @cOrderKey,
+            @cLoadKey    = @cLoadKey,
+            @cLOC        = @cLOC,
+            @cID         = @cID,
+            @cSKU        = @cTempSKU,
+            @cStatus     = @cPickConfirmStatus,
+            @cPickZone   = @cPickZone,
+            @nQTY        = @nTempQTY        OUTPUT,
+            @cLottable01 = @cTempLottable01 OUTPUT,
+            @cLottable02 = @cTempLottable02 OUTPUT,
+            @cLottable03 = @cTempLottable03 OUTPUT,
+            @dLottable04 = @dTempLottable04 OUTPUT,
+            @dLottable05 = @dTempLottable05 OUTPUT,
+            @cLottable06 = @cTempLottable06 OUTPUT,
+            @cLottable07 = @cTempLottable07 OUTPUT,
+            @cLottable08 = @cTempLottable08 OUTPUT,
+            @cLottable09 = @cTempLottable09 OUTPUT,
+            @cLottable10 = @cTempLottable10 OUTPUT,
+            @cLottable11 = @cTempLottable11 OUTPUT,
+            @cLottable12 = @cTempLottable12 OUTPUT,
+            @dLottable13 = @dTempLottable13 OUTPUT,
+            @dLottable14 = @dTempLottable14 OUTPUT,
+            @dLottable15 = @dTempLottable15 OUTPUT
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 275355
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Execute SQL error
+         GOTO Quit
+      END CATCH
 
       IF @nTempQTY > 0
          BREAK
@@ -531,7 +569,7 @@ BEGIN
       @cLottableCode = LottableCode,
       @cPPK          =
          CASE WHEN SKU.PrePackIndicator = '2'
-            THEN CAST( SKU.PackQtyIndicator AS NVARCHAR( 5))
+            THEN ISNULL(TRY_CAST( SKU.PackQtyIndicator AS NVARCHAR( 5)), '')
             ELSE ''
          END,
       @cMUOM_Desc    = Pack.PackUOM3,
