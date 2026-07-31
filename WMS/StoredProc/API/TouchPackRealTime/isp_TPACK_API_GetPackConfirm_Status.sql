@@ -103,15 +103,14 @@ BEGIN
 
    IF EXISTS ( SELECT 1      
                FROM PACKHEADER (NOLOCK)       
-               WHERE StorerKey = @cStorerKey      
-               AND PickSlipNo = @cPickSlipNo
+               WHERE PickSlipNo = @cPickSlipNo
                AND [Status] = '9'
    )      
    BEGIN      
       SET @b_Success =1      
    END      
 
-	SET @c_ResponseString = ISNULL((SELECT CAST ( 1 AS BIT ) AS 'Success' FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+	SET @c_ResponseString = ISNULL((SELECT CAST ( @b_Success AS BIT ) AS 'Success' FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '') 
 
 END
