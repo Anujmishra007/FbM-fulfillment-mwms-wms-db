@@ -82,10 +82,8 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-   IF @nTranCount = 0
-      BEGIN TRANSACTION
-   ELSE
-      SAVE TRANSACTION nspTTMFPK8
+   BEGIN TRAN  -- Begin our own transaction
+   SAVE TRAN nspTTMFPK8 -- For rollback or commit only our own transaction
 
    SET @c_TaskDetailKey = ''
 
