@@ -1,12 +1,12 @@
 --rdt_1764CfmExtUpd10
-execute rdt.rdtdropmsg 91001, 91009
+--276351 - 276400
+execute rdt.rdtdropmsg 276351, 276400
 
-execute rdt.rdtAddMsg 91001, 10, '91001ReadTaskFail   ', 'us_english', 1764
-execute rdt.rdtAddMsg 91002, 10, '91002CCMsgFail      ', 'us_english', 1764
-execute rdt.rdtAddMsg 91003, 10, '91003HoldLocFail    ', 'us_english', 1764
-execute rdt.rdtAddMsg 91004, 10, '91004HoldLocExecFail', 'us_english', 1764
-execute rdt.rdtAddMsg 91005, 10, '91005PickDetailFail ', 'us_english', 1764
-execute rdt.rdtAddMsg 91006, 10, '91006LLIFail        ', 'us_english', 1764
-execute rdt.rdtAddMsg 91007, 10, '91007ReallocFail    ', 'us_english', 1764
-execute rdt.rdtAddMsg 91008, 10, '91008ReallocExecFail', 'us_english', 1764
-execute rdt.rdtAddMsg 91009, 10, '91009DataError      ', 'us_english', 1764
+execute rdt.rdtAddMsg 276351, 10, '276351 TskDtl not found',    'us_english', 1764, 0, '276351 TaskDetail not found'
+execute rdt.rdtAddMsg 276352, 10, '276352 CC Tsk upd fail ',    'us_english', 1764, 0, '276352 Update CC TaskDetails fail'
+execute rdt.rdtAddMsg 276353, 10, '276353 Inv Hold fail',       'us_english', 1764, 0, '276353 Execute InventoryHold fail'
+execute rdt.rdtAddMsg 276354, 10, '276354 Inv Hold exec fail',  'us_english', 1764, 0, '276354 Execute InventoryHold fail'
+execute rdt.rdtAddMsg 276355, 10, '276355 PickDetail upd fail', 'us_english', 1764, 0, '276355 Mark PickDetail as SHORT fail'
+execute rdt.rdtAddMsg 276356, 10, '276356 Replen upd fail',     'us_english', 1764, 0, '276356 Replenishment update fail'
+execute rdt.rdtAddMsg 276357, 10, '276357 Replen upd fail',     'us_english', 1764, 0, '276357 Replenishment update fail'
+
