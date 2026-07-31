@@ -32,6 +32,7 @@ GO
 /* 2026-03-19   3.8  JWF011     FCR-11818: Update TPACK_UserSessionActivityLog      */
 /* 2026-05-11   3.9  JWF011     UWP-52781: Fix weight config                        */
 /* 2026-06-30   4.0  JWF011     UWP-59788: Fix NULL cube                            */
+/* 2026-07-31   4.1  MBR282     UWP-62862: Add new validation for TPS-CtnRec case   */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_UpdatePackInfo] (
@@ -141,6 +142,26 @@ BEGIN
       SET @n_Continue = 3
       SET @n_ErrNo = 11551
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Failed to Update into PackInfo, Current Carton No. not found.
+      GOTO EXIT_SP
+   END
+
+   --add check for TPS-CtnRec case
+   IF EXISTS ( SELECT 1
+               FROM PACKINFO PI (NOLOCK)
+               WHERE PI.PickSlipNo = @cPickSlipNo
+               AND PI.CartonNo = @nCartonNo
+               AND PI.Qty = 0
+               AND PI.CartonType <> ''
+               AND NOT EXISTS ( SELECT 1
+                              FROM PACKDETAIL PD (NOLOCK)
+                              WHERE PD.PickSlipNo = PI.PickSlipNo
+                              AND PD.CartonNo = PI.CartonNo
+               )
+	)
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_ErrNo = 11561
+      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No SKU packed in this carton, please pack at least 1 SKU before closing the carton.'
       GOTO EXIT_SP
    END
 
