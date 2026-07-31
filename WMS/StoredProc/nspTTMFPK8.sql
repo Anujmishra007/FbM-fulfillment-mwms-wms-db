@@ -12,10 +12,10 @@ GO
 /* Modifications log:                                                    		   	*/
 /* Date        Author    Ver  Purposes                                     			*/
 /* 2026-07-06  PSJ036    1.0  RITM8976012/UWP-60717 Is's a copy from SP nspTTMFPK1	*/
-/*							  this change is to find the candidates for			         	*/
-/*							  Taskdetailkey instead GroupKey. 					            	*/
+/*							  this change is to find the candidates for			   	*/
+/*							  Taskdetailkey instead GroupKey. 					   	*/
 /************************************************************************************/
-ALTER   PROC [dbo].[nspTTMFPK8](
+CREATE OR ALTER   PROC [dbo].[nspTTMFPK8](
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
@@ -36,37 +36,39 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-       @b_debug      INT
-      ,@n_starttcnt  INT -- Holds the current transaction count
-      ,@n_continue   INT
-      ,@b_Success    INT
+       @b_debug      	INT
+      ,@n_starttcnt  	INT -- Holds the current transaction count
+      ,@n_continue   	INT
+      ,@b_Success    	INT
       ,@c_LastLOCAisle  NVARCHAR(10)
-      ,@cFoundTask    NVARCHAR( 1)
-      ,@b_SkipTheTask INT
+      ,@cFoundTask    	NVARCHAR( 1)
+      ,@b_SkipTheTask 	INT
 
    DECLARE
-       @c_StorerKey NVARCHAR(15)
-      ,@c_SKU       NVARCHAR(20)
-      ,@c_FromID    NVARCHAR(18)
-      ,@c_ToLOC     NVARCHAR(10)
-      ,@c_ToID      NVARCHAR(18)
-      ,@c_LOT       NVARCHAR(10)
-      ,@n_QTY       INT
-      ,@c_TaskType  NVARCHAR(10)
-      ,@c_LOCCategory NVARCHAR( 10)
-      ,@c_LOCAisle  NVARCHAR(10)
-      ,@c_Facility  NVARCHAR(5)
-      ,@c_GroupKey  NVARCHAR(10)
+       @c_StorerKey 				NVARCHAR(15)
+      ,@c_SKU       				NVARCHAR(20)
+      ,@c_FromID    				NVARCHAR(18)
+      ,@c_ToLOC     				NVARCHAR(10)
+      ,@c_ToID      				NVARCHAR(18)
+      ,@c_LOT       				NVARCHAR(10)
+      ,@n_QTY       				INT
+      ,@c_TaskType  				NVARCHAR(10)
+      ,@c_LOCCategory 				NVARCHAR( 10)
+      ,@c_LOCAisle  				NVARCHAR(10)
+      ,@c_Facility  				NVARCHAR(5)
+      ,@c_GroupKey  				NVARCHAR(10)
+	  ,@Cursor_FPKTaskCandidates	CURSOR
+
 
     SELECT
-       @b_debug = 0
-      ,@n_starttcnt = @@TRANCOUNT
-      ,@n_continue = 1
-      ,@b_success = 0
-      ,@n_err = 0
-      ,@c_errmsg = ''
+       @b_debug 		= 0
+      ,@n_starttcnt 	= @@TRANCOUNT
+      ,@n_continue 		= 1
+      ,@b_success 		= 0
+      ,@n_err 			= 0
+      ,@c_errmsg 		= ''
       ,@c_TaskDetailkey = ''
-      ,@c_LastLOCAisle = ''
+      ,@c_LastLOCAisle 	= ''
 
    -- Get last GroupKey by this user
    SET @c_GroupKey = ''
@@ -80,13 +82,15 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN nspTTMFPK8 -- For rollback or commit only our own transaction
+   IF @nTranCount = 0
+      BEGIN TRANSACTION
+   ELSE
+      SAVE TRANSACTION nspTTMFPK8
 
    SET @c_TaskDetailKey = ''
 
    IF @c_AreaKey01 <> ''
-      DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SET @Cursor_FPKTaskCandidates = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TaskDetailkey, GroupKey
          FROM dbo.TaskDetail WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
@@ -104,22 +108,22 @@ BEGIN
             AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE
-                 AND tmu.UserKey = @c_UserID
-                 AND tmu.AreaKey = @c_AreaKey01
-                 AND tmu.Permission = '1')
-         --INC0693341 Start
-         --ORDER BY
+                  AND tmu.UserKey = @c_UserID
+                  AND tmu.AreaKey = @c_AreaKey01
+                  AND tmu.Permission = '1')
+           --INC0693341 Start
+           --ORDER BY
            --CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
            --,TaskDetail.Priority
            --,TaskDetail.TaskDetailKey
            ORDER BY
-             CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END  --PSJ036 VER1.0
-            ,TaskDetail.Priority
-            , LOC.LogicalLocation
-            , LOC.LOC
-         --INC0693341 End
+              CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END  --PSJ036 VER1.0
+              ,TaskDetail.Priority
+              , LOC.LogicalLocation
+              , LOC.LOC
+           --INC0693341 End
    ELSE
-      DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SET @Cursor_FPKTaskCandidates = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT TaskDetailkey, GroupKey
          FROM dbo.TaskDetail WITH (NOLOCK)
             JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
@@ -136,23 +140,23 @@ BEGIN
             AND EXISTS( SELECT 1
                FROM TaskManagerUserDetail tmu WITH (NOLOCK)
                WHERE PermissionType = TaskDetail.TASKTYPE
-                 AND tmu.UserKey = @c_UserID
-                 AND tmu.Permission = '1')
-         --INC0693341 Start
-         --ORDER BY
-            -- CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
-            --,TaskDetail.Priority
-            --,TaskDetail.TaskDetailKey
+                  AND tmu.UserKey = @c_UserID
+                  AND tmu.Permission = '1')
+           --INC0693341 Start
+           --ORDER BY
+           -- CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
+           --,TaskDetail.Priority
+           --,TaskDetail.TaskDetailKey
            ORDER BY
-             CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END  --PSJ036 VER1.0
-            ,TaskDetail.Priority
-            , LOC.LogicalLocation
-            , LOC.LOC
-         --INC0693341 End
+              CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END  --PSJ036 VER1.0
+              ,TaskDetail.Priority
+              , LOC.LogicalLocation
+              , LOC.LOC
+           --INC0693341 End
 
    -- Get a task
-   OPEN Cursor_FPKTaskCandidates
-   FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+   OPEN @Cursor_FPKTaskCandidates
+   FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
    WHILE @@FETCH_STATUS = 0
    BEGIN
       -- Get task info
@@ -190,7 +194,7 @@ BEGIN
          GOTO Fail
       IF @b_SkipTheTask = 1
       BEGIN
-         FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+         FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
          CONTINUE
       END
 
@@ -212,7 +216,7 @@ BEGIN
          , @c_errmsg       = @c_errmsg  OUTPUT
       IF @b_success = 0
       BEGIN
-         FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+         FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
          CONTINUE
       END
 
@@ -238,7 +242,7 @@ BEGIN
                AND NOT L2.LocationCategory IN ('PND_IN', 'PND')  -- Exclude task coming in into PND_IN
                AND UserKey <> @c_userid)
          BEGIN
-            FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+            FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
             CONTINUE
          END
       END
@@ -268,7 +272,7 @@ BEGIN
                   AND NOT L2.LocationCategory IN ('PND_IN', 'PND')  -- Exclude task coming in into PND_IN
                   AND UserKey <> @c_userid)
             BEGIN
-               FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+               FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
                CONTINUE
             END
          END
@@ -276,7 +280,7 @@ BEGIN
 
       -- Update task as in-progress
       IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)
-      BEGIN
+      BEGIN TRY
          UPDATE TaskDetail WITH (ROWLOCK) SET
              Status          = '3'
             ,UserKey         = @c_UserID
@@ -288,14 +292,12 @@ BEGIN
             ,TrafficCop      = NULL
          WHERE TaskDetailKey = @c_TaskDetailKey
             AND Status IN ('0')
-
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-         BEGIN
-            SET @n_Err = 90701
-            SET @c_ErrMsg = '90701 UPDTaskDtlFail'
+      END TRY
+      BEGIN CATCH
+            SET @n_Err = 275801
+            SET @c_ErrMsg = rdt.rdtGetMessage( @n_Err, 'ENG', 'DSP')
             GOTO Fail
-         END
-      END
+      END CATCH
 
       SET @cFoundTask = 'Y'
       BREAK -- Task assiged sucessfully, Quit Now
