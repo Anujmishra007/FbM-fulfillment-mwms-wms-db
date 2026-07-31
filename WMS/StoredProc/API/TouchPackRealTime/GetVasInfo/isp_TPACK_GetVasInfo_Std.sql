@@ -22,6 +22,7 @@ GO
 /* 2026-02-27   8.1  JWF011     UWP-49173 Fix Order Header VAS display 2 times          */
 /* 2026-04-03   8.2  GCH225     UWP-53582 Fix Print Type that Short column ='Y'         */
 /* 2026-07-02   8.3  GCH225     UWP-59664 Fine tune the VAS query process               */
+/* 2026-07-29   8.4  MBR282     UWP-62774 Fix 0H display issue for TPS-CtnRec case      */
 /****************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetVasInfo_Std] (
@@ -139,6 +140,17 @@ BEGIN
                   AND PD.CartonNo = @nCartonNo
                   AND PD.ExpQty > 0
             ) = 0
+      )  OR (@nCartonNo > 0
+            AND EXISTS(SELECT 1 
+                  FROM PACKINFO PI (NOLOCK)
+                  WHERE PI.PickSlipNo = @cPickSlipNo
+                  AND PI.CartonNo = @nCartonNo
+            )
+            AND NOT EXISTS(SELECT 1 
+                  FROM PACKDETAIL PD (NOLOCK)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.CartonNo = @nCartonNo
+            )  
       )
       BEGIN
          SET @bShowOrderHeaderVAS = 1
