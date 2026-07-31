@@ -536,7 +536,7 @@ BEGIN
                   PD1.EditWho = @cUserName,  
                   PD1.ArchiveCop = NULL  
                FROM dbo.PackDetail PD1  
-               INNER JOIN PackHeader PH1 ON PD1.PickSlipNo = PH1.PickSlipNo and PD1.StorerKey = PH1.StorerKey  
+               INNER JOIN dbo.PackHeader PH1 ON PD1.PickSlipNo = PH1.PickSlipNo and PD1.StorerKey = PH1.StorerKey
                WHERE  PD1.StorerKey = @cStorerKey  
                   AND PD1.LabelNo = @cLabelNo  
                   AND PD1.PickSlipNo = @cPickSlipNo  
