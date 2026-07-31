@@ -360,7 +360,7 @@ BEGIN
    BEGIN CATCH
       SELECT @cErrMsg1='', @cErrMsg2='', @cErrMsg3=''
       SET @cErrMsg3 = ERROR_MESSAGE()
-      SET @cErrMsg1 = '91008-QcmdFail'
+      SET @cErrMsg1 = 'QcmdFail'
       SET @cErrMsg2 = 'Trigger reallocation fail'
       EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
       GOTO Quit
@@ -370,11 +370,13 @@ BEGIN
    BEGIN
       SELECT @cErrMsg1='', @cErrMsg2='', @cErrMsg3=''
       SET @cErrMsg3 = 'Return err: ' + TRY_CAST(@nErrNo AS NVARCHAR(10))
-      SET @cErrMsg1 = '91008-GenQcmdTaskFail'
+      SET @cErrMsg1 = 'GenQcmdTaskFail'
       SET @cErrMsg2 = 'Trigger reallocation fail'
       EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
       GOTO Quit
    END
+
+   GOTO Quit
 
    RollBackTran:
       IF XACT_STATE() = -1
