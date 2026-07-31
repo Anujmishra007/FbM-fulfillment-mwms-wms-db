@@ -14,6 +14,7 @@ GO
 /* 15/07/2024   1.1   PPA374   Adding pick check AND PA, Replen check   */
 /* 18/10/2024   1.2   PPA374   Formatted, messages created              */
 /* 28/10/2024   1.3.0 WSE016   UWP-26437 Exclude moves to TrolleyQC loc */
+/* 30/07/2026   1.4   PPA374   Adding validation control for shelving   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtValVLT] (
@@ -67,19 +68,19 @@ BEGIN
    
          --LPN got putaway task. Should not be moved.
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID WITH(NOLOCK) WHERE ID = @cFromID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey) AND 
-            EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Loc = @FromLOC AND FACILITY = @cFacility AND (EXISTS (SELECT code FROM dbo.CODELKUP WITH (NOLOCK) 
+            EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @FromLOC AND FACILITY = @cFacility AND (EXISTS (SELECT code FROM dbo.CODELKUP WITH (NOLOCK) 
             WHERE LocationType = code AND LISTNAME = 'HUSQINBLOC' AND Storerkey = @cStorerKey) or LocationCategory = 'PND'))
          BEGIN
             SET @nErrNo = 217974 
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got putaway task. Should not be moved.
          END
 
-       --LPN got picking task. Should not be moved.
-       ELSE IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE Storerkey = @cStorerKey AND FromID = @cFromID AND FromID <> '' AND Status NOT IN ('9','X'))
-       BEGIN
-          SET @nErrNo = 218064
+		 --LPN got picking task. Should not be moved.
+		 ELSE IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE Storerkey = @cStorerKey AND FromID = @cFromID AND FromID <> '' AND Status NOT IN ('9','X'))
+		 BEGIN
+		    SET @nErrNo = 218064
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got pick task. Should not be moved.
-       END
+		 END
 
          -- WS 28102024 - not allow to pick ID from TrolleyQC via Move by ID
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @FromLOC AND FACILITY = @cFacility 
@@ -177,7 +178,14 @@ BEGIN
          BEGIN
             SET @nErrNo = 218009
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Not SHLV storage loc'
-          END
+			BEGIN
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
+         END
 
          --Shelf SKU should not be moved to a shelf location not assigned to that SKU
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) WHERE qty > 0 AND StorerKey = @cStorerKey AND id = @cFromID AND id <> '' 
@@ -188,6 +196,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218010
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU not SET for loc'
+			BEGIN
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Non-shelf SKU should not be moved to shelf location
@@ -198,9 +213,16 @@ BEGIN
          BEGIN
             SET @nErrNo = 218011
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU not shelf type'
-          END
+			BEGIN
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
+         END
 
-        --Consumable location
+         --Consumable location
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE facility = @cFacility AND loc = @cToLOC AND LocationType = 'CONS')
          BEGIN
             SET @nErrNo = 218013
