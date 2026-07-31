@@ -15,7 +15,7 @@ GO
 /*							  this change is to find the candidates for			         	*/
 /*							  Taskdetailkey instead GroupKey. 					            	*/
 /************************************************************************************/
-ALTER   PROC [dbo].[nspTTMFPK8](
+CREATE OR ALTER PROC [dbo].[nspTTMFPK8](
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
