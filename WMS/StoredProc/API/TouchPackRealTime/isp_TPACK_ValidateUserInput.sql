@@ -23,6 +23,8 @@ GO
 /* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
 /* 2026-05-19   3.1  GCH225     FCR-13354: Fix for auto close carton scenario    */
+/* 2026-07-21   3.2  JWF011     UWP-62055: Fix sku list for scan handler         */
+/* 2026-07-30   3.3  JWF011     UWP-62868: Fix sku list for scan handler         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -1545,6 +1547,15 @@ SKIP_VAS:
          BEGIN 
             SET @bAutoCloseCarton = 1
          END
+      END
+
+      IF EXISTS ( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-PackDetail'
+      )
+      BEGIN
+         SET @cSKUList = ISNULL((SELECT SKU FROM @oSKUList FOR JSON AUTO),'')
       END
 
       GOTO GET_PACKDETAIL_LIST

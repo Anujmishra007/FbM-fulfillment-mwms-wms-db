@@ -12,6 +12,8 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-12-05   1.0  Sean       Cloned from isp_TPS_ExtUpd03                     */
 /* 2026-03-27   1.1  JWF011     UWP-52830: Fix logic                             */
+/* 2026-07-17   1.2  JWF011     UWP-52830: Fix SerialNo logic                    */
+/* 2026-07-23   1.3  JWF011     UWP-52830: Update SerialNo status                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtPreUpd03] (
@@ -60,9 +62,6 @@ BEGIN
          , @cDuplicateVal     NVARCHAR(1000)
 
    DECLARE @CURSOR_AD CURSOR
-   DECLARE @cList TABLE (
-      cSerialNo   NVARCHAR(100)
-   )
 
    SET @b_Success         = 0  
    SET @n_ErrNo           = 0  
@@ -96,7 +95,7 @@ BEGIN
       SET @nRemainQty = @nQty
 
       UPDATE UCC WITH (ROWLOCK)  
-      SET   Status = '6',
+      SET   [Status] = '6',
             EditDate = GETDATE(),  
             EditWho = @c_UserID    
       WHERE UCCNo = @cUCCNo  
@@ -109,7 +108,7 @@ BEGIN
       WHERE SKU = @cSKU  
       AND UserDefine01 = @cUCCNo  
       AND StorerKey = @cStorerKey  
-      AND Status IN ('0', '1') 
+      AND [Status] IN ('0', '1') 
       GROUP BY SerialNoKey
       ORDER BY SerialNoKey  
   
@@ -169,7 +168,7 @@ BEGIN
             CartonNo = @nCartonNo,  
             PickSlipNo = @cPickSlipNo,  
             TrafficCop = NULL,  
-            Status = '1',
+            [Status] = '6',
             EditDate = GETDATE(),  
             EditWho = @c_UserID   
          WHERE SerialNoKey = @cSerialNoKey  
@@ -200,160 +199,119 @@ BEGIN
          GOTO EXIT_SP        
       END     
    END  
-   ELSE  
+   ELSE IF @cScanType = 'serialno'
+   AND @cInputValue2 <> '' 
    BEGIN  
-      -- Non-UCC mode: process serial numbers from @cInputValue2 JSON array
-      IF ISJSON(@cInputValue2) = 0
-      OR @cInputValue2 = ''
-      BEGIN
-         GOTO EXIT_SP
-      END
-
       IF @cOrderKey = ''      
       BEGIN  
          SET @n_Continue = 3
          SET @n_ErrNo = 14402      
          SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'OrderKey cannot be empty.'   
          GOTO EXIT_SP     
-      END  
-
-      -- Insert serial numbers from JSON array
-      INSERT INTO @cList (cSerialNo)
-      SELECT [value]
-      FROM OPENJSON(@cInputValue2)
-      WITH ([value] NVARCHAR(100) '$') J
-
-      -- Check for duplicates
-      SELECT @cDuplicateVal = STRING_AGG(D.cSerialNo, ', ') 
-      FROM (
-         SELECT cSerialNo 
-         FROM @cList
-         GROUP BY cSerialNo
-         HAVING COUNT(1) > 1
-      ) AS D
-
-      IF LEN(@cDuplicateVal) > 1
-      BEGIN
-         SET @n_Continue = 3
-         SET @n_ErrNo = 14404      
-         SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') + '(' + @cDuplicateVal + ')' -- 'One or more duplicate serial numbers were detected.'      
-         GOTO EXIT_SP 
       END
 
-      SET @CURSOR_AD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-      SELECT cSerialNo    
-      FROM @cList      
-      WHERE cSerialNo <> ''      
-         
-      OPEN @CURSOR_AD      
-      FETCH NEXT FROM @CURSOR_AD INTO @cSerialNo     
-      WHILE @@FETCH_STATUS = 0      
-      BEGIN      
-         SELECT @cLblLineNumber = PD.LabelLine
-              , @cLabelNo = PD.LabelNo 
-         FROM dbo.PackHeader PH (NOLOCK)
-         JOIN dbo.PackDetail PD (NOLOCK) 
-         ON PH.PickSlipNo = PD.PickSlipNo  
-         WHERE PD.StorerKey = @cStorerKey        
-         AND PH.PickSlipNo = @cPickSlipNo        
-         AND PD.CartonNo = @nCartonNo 
-         AND PD.SKU = @cSKU  
+      SET @cSerialNo = @cInputValue2
 
-         SELECT @cOrderLineNumber = PD.OrderLineNumber         
+      SELECT @cLblLineNumber = PD.LabelLine
+            , @cLabelNo = PD.LabelNo 
+      FROM dbo.PackHeader PH (NOLOCK)
+      JOIN dbo.PackDetail PD (NOLOCK) 
+      ON PH.PickSlipNo = PD.PickSlipNo  
+      WHERE PD.StorerKey = @cStorerKey        
+      AND PH.PickSlipNo = @cPickSlipNo        
+      AND PD.CartonNo = @nCartonNo 
+      AND PD.SKU = @cSKU  
+
+      SELECT @cOrderLineNumber = PD.OrderLineNumber         
+      FROM dbo.PickDetail PD (NOLOCK)        
+      WHERE PD.StorerKey = @cStorerKey        
+      AND PD.OrderKey = @cOrderKey        
+      AND PD.SKU = @cSKU         
+      AND NOT EXISTS (SELECT 1 
+                        FROM dbo.SerialNo S (NOLOCK)         
+                        WHERE S.OrderKey = PD.OrderKey        
+                        AND S.OrderLineNumber = PD.OrderLineNumber        
+                        AND S.SKU = PD.SKU)  
+
+      IF ISNULL(@cOrderLineNumber, '') = ''  
+      BEGIN  
+         SELECT TOP 1 @cOrderLineNumber = PD.OrderLineNumber           
          FROM dbo.PickDetail PD (NOLOCK)        
          WHERE PD.StorerKey = @cStorerKey        
          AND PD.OrderKey = @cOrderKey        
-         AND PD.SKU = @cSKU         
-         AND NOT EXISTS (SELECT 1 
-                         FROM dbo.SerialNo S (NOLOCK)         
-                         WHERE S.OrderKey = PD.OrderKey        
-                         AND S.OrderLineNumber = PD.OrderLineNumber        
-                         AND S.SKU = PD.SKU)  
+         AND PD.SKU = @cSKU       
+      END 
 
-         IF ISNULL(@cOrderLineNumber, '') = ''  
-         BEGIN  
-            SELECT TOP 1 @cOrderLineNumber = PD.OrderLineNumber           
-            FROM dbo.PickDetail PD (NOLOCK)        
-            WHERE PD.StorerKey = @cStorerKey        
-            AND PD.OrderKey = @cOrderKey        
-            AND PD.SKU = @cSKU       
-         END 
+      SET @cSerialNoKey = ''
 
-         SET @cSerialNoKey = ''
+      SELECT @cSerialNoKey = SerialNoKey
+      FROM dbo.SerialNo (NOLOCK) 
+      WHERE StorerKey = @cStorerKey 
+      AND SKU = @cSKU 
+      AND SerialNo = @cSerialNo
 
-         SELECT @cSerialNoKey = SerialNoKey
-         FROM dbo.SerialNo (NOLOCK) 
-         WHERE StorerKey = @cStorerKey 
-         AND SKU = @cSKU 
-         AND SerialNo = @cSerialNo
-
-         IF @@ROWCOUNT = 0
+      IF @@ROWCOUNT = 0
+      BEGIN        
+         EXECUTE dbo.nspg_GetKey        
+                  'SerialNo',        
+                  10 ,        
+                  @cSerialNoKey  OUTPUT,        
+                  @b_Success     OUTPUT,        
+                  @n_ErrNo       OUTPUT,        
+                  @c_ErrMsg      OUTPUT        
+                     
+         IF @b_Success <> 1        
          BEGIN        
-            EXECUTE dbo.nspg_GetKey        
-                     'SerialNo',        
-                     10 ,        
-                     @cSerialNoKey  OUTPUT,        
-                     @b_Success     OUTPUT,        
-                     @n_ErrNo       OUTPUT,        
-                     @c_ErrMsg      OUTPUT        
-                       
-            IF @b_Success <> 1        
-            BEGIN        
-               SET @n_Continue = 3
-               SET @n_ErrNo = 14405        
-               SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to get SerialNo Key.'        
-               GOTO EXIT_SP        
-            END        
-                                                 
-            INSERT INTO SERIALNO (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty, Status, LabelLine, CartonNo, PickSlipNo, AddWho, AddDate, EditWho, EditDate)         
-            VALUES (@cSerialNoKey, @cOrderKey, ISNULL(@cOrderLineNumber, ''), @cStorerKey, @cSKU, @cSerialNo, @nQty, '1', @cLabelLine, @nCartonNo, @cPickSlipNo, @c_UserID, GETDATE(), @c_UserID, GETDATE())         
-  
-            IF @@ERROR <> 0         
-            BEGIN         
-               SET @n_Continue = 3
-               SET @n_ErrNo = 14406        
-               SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Insert into SerialNo.'        
-               GOTO EXIT_SP        
-            END        
+            SET @n_Continue = 3
+            SET @n_ErrNo = 14405        
+            SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to get SerialNo Key.'        
+            GOTO EXIT_SP        
          END        
-         ELSE   
-         BEGIN          
-            UPDATE SerialNo WITH (ROWLOCK) SET      
-               OrderKey = @cOrderKey,       
-               OrderLineNumber = ISNULL(@cOrderLineNumber, ''),  
-               LabelLine = @cLabelLine,  
-               CartonNo = @nCartonNo,  
-               PickSlipNo = @cPickSlipNo,  
-               TrafficCop = NULL,  
-               Status = '1',
-               EditDate = GETDATE(),  
-               EditWho = @c_UserID   
-            WHERE SerialNoKey = @cSerialNoKey    
-                        
-            IF @@ERROR <> 0         
-            BEGIN         
-               SET @n_Continue = 3
-               SET @n_ErrNo = 14407        
-               SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Update SerialNo.'        
-               GOTO EXIT_SP        
-            END        
-         END   
-         
-         INSERT INTO PACKSERIALNO (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, Qty, AddWho, AddDate, EditWho, EditDate)      
-         VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nQty, @c_UserID, GETDATE(), @c_UserID, GETDATE())      
-      
+                                                
+         INSERT INTO SERIALNO (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty, [Status], LabelLine, CartonNo, PickSlipNo, AddWho, AddDate, EditWho, EditDate)         
+         VALUES (@cSerialNoKey, @cOrderKey, ISNULL(@cOrderLineNumber, ''), @cStorerKey, @cSKU, @cSerialNo, @nQty, '6', @cLabelLine, @nCartonNo, @cPickSlipNo, @c_UserID, GETDATE(), @c_UserID, GETDATE())         
+
          IF @@ERROR <> 0         
          BEGIN         
             SET @n_Continue = 3
-            SET @n_ErrNo = 14408        
-            SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Insert into PackSerialNo.'        
+            SET @n_ErrNo = 14406        
+            SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Insert into SerialNo.'        
             GOTO EXIT_SP        
-         END 
-         
-         FETCH NEXT FROM @CURSOR_AD INTO @cSerialNo        
+         END        
+      END        
+      ELSE   
+      BEGIN          
+         UPDATE SerialNo WITH (ROWLOCK) SET      
+            OrderKey = @cOrderKey,       
+            OrderLineNumber = ISNULL(@cOrderLineNumber, ''),  
+            LabelLine = @cLabelLine,  
+            CartonNo = @nCartonNo,  
+            PickSlipNo = @cPickSlipNo,  
+            TrafficCop = NULL,  
+            [Status] = '6',
+            EditDate = GETDATE(),  
+            EditWho = @c_UserID   
+         WHERE SerialNoKey = @cSerialNoKey    
+                     
+         IF @@ERROR <> 0         
+         BEGIN         
+            SET @n_Continue = 3
+            SET @n_ErrNo = 14407        
+            SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Update SerialNo.'        
+            GOTO EXIT_SP        
+         END        
+      END   
+      
+      INSERT INTO PACKSERIALNO (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, Qty, AddWho, AddDate, EditWho, EditDate)      
+      VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nQty, @c_UserID, GETDATE(), @c_UserID, GETDATE())      
+   
+      IF @@ERROR <> 0         
+      BEGIN         
+         SET @n_Continue = 3
+         SET @n_ErrNo = 14408        
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'Failed to Insert into PackSerialNo.'        
+         GOTO EXIT_SP        
       END 
-      CLOSE @CURSOR_AD
-      DEALLOCATE @CURSOR_AD
    END  
 
 EXIT_SP:

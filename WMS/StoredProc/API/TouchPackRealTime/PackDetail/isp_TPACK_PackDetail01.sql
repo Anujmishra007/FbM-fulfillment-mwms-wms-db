@@ -13,6 +13,11 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-06-16   1.0  JWF011     FCR-13553: Extended from std                     */
 /* 2026-06-23   1.1  JWF011     FCR-13553: Fix QtyToPack                         */
+/* 2026-07-20   1.2  JWF011     UWP-61908: Update SKU search logic               */
+/* 2026-07-24   1.3  JWF011     UWP-62167: Update SKU order                      */
+/* 2026-07-27   1.4  JWF011     UWP-62527: Fix incorrect sku displayed           */
+/* 2026-07-28   1.5  JWF011     UWP-62579: Support SKU format style-color_size   */
+/* 2026-07-30   1.6  JWF011     UWP-62868: Fix sku list                          */
 /*********************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPACK_PackDetail01] (
@@ -67,6 +72,8 @@ BEGIN
          , @cDynamicColumn5      NVARCHAR(4000)
          , @cOffset              NVARCHAR(10)
          , @cAuthority           NVARCHAR(30)
+         , @cStyleColor          NVARCHAR(20)     = ''
+         , @cTempSKU             NVARCHAR(20)     = ''
    
    DECLARE @nToPackQty     INT          
 
@@ -91,6 +98,8 @@ BEGIN
    SET @cDynamicColumn5       = ''
    SET @cOffset               = ''
    SET @nToPackQty            = 0
+   SET @cStyleColor           = ''
+   SET @cTempSKU              = ''
 
    SET @cSQLQueryEnd = ' FOR JSON PATH )) ' + CHAR(13)
                      + ' ),'''') ' + CHAR(13)
@@ -106,6 +115,8 @@ BEGIN
                           + ', S.RetailSKU ' + CHAR(13)
                           + ', S.ManufacturerSKU ' + CHAR(13)
                           + ', S.AltSKU ' + CHAR(13)
+
+   SET @cSQLOrderByClause = ' ORDER BY '+ CHAR(13)
 
    SET @cOffset = ISNULL(TRY_CAST(@nPageIndex AS NVARCHAR(10)),'0')
 
@@ -217,7 +228,6 @@ BEGIN
       FROM OPENJSON(@cSKUList)
       WITH (SKU NVARCHAR(20))
 
-      
       IF @cLottableList <> ''
       BEGIN
          SET @cSQLSelectClause = @cSQLSelectClause
@@ -231,13 +241,11 @@ BEGIN
                                + ', JSON_QUERY(''[]'') AS lottables '  + CHAR(13)
       END
 
-
       SET @cSQLFromClause = @cSQLFromClause 
                           + ' FROM SKU S (NOLOCK) ' + CHAR(13)
 
       SET @cSQLWhereClause = @cSQLWhereClause
                            + ' WHERE S.StorerKey = @cStorerKey ' + CHAR(13)
-                           
    
       IF @nCartonNo <> 0
       BEGIN
@@ -267,7 +275,7 @@ BEGIN
                              + ' AND S.SKU = PAD2.SKU ' + CHAR(13)
 
          SET @cSQLFromClause = @cSQLFromClause
-                             + ' LEFT JOIN ( ' + CHAR(13)
+                             + ' INNER JOIN ( ' + CHAR(13)
                              + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY ' + CHAR(13)
                              + ' FROM PICKDETAIL (NOLOCK) ' + CHAR(13)
                              + ' WHERE OrderKey = @cOrderKey ' + CHAR(13)
@@ -275,6 +283,10 @@ BEGIN
                              + ' ) PID ' + CHAR(13)
                              + ' ON S.StorerKey = PID.StorerKey ' + CHAR(13)
                              + ' AND S.SKU = PID.SKU ' + CHAR(13)
+         
+         SET @cSQLOrderByClause = @cSQLOrderByClause
+                                + ' CASE WHEN COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD2.QTY),0) <= 0 THEN 1 ELSE 0 END, '+ CHAR(13)
+                                + ' CASE WHEN S.SKU = @cSKU THEN 0 ELSE 1 END, ' + CHAR(13)
       END
       ELSE
       BEGIN
@@ -288,8 +300,31 @@ BEGIN
          FROM OPENJSON(@cSKUList)
          WITH (SKU NVARCHAR(20))
 
-         SET @cSQLWhereClause = @cSQLWhereClause
-                              + ' AND S.SKU = @cSKU '  + CHAR(13)
+         IF @nCartonNo <> 0
+         AND CHARINDEX('_', @cSKU) > 0
+         AND LEN(@cSKU) - LEN(REPLACE(@cSKU, '-', '')) < 2
+         BEGIN
+            SET @cTempSKU = REPLACE(@cSKU, '-', '_')
+            IF LEN(@cTempSKU) - LEN(REPLACE(@cTempSKU, '_', '')) = 2
+            AND CHARINDEX('_', @cTempSKU) > 1
+            AND CHARINDEX('_', @cTempSKU, CHARINDEX('_', @cTempSKU) + 1) > CHARINDEX('_', @cTempSKU) + 1
+            AND LEN(@cTempSKU) > CHARINDEX('_', @cTempSKU, CHARINDEX('_', @cTempSKU) + 1)
+            BEGIN
+               SET @cStyleColor = LEFT(@cSKU, LEN(@cSKU) - CHARINDEX('_', REVERSE(@cSKU)))
+               SET @cSQLWhereClause = @cSQLWhereClause
+                                    + ' AND S.SKU LIKE @cStyleColor + ''_%'' ' + CHAR(13)
+            END
+            ELSE
+            BEGIN
+               SET @cSQLWhereClause = @cSQLWhereClause
+                                    + ' AND S.SKU = @cSKU '  + CHAR(13)
+            END
+         END
+         ELSE
+         BEGIN
+            SET @cSQLWhereClause = @cSQLWhereClause
+                                 + ' AND S.SKU = @cSKU '  + CHAR(13)
+         END
       END
       ELSE
       BEGIN
@@ -298,7 +333,7 @@ BEGIN
       END
 
       SET @cSQLOrderByClause = @cSQLOrderByClause 
-                             + ' ORDER BY LEN(S.SKU) ASC, MAX(S.EditDate) DESC ' + CHAR(13)
+									  + ' LEN(S.SKU) ASC, MAX(S.EditDate) DESC ' + CHAR(13)
 
       SET @cSQLParams = @cSQLParams
                       + ' , @cLottableList NVARCHAR(1000) '
@@ -308,6 +343,7 @@ BEGIN
                       + ' , @cSKU NVARCHAR(20) '
                       + ' , @cSKUList NVARCHAR(1000) '
                       + ' , @cOrderKey NVARCHAR(10) '
+                      + ' , @cStyleColor NVARCHAR(20) '
 
       IF @cDynamicColumn3 = 'CUSTOM'
       BEGIN
@@ -338,6 +374,7 @@ BEGIN
                         , @cSKU
                         , @cSKUList
                         , @cOrderKey
+                        , @cStyleColor
    END
    ELSE
    BEGIN
@@ -356,7 +393,7 @@ BEGIN
                            + ' AND PAD.CartonNo = @nCartonNo ' + CHAR(13)
 
       SET @cSQLOrderByClause = @cSQLOrderByClause 
-                             + ' ORDER BY MAX(PAD.EditDate) DESC ' + CHAR(13)
+                             + ' MAX(PAD.EditDate) DESC ' + CHAR(13)
 
       SET @cSQLParams = @cSQLParams
                       + ' , @cPickSlipNo NVARCHAR(10) '

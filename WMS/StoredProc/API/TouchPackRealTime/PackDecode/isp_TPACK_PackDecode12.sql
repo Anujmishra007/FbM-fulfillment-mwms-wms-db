@@ -15,6 +15,7 @@ GO
 /* 2026-05-18   1.2  JWF011     FCR-12745: Fix Multi SKU matched case            */
 /* 2026-05-26   1.3  JWF011     FCR-12745: Disable SerialNo validation           */
 /* 2026-07-09   1.4  JWF011     FCR-12745: Enable SerialNo validation            */
+/* 2026-07-17   1.5  JWF011     UWP-61826: Enhance SerialNo validation            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_PackDecode12] (
@@ -120,22 +121,32 @@ BEGIN
                AND SKU = @cSKU            
    )
    BEGIN
-      SET @n_ErrNo = 15754
-      SET @c_ErrMsg = '(' + @cFirstValue + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SerialNo is existed in SerialNo table.' 
-      GOTO QUIT
-   END
-
-   IF EXISTS ( SELECT 1
-               FROM PACKSERIALNO (NOLOCK)
-               WHERE SerialNo = @cFirstValue
-               AND PickSlipNo = @cPickSlipNo
-               AND StorerKey = @cStorerKey
-               AND SKU = @cSKU   
-   )
-   BEGIN
-      SET @n_ErrNo = 15755
-      SET @c_ErrMsg = '(' + @cFirstValue + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SerialNo is existed in PackSerialNo table.' 
-      GOTO QUIT
+      IF EXISTS ( SELECT 1
+                  FROM PACKSERIALNO (NOLOCK)
+                  WHERE SerialNo = @cFirstValue
+                  AND PickSlipNo = @cPickSlipNo
+                  AND StorerKey = @cStorerKey
+                  AND SKU = @cSKU   
+      )
+      BEGIN
+         SET @n_ErrNo = 15754
+         SET @c_ErrMsg = '(' + @cFirstValue + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SerialNo is existed/used in both SerialNo and PackSerialNo tables.' 
+         GOTO QUIT
+      END
+      ELSE IF EXISTS(SELECT 1
+                     FROM PACKSERIALNO PSN (NOLOCK)
+                     JOIN PACKHEADER PH (NOLOCK)
+                     ON PSN.PickSlipNo = PH.PickSlipNo
+                     WHERE PSN.SerialNo = @cFirstValue
+                     AND PSN.StorerKey = @cStorerKey
+                     AND PSN.SKU = @cSKU
+                     AND PH.Status <> '9'
+      )
+      BEGIN
+         SET @n_ErrNo = 15755
+         SET @c_ErrMsg = '(' + @cFirstValue + ')' + API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--Current SerialNo is being used by another PickSlipNo in PackSerialNo table.' 
+         GOTO QUIT
+      END
    END
 
    SET @cInputValue2 = '["' + @cInputValue1 + '"]'
