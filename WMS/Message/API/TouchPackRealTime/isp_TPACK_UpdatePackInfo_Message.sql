@@ -10,3 +10,4 @@ EXEC API.TouchPadAddMsg 11557, 10, 'Number of different SKU in a carton must not
 EXEC API.TouchPadAddMsg 11558, 10, 'Not Allow Recartonization',    'us_english'
 EXEC API.TouchPadAddMsg 11559, 10, 'Failed to Insert Audit Log for Carton Type change.',    'us_english'
 EXEC API.TouchPadAddMsg 11560, 10, '',    'us_english'
+EXEC API.TouchPadAddMsg 11561, 10, 'No SKU packed in this carton, please pack at least 1 SKU before closing the carton.',    'us_english'
