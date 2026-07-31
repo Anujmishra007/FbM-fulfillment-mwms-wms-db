@@ -45,6 +45,16 @@ BEGIN
       @cPOSTPICK                 NVARCHAR(8) = 'POSTPICK',
       @cSTAGEOB                  NVARCHAR(8) = 'STAGEOB'
 
+   DECLARE @tPalletData TABLE 
+   (
+      RowRef INT IDENTITY(1,1) PRIMARY KEY,
+      LabelNo NVARCHAR(20),
+      IntermodalVehicle NVARCHAR(30),
+      WaveKey NVARCHAR(10),
+      ConsigneeKey NVARCHAR(15),
+      OrderKey NVARCHAR(20)
+   )
+
    SELECT @nStep = Step,
           @nInputKey = InputKey,
           @cLoc = V_String5
@@ -75,15 +85,30 @@ BEGIN
             BEGIN
                IF EXISTS (SELECT 1 FROM dbo.PickDetail WITH(NOLOCK) WHERE DropID = @cUCCNo AND StorerKey = @cStorerKey) 
                BEGIN
-                  SELECT TOP 1 
-                     @cIntermodalVehicle = OD.IntermodalVehicle, 
-                     @cWaveKey = PD.WaveKey,
-                     @cConsigneeKey = OD.ConsigneeKey
+                  DELETE FROM @tPalletData
+
+                  INSERT INTO @tPalletData (LabelNo, IntermodalVehicle, WaveKey, ConsigneeKey, OrderKey)
+                  SELECT DISTINCT
+                     '',
+                     OD.IntermodalVehicle,
+                     PD.WaveKey,
+                     OD.ConsigneeKey,
+                     OD.OrderKey
                   FROM dbo.PickDetail PD WITH(NOLOCK)
                   INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PD.OrderKey = OD.OrderKey AND PD.StorerKey = OD.StorerKey
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.DropID = @cUCCNo
-                  ORDER BY PD.PickDetailKey
+                  ORDER BY OD.OrderKey
+                  
+                  SET @cIntermodalVehicle = ''
+                  SET @cWaveKey = ''
+                  SET @cConsigneeKey = ''
+                  SELECT TOP 1 
+                     @cIntermodalVehicle = PD.IntermodalVehicle, 
+                     @cWaveKey = PD.WaveKey,
+                     @cConsigneeKey = PD.ConsigneeKey
+                  FROM @tPalletData PD
+                  ORDER BY PD.RowRef
 
                   IF EXISTS(SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cUCCNo)
                   BEGIN
@@ -114,6 +139,19 @@ BEGIN
                         GOTO ROLLBACK_TRAN
                      END CATCH
                   END
+
+                  BEGIN TRY
+                     UPDATE O WITH(ROWLOCK) 
+                     SET
+                        UserDefine03 = @cDropID
+                     FROM dbo.ORDERS O WITH(ROWLOCK)
+                     INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 271459
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                     GOTO ROLLBACK_TRAN
+                  END CATCH
                   GOTO Quit
                END
             END
@@ -123,15 +161,30 @@ BEGIN
                -- 1. If scanned value is PACKDETAIL.LabelNo, store it in DropIDDetail (incl. WaveKey/Consignee/Vehicle)
                IF EXISTS (SELECT 1 FROM dbo.PACKDETAIL WITH(NOLOCK) WHERE LabelNo = @cUCCNo AND StorerKey = @cStorerKey) 
                BEGIN
-                  SELECT TOP 1 
-                     @cIntermodalVehicle = OD.IntermodalVehicle, 
-                     @cWaveKey = PD.WaveKey,
-                     @cConsigneeKey = OD.ConsigneeKey
+                  DELETE FROM @tPalletData
+
+                  INSERT INTO @tPalletData (LabelNo, IntermodalVehicle, WaveKey, ConsigneeKey, OrderKey)
+                  SELECT DISTINCT
+                     '',
+                     OD.IntermodalVehicle,
+                     PD.WaveKey,
+                     OD.ConsigneeKey,
+                     OD.OrderKey
                   FROM dbo.PickDetail PD WITH(NOLOCK)
                   INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PD.OrderKey = OD.OrderKey AND PD.StorerKey = OD.StorerKey
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.DropID = @cUCCNo
-                  ORDER BY PD.PickDetailKey
+                  ORDER BY OD.OrderKey
+
+                  SET @cIntermodalVehicle = ''
+                  SET @cWaveKey = ''
+                  SET @cConsigneeKey = ''
+                  SELECT TOP 1 
+                     @cIntermodalVehicle = PD.IntermodalVehicle, 
+                     @cWaveKey = PD.WaveKey,
+                     @cConsigneeKey = PD.ConsigneeKey
+                  FROM @tPalletData PD
+                  ORDER BY PD.RowRef
 
                   IF EXISTS (SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cUCCNo)
                   BEGIN
@@ -162,6 +215,19 @@ BEGIN
                         GOTO ROLLBACK_TRAN
                      END CATCH
                   END
+
+                  BEGIN TRY
+                     UPDATE O WITH(ROWLOCK) 
+                     SET
+                        UserDefine03 = @cDropID
+                     FROM dbo.ORDERS O WITH(ROWLOCK)
+                     INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 271460
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                     GOTO ROLLBACK_TRAN
+                  END CATCH
                   GOTO Quit
                END
 
@@ -171,15 +237,15 @@ BEGIN
                            WHERE TrackingNo IS NOT NULL
                            AND TrackingNo = @cUCCNo)
                BEGIN
-                  SET @cLabelNo = ''
-                  SET @cIntermodalVehicle = ''
-                  SET @cWaveKey = ''
-                  SET @cConsigneeKey = ''
-                  SELECT TOP 1 
-                     @cLabelNo = PD.LabelNo, 
-                     @cIntermodalVehicle = OD.IntermodalVehicle, 
-                     @cWaveKey = PKD.WaveKey,
-                     @cConsigneeKey = OD.ConsigneeKey
+                  DELETE FROM @tPalletData
+
+                  INSERT INTO @tPalletData (LabelNo, IntermodalVehicle, WaveKey, ConsigneeKey, OrderKey)
+                  SELECT DISTINCT
+                     PD.LabelNo,
+                     OD.IntermodalVehicle,
+                     PKD.WaveKey,
+                     OD.ConsigneeKey,
+                     OD.OrderKey
                   FROM dbo.PackDetail PD WITH(NOLOCK)
                   INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
                   INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo AND PD.StorerKey = PH.StorerKey
@@ -188,6 +254,18 @@ BEGIN
                   WHERE PI.TrackingNo = @cUCCNo
                      AND PD.StorerKey = @cStorerKey
                   ORDER BY PD.LabelNo
+                  
+                  SET @cLabelNo = ''
+                  SET @cIntermodalVehicle = ''
+                  SET @cWaveKey = ''
+                  SET @cConsigneeKey = ''
+                  SELECT TOP 1 
+                     @cLabelNo = PD.LabelNo, 
+                     @cIntermodalVehicle = PD.IntermodalVehicle, 
+                     @cWaveKey = PD.WaveKey,
+                     @cConsigneeKey = PD.ConsigneeKey
+                  FROM @tPalletData PD
+                  ORDER BY PD.RowRef
 
                   -- Delete old record in DropIDDetail if exists
                   IF EXISTS(SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cUCCNo AND AddWho = @cUserName)
@@ -219,6 +297,19 @@ BEGIN
                         GOTO ROLLBACK_TRAN
                      END CATCH
                   END
+
+                  BEGIN TRY
+                     UPDATE O WITH(ROWLOCK) 
+                     SET
+                        UserDefine03 = @cDropID
+                     FROM dbo.ORDERS O WITH(ROWLOCK)
+                     INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 271461
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                     GOTO ROLLBACK_TRAN
+                  END CATCH
                   GOTO Quit
                END
 
@@ -230,15 +321,15 @@ BEGIN
                      DECLARE @cUCCNo12 NVARCHAR(20)
                      SET @cUCCNo12 = RIGHT(@cUCCNo, 12)
 
-                     SET @cLabelNo = ''
-                     SET @cIntermodalVehicle = ''
-                     SET @cWaveKey = ''
-                     SET @cConsigneeKey = ''
-                     SELECT TOP 1 
-                        @cLabelNo = PD.LabelNo, 
-                        @cIntermodalVehicle = OD.IntermodalVehicle, 
-                        @cWaveKey = PKD.WaveKey,
-                        @cConsigneeKey = OD.ConsigneeKey
+                     DELETE FROM @tPalletData
+
+                     INSERT INTO @tPalletData (LabelNo, IntermodalVehicle, WaveKey, ConsigneeKey, OrderKey)
+                     SELECT DISTINCT
+                        PD.LabelNo,
+                        OD.IntermodalVehicle,
+                        PKD.WaveKey,
+                        OD.ConsigneeKey,
+                        OD.OrderKey
                      FROM dbo.PackDetail PD WITH(NOLOCK)
                      INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
                      INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo AND PD.StorerKey = PH.StorerKey
@@ -247,6 +338,18 @@ BEGIN
                      WHERE PI.TrackingNo = @cUCCNo12
                         AND PD.StorerKey = @cStorerKey
                      ORDER BY PD.LabelNo
+
+                     SET @cLabelNo = ''
+                     SET @cIntermodalVehicle = ''
+                     SET @cWaveKey = ''
+                     SET @cConsigneeKey = ''
+                     SELECT TOP 1 
+                        @cLabelNo = PD.LabelNo, 
+                        @cIntermodalVehicle = PD.IntermodalVehicle, 
+                        @cWaveKey = PD.WaveKey,
+                        @cConsigneeKey = PD.ConsigneeKey
+                     FROM @tPalletData PD
+                     ORDER BY PD.RowRef
 
                      -- Delete old record in DropIDDetail if exists
                      IF EXISTS(SELECT 1 FROM dbo.DropIDDetail WITH(NOLOCK) WHERE DropID = @cDropID AND ChildID = @cUCCNo AND AddWho = @cUserName)
@@ -283,6 +386,19 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid scanned UCC, no matching data is found
                         GOTO ROLLBACK_TRAN
                      END
+
+                     BEGIN TRY
+                        UPDATE O WITH(ROWLOCK) 
+                        SET
+                           UserDefine03 = @cDropID
+                        FROM dbo.ORDERS O WITH(ROWLOCK)
+                        INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 271462
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                        GOTO ROLLBACK_TRAN
+                     END CATCH
                   END
                END
             END
