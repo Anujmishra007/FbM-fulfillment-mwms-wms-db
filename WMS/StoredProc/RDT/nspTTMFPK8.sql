@@ -294,7 +294,7 @@ BEGIN
             AND Status IN ('0')
       END TRY
       BEGIN CATCH
-            SET @n_Err = 275950
+            SET @n_Err = 275801
             SET @c_ErrMsg = rdt.rdtGetMessage( @n_Err, 'ENG', 'DSP')
             GOTO Fail
       END CATCH
