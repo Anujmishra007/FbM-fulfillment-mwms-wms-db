@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 4.0                                                          */    
+/* Version: 4.1                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -57,6 +57,9 @@ GO
 /* 01-Apr-2026 WLChooi  3.8   FCR-12170 Fix CSCORDTYPE logic (WL27)      */
 /* 01-Apr-2026 WLChooi  3.9   FCR-12172 Change CartonWeight logic (WL28) */
 /* 10-Apr-2026 WLChooi  4.0   FCR-12447 Tote Assignment for B2C (WL29)   */
+/* 28-Jul-2026 WLChooi  4.1   FCR-14984 PA/PU No Split VAS qty per case  */
+/*                            PD carton group by Style + Color           */
+/*                            Modify cartonization API algorithm (WL30)  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_PACK]       
    @c_Wavekey     NVARCHAR(10)
@@ -183,9 +186,9 @@ BEGIN
          , @c_NewPickDetailKey      NVARCHAR(10)   = ''
          , @c_LabelNo               NVARCHAR(20)   = ''
 
-         , @c_SQL                   NVARCHAR(4000) = ''
-         , @c_SQLParms              NVARCHAR(4000) = ''
-         , @c_SQLCond               NVARCHAR(4000) = ''
+         , @c_SQL                   NVARCHAR(MAX) = ''      --WL30
+         , @c_SQLParms              NVARCHAR(MAX) = ''      --WL30
+         , @c_SQLCond               NVARCHAR(MAX) = ''      --WL30
          , @c_Option5               NVARCHAR(4000) = ''     --WL01
          , @c_PackECOM              NVARCHAR(10)   = 'N'    --WL01
          , @c_OtherParms            NVARCHAR(MAX)  = ''     --WL02
@@ -502,7 +505,12 @@ BEGIN
 
       SET @c_PackType     = 'ORDERS.Orderkey'
       SET @c_HardCTNGroup = 'ORDERS.Orderkey, ISNULL(SKU.BUSR7,'''')'
-      SET @c_Algorithm    = 'HEIGHT'   --WL20
+                          --WL30 S
+                          + ',CASE WHEN WORKORDERDETAIL.Type = ''PD'''
+                          +      ' THEN ISNULL(SKU.Style,'''') + ''-'' + ISNULL(SKU.Color,'''')'
+                          +      ' ELSE '''' END'
+                          --WL30 E
+      SET @c_Algorithm    = ''   --WL20   --WL30
 
       SET @c_SortCTNGroup = @c_HardCTNGroup +
                           + ',CASE WHEN PICKDETAIL.UOM = ''2'' THEN 2 ELSE 6 END'
@@ -516,7 +524,7 @@ BEGIN
                           +      ' WHEN WORKORDERDETAIL.Type = ''PU'''
                           +      ' THEN WORKORDERDETAIL.Type'
                           +      ' WHEN WORKORDERDETAIL.Type = ''PD'''
-                          +      ' THEN WORKORDERDETAIL.Type'
+                          +      ' THEN ISNULL(SKU.Style,'''')'   --WL30
                           +      ' ELSE '''' END'
                           + ',CASE WHEN WORKORDERDETAIL.WorkOrderkey IS NULL'
                           +      ' THEN ISNULL(SKU.Size,'''')'
@@ -525,7 +533,7 @@ BEGIN
                           +      ' WHEN WORKORDERDETAIL.Type = ''PU'''
                           +      ' THEN WORKORDERDETAIL.Type'
                           +      ' WHEN WORKORDERDETAIL.Type = ''PD'''
-                          +      ' THEN WORKORDERDETAIL.Type'
+                          +      ' THEN ISNULL(SKU.Color,'''')'   --WL30
                           +      ' ELSE '''' END'
 
       -- Get optional configuration if available
@@ -1467,6 +1475,14 @@ BEGIN
                END
             END
 
+            --WL30 S
+            -- Do not call API for VAS PA/PU
+            IF @n_VASQty_PI > 0 AND @c_VAS IN ('PA', 'PU')
+            BEGIN
+               SET @b_API = 0
+            END
+            --WL30 E
+
             --SET @n_RowID_pcz = 0   --WL21
             --SET @n_Qty_pd    = 0
             --SET @c_RefPickMode = ''
@@ -1693,10 +1709,19 @@ BEGIN
                   IF @n_VASQty_PI > 0 AND @n_SkuAccessQty = 0   --WL15
                   BEGIN
                      --SET @n_QtyToPack_PI = @n_Qty_PI
+                     
+                     --WL30 S
+                     -- Can pack > VAS qty -> pack VAS qty
                      IF @n_QtyToPack_PI > @n_VASQty_PI
                      BEGIN
                         SET @n_QtyToPack_PI = @n_VASQty_PI
                      END
+                     -- Can pack < VAS qty -> still pack VAS qty, max customer carton, no API
+                     ELSE IF @n_QtyToPack_PI < @n_VASQty_PI
+                     BEGIN
+                        SET @n_QtyToPack_PI = 0
+                     END
+                     --WL30 E
                   END
                   --WL16 E
                   
@@ -1711,11 +1736,23 @@ BEGIN
                   END
 
                   -- Item Cannot pack into Large Carton
+                  -- OR
+                  -- Can pack < VAS qty
                   IF @n_QtyToPack = 0 AND @b_NewCarton = 1
                   BEGIN
+                     --WL30 S
+                     IF @n_VASQty_PI > 0 AND @c_VAS IN ('PA', 'PU')
+                     BEGIN
+                        SET @n_QtyToPack_PI = @n_VASQty_PI
+                     END
+                     ELSE
+                     BEGIN
+                        SET @n_QtyToPack_PI = 1
+                     END
+                     --WL30 E
+
                      SET @b_API          = 0
                      SET @n_GetSmaller   = 0
-                     SET @n_QtyToPack_PI = 1
                      SET @n_QtyToPack    = @n_QtyToPack_PI * @n_PackQtyIndicator
                      SET @c_CartonType   = @c_CartonType_Max
                      SET @n_CartonCube   = @n_CartonCube_Max
