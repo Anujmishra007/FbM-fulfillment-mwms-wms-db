@@ -121,7 +121,7 @@ BEGIN
    --AppendDeviceID
    IF @cDeviceID = 'Web'
    BEGIN
-      SET @cDeviceID = @cDeviceID + @c_UserID
+      SET @cDeviceID = @cDeviceID + NEWID()
       SET @nWebFlag = 1
 
       SET @cSelWorkStation = @cWorkStation
@@ -448,6 +448,7 @@ SUCCESS_SP:
 	   SET @c_ResponseString = ISNULL((
                                  SELECT  @dNow AS SectionTime
                                        , @timeOut AS ConfigInSec 
+                                       , @cDeviceID AS DeviceID
                                  FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                               ), '') 
 
