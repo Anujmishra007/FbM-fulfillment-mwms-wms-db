@@ -75,9 +75,10 @@ DECLARE @nSKUCnt INT
    END  
      
   
-Quit:  
-  
-END  
+Quit:
+
+END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
