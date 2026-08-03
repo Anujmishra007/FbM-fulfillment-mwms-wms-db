@@ -14,7 +14,7 @@ GO
 /* 2024-02-26 1.0  Dennis   Draft                                       */
 /* 2024-03-01 1.1  Dennis   UWP-14799                                   */
 /* 2024-08-26 1.2  VPA235                                               */
-/*                                                                      */
+/* 2026-07-31 1.3  NYE018   FCR-14606 add code2 check                   */
 /************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_600ExtScn01] (
@@ -83,8 +83,9 @@ BEGIN
    @cLott10              NVARCHAR( 30),
    @cSKUReceived         NVARCHAR( 20),
    @cDamagedCode         NVARCHAR(30),
-   @cExpiredCode         NVARCHAR(30)
-
+   @cExpiredCode         NVARCHAR(30),  
+   @cFLottable07         NVARCHAR(30), --ASC199  
+   @code                 NVARCHAR(2)   --ASC199  
    SELECT
    @cLott10 = C_String1,
    @cPalletTypeSave = C_String2,
@@ -168,7 +169,7 @@ BEGIN
                IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
                BEGIN
                   SET @cLottable06 = ''
-                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'')
+                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,''), @cFLottable07=ISNULL(RD.lottable07,'') --ASC199  
                   FROM dbo.Receipt R WITH (NOLOCK)
                      INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
                   WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
@@ -179,6 +180,12 @@ BEGIN
                   BEGIN    
                      SET @cLottable06 = '1'
                   END
+                    --ASC199    
+                   SET @code=''  
+                   SELECT @code= Max(code2) FROM CODELKUP WITH (NOLOCK)  
+                    WHERE LISTNAME = 'SLCODE'  
+                    AND Storerkey=@cStorerKey AND code2=SUBSTRING(isnull(@cFLottable07,''), 1, 2)      
+                   --ASC199  
                   IF ISNULL(@cLottable12,'') <> '' AND 
                   EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
                               WHERE LISTNAME = 'ASNREASON'
@@ -191,6 +198,7 @@ BEGIN
                      WHERE storerkey = @cStorerkey
                      AND UDF01 = 'RMPM_Damaged'
                      AND LISTNAME = 'SLCode'
+                     AND Code2=@code --ASC199  
 
                      IF ISNULL(@cDamagedCode,'') <> ''
                      BEGIN
@@ -213,6 +221,7 @@ BEGIN
                      WHERE storerkey = @cStorerkey
                         AND UDF01 = 'RMPM_Expired' 
                         AND LISTNAME = 'SLCode'         
+                        AND Code2=@code   --ASC199  
                               
                      IF ISNULL(@cExpiredCode,'') = ''
                      BEGIN
@@ -241,7 +250,7 @@ BEGIN
                      WHERE [storerkey] = @cStorerkey
                         AND [UDF01] = 'FG_NearExpire'
                         AND [LISTNAME] = 'SLCode'
-                     
+                        AND Code2=@code   --ASC199  
                      IF ISNULL(@cExpiredCode, '') = ''
                      BEGIN
                         SET @nErrNo = 63533;
