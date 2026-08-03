@@ -80,8 +80,9 @@ BEGIN
             END     -- IF @nInputKey = 1  
         END        -- IF @nStep = 5  
    END  
-Quit:  
-END  
+Quit:
+END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
