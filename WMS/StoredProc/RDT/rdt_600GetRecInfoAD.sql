@@ -62,7 +62,8 @@ BEGIN
       END --Step 6  
   
    END  
-END -- End Procedure  
+END -- End Procedure
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
