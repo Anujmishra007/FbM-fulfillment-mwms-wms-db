@@ -124,7 +124,8 @@ BEGIN
          END--@nAction = 2  
       END--@nStep = 7  
 Quit:  
-END  
+END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
