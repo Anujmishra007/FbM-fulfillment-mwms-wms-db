@@ -301,7 +301,7 @@ BEGIN
    END
 
    -- Exit if no task
-   IF @cFoundTask <> 'Y'
+   IF ISNULL(@cFoundTask, '') <> 'Y'
    BEGIN
       SET @c_TaskDetailKey = ''  --@c_TaskDetailKey still contain last record value if @@FETCH_STATUS <> 0 exit while loop
       GOTO Quit
