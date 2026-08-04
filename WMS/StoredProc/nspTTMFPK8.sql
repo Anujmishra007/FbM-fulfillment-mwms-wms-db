@@ -278,7 +278,7 @@ BEGIN
       -- Update task as in-progress
       IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)
       BEGIN TRY
-         UPDATE TaskDetail WITH (ROWLOCK) SET
+         UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
              Status          = '3'
             ,UserKey         = @c_UserID
             ,ReasonKey       = ''
@@ -289,11 +289,17 @@ BEGIN
             ,TrafficCop      = NULL
          WHERE TaskDetailKey = @c_TaskDetailKey
             AND Status IN ('0')
+
+         IF @@ROWCOUNT <> 1
+         BEGIN
+            FETCH NEXT FROM @Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
+            CONTINUE
+         END
       END TRY
       BEGIN CATCH
-            SET @n_Err = 275801
-            SET @c_ErrMsg = rdt.rdtGetMessage( @n_Err, 'ENG', 'DSP')
-            GOTO Fail
+         SET @n_Err = 275801
+         SET @c_ErrMsg = rdt.rdtGetMessage( @n_Err, 'ENG', 'DSP')
+         GOTO RollBackTran
       END CATCH
 
       SET @cFoundTask = 'Y'
