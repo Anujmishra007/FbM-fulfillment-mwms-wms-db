@@ -297,7 +297,7 @@ BEGIN
       END CATCH
 
       SET @cFoundTask = 'Y'
-      BREAK -- Task assiged sucessfully, Quit Now
+      BREAK -- Task assigned successfully, quit now
    END
 
    -- Exit if no task
