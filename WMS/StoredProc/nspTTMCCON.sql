@@ -5,7 +5,7 @@ GO
 /************************************************************************/  
 /* Stored Procedure: nspTTMCCON                                         */  
 /* Creation Date: 09-11-2011                                            */  
-/* Copyright: IDS                                                       */  
+/* Copyright: MAERSK                                                    */
 /* Written by: Chew KP                                                  */  
 /*                                                                      */  
 /* Purpose:                                                             */ 
@@ -21,7 +21,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author  Ver    Purposes                                 */  
-/* 2024-11-22   NLT013  1.0.0  UWP-27392 consider Loc.CCLogicalLoc      */  
+/* 2024-11-22   NLT013  1.0.0  UWP-27392 consider Loc.CCLogicalLoc      */ 
+/* 2026-08-04   NYE018  1.1    UWP-62594 merge to repo from stage db    */
 /************************************************************************/  
   
 CREATE OR ALTER PROC  [dbo].[nspTTMCCON]  

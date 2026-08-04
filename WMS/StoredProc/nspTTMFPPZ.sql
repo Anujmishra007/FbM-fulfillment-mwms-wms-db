@@ -6,14 +6,15 @@ GO
   
 /******************************************************************************/  
 /* Stored Procedure: nspTTMFPPZ                                               */  
-/* Copyright: IDS                                                             */  
+/* Copyright: MAERSK                                                          */  
 /*                                                                            */  
 /* Purpose: TM piece pick strategy                                            */  
 /* merging to repo as a part of UWP-62594                                     */
 /*                                                                            */  
 /* Modifications log:                                                         */  
 /* Date        Author    Ver  Purposes                                        */  
-/* 2018-03-27  Ung       1.0  WMS-3333 Created                                */  
+/* 2018-03-27  Ung       1.0  WMS-3333 Created                                */ 
+/* 2026-08-04  NYE018    1.1  UWP-62594 merge to repo from stage db           */ 
 /******************************************************************************/  
 CREATE OR ALTER PROC [dbo].[nspTTMFPPZ]  
     @c_UserID        NVARCHAR(18)  
