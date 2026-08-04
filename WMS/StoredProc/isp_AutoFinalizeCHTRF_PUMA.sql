@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date        Author  Ver   Purposes                                      */
 /* 2025-10-13  Michael 1.0   DevOps Combine Script                         */
+/* 2026-07-02  Michael 1.1   UWP-60126 Allow Finalize when Short to 0(ML01)*/
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_AutoFinalizeCHTRF_PUMA]
 (
@@ -267,7 +268,8 @@ BEGIN
          END
 
          IF EXISTS(SELECT TOP 1 1 FROM ChannelTransferDetail WITH(NOLOCK)
-                   WHERE ChannelTransferkey = @c_ChannelTrfkey AND ChannelTransferLineNumber = @c_ChannelTrfLineNo AND FromQty>0)
+--ML01                   WHERE ChannelTransferkey = @c_ChannelTrfkey AND ChannelTransferLineNumber = @c_ChannelTrfLineNo AND FromQty>0)
+                   WHERE ChannelTransferkey = @c_ChannelTrfkey AND ChannelTransferLineNumber = @c_ChannelTrfLineNo)   --ML01
          BEGIN
             EXEC isp_FinalizeChannelTransfer
                  @c_ChannelTrfkey
