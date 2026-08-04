@@ -15,49 +15,49 @@ GO
 /* 2026-07-31 1.0  Dennis      UWP-61955 Created based on rdt_Receive_V7      */
 /******************************************************************************/  
   
-CREATE OR ALTER PROCEDURE [RDT].[rdt_600RcvCfmPGPE] (  
-   @nFunc          INT,  
-   @nMobile        INT,  
-   @cLangCode      NVARCHAR( 3),  
-   @nErrNo         INT          OUTPUT,  
-   @cErrMsg        NVARCHAR( 20) OUTPUT, -- screen limitation, 20 char max  
-   @cStorerKey     NVARCHAR( 15),  
-   @cFacility      NVARCHAR( 5),  
-   @cReceiptKey    NVARCHAR( 10),  
-   @cPOKey         NVARCHAR( 10), -- Blank = receive to ReceiptDetail with blank POKey  
-   @cToLOC         NVARCHAR( 10),  
-   @cToID          NVARCHAR( 18), -- Blank = receive to blank ToID  
-   @cSKUCode       NVARCHAR( 20), -- SKU code. Not SKU barcode  
-   @cSKUUOM        NVARCHAR( 10),  
-   @nSKUQTY        INT,       -- In master unit  
-   @cUCC           NVARCHAR( 20),  
-   @cUCCSKU        NVARCHAR( 20),  
-   @nUCCQTY        INT,       -- In master unit. Pass in the QTY for UCCWithDynamicCaseCNT  
-   @cCreateUCC     NVARCHAR( 1),  -- Create UCC. 1=Yes, the rest=No  
-   @cLottable01    NVARCHAR( 18),  
-   @cLottable02    NVARCHAR( 18),  
-   @cLottable03    NVARCHAR( 18),  
-   @dLottable04    DATETIME,  
-   @dLottable05    DATETIME,  
-   @cLottable06    NVARCHAR( 30),  
-   @cLottable07    NVARCHAR( 30),  
-   @cLottable08    NVARCHAR( 30),  
-   @cLottable09    NVARCHAR( 30),  
-   @cLottable10    NVARCHAR( 30),  
-   @cLottable11    NVARCHAR( 30),  
-   @cLottable12    NVARCHAR( 30),  
-   @dLottable13    DATETIME,  
-   @dLottable14    DATETIME,  
-   @dLottable15    DATETIME,  
-   @nNOPOFlag      INT,  
-   @cConditionCode NVARCHAR( 10),  
-   @cSubreasonCode NVARCHAR( 10),  
-   @cReceiptLineNumberOutput NVARCHAR( 5) = '' OUTPUT,  
-   @cDebug         NVARCHAR( 1) = '0',    
-   @cSerialNo      NVARCHAR( 30) = '',     
-   @nSerialQTY     INT = 0,     
-   @nBulkSNO       INT = 0,     
-   @nBulkSNOQTY    INT = 0    
+CREATE OR ALTER PROCEDURE [RDT].[rdt_600RcvCfmPGPE] (
+   @nFunc          INT,
+   @nMobile        INT,
+   @cLangCode      NVARCHAR( 3),
+   @cStorerKey     NVARCHAR( 15),
+   @cFacility      NVARCHAR( 5),
+   @cReceiptKey    NVARCHAR( 10),
+   @cPOKey         NVARCHAR( 10), -- Blank = receive to ReceiptDetail with blank POKey
+   @cToLOC         NVARCHAR( 10),
+   @cToID          NVARCHAR( 18), -- Blank = receive to blank ToID
+   @cSKUCode       NVARCHAR( 20), -- SKU code. Not SKU barcode
+   @cSKUUOM        NVARCHAR( 10),
+   @nSKUQTY        INT,       -- In master unit
+   @cUCC           NVARCHAR( 20),
+   @cUCCSKU        NVARCHAR( 20),
+   @nUCCQTY        INT,       -- In master unit. Pass in the QTY for UCCWithDynamicCaseCNT
+   @cCreateUCC     NVARCHAR( 1),  -- Create UCC. 1=Yes, the rest=No
+   @cLottable01    NVARCHAR( 18),
+   @cLottable02    NVARCHAR( 18),
+   @cLottable03    NVARCHAR( 18),
+   @dLottable04    DATETIME,
+   @dLottable05    DATETIME,
+   @cLottable06    NVARCHAR( 30),
+   @cLottable07    NVARCHAR( 30),
+   @cLottable08    NVARCHAR( 30),
+   @cLottable09    NVARCHAR( 30),
+   @cLottable10    NVARCHAR( 30),
+   @cLottable11    NVARCHAR( 30),
+   @cLottable12    NVARCHAR( 30),
+   @dLottable13    DATETIME,
+   @dLottable14    DATETIME,
+   @dLottable15    DATETIME,
+   @nNOPOFlag      INT,
+   @cConditionCode NVARCHAR( 10),
+   @cSubreasonCode NVARCHAR( 10),
+   @nErrNo         INT          OUTPUT,
+   @cErrMsg        NVARCHAR( 20) OUTPUT, -- screen limitation, 20 char max
+   @cReceiptLineNumberOutput NVARCHAR( 5) = '' OUTPUT,
+   @cDebug         NVARCHAR( 1) = '0',
+   @cSerialNo      NVARCHAR( 30) = '',
+   @nSerialQTY     INT = 0,
+   @nBulkSNO       INT = 0,
+   @nBulkSNOQTY    INT = 0
 ) AS  
 SET NOCOUNT ON  
 SET QUOTED_IDENTIFIER OFF  
@@ -1976,70 +1976,72 @@ BEGIN
   
       -- Balance insert as new ReceiptDetail line  
       -- Added By Vicky - To Cater Return without Receiptlines  
-      IF @cDocType = 'R' AND @cExternReceiptKey = '' AND @cOrgPOKey = ''  
-      BEGIN  
-         INSERT INTO @tRD  
-            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,  
-            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,  
-            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,  
-            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,  
-            FinalizeFlag, ExternReceiptkey, Org_ReceiptLineNumber, Org_QTYExpected,  
-            Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate ) -- (ChewKP01)  
-         VALUES  
-         (  @cNewReceiptLineNumber, '', @nQTY, @nQTY, @cToID, @cToLOC,  
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,  
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
-            'N', '', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate()  ) -- Added By Vicky -- (ChewKP01)  
-      END  
-      ELSE  
-      BEGIN  
-         IF @cDebug = '1'  
-         BEGIN  
-            SELECT @nQTY_Bal '@nQTY_Bal', @nQTY '@nQTY', @nQTYExpected_Borrowed '@nQTYExpected_Borrowed', @nBeforeReceivedQTY '@nBeforeReceivedQTY' , @cReceiptLineNumber_Borrowed '@cReceiptLineNumber_Borrowed'  
-         END  
-  
-         -- Only create new line when Inserted record not from @cReceiptLineNumber_Borrowed  
-         SET @cBorrowed_OriginalReceiptLineNumber = ''  
-  
-         -- Check if the borrowed line is exact match  
-         SELECT @cBorrowed_OriginalReceiptLineNumber = ReceiptLineNumber  
-         FROM @tRD  
-         WHERE ReceiptLine_Borrowed = @cReceiptLineNumber_Borrowed  
-         AND FinalizeFlag <> 'Y'  
-         AND ToID = @cToID  
-         AND (@cLottable01Required = '0' OR Lottable01 = @cLottable01)  
-         AND (@cLottable02Required = '0' OR Lottable02 = @cLottable02)  
-         AND (@cLottable03Required = '0' OR Lottable03 = @cLottable03)  
-         AND (@cLottable04Required = '0' OR IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0))  
-         AND (@cLottable05Required = '0' OR IsNULL( Lottable05, 0) = IsNULL( @dLottable05, 0))  
-         AND (@cLottable06Required = '0' OR Lottable06 = @cLottable06)  
-         AND (@cLottable07Required = '0' OR Lottable07 = @cLottable07)  
-         AND (@cLottable08Required = '0' OR Lottable08 = @cLottable08)  
-         AND (@cLottable09Required = '0' OR Lottable09 = @cLottable09)  
-         AND (@cLottable10Required = '0' OR Lottable10 = @cLottable10)  
-         AND (@cLottable11Required = '0' OR Lottable11 = @cLottable11)  
-         AND (@cLottable12Required = '0' OR Lottable12 = @cLottable12)  
-         AND (@cLottable13Required = '0' OR IsNULL( Lottable13, 0) = IsNULL( @dLottable13, 0))  
-         AND (@cLottable14Required = '0' OR IsNULL( Lottable14, 0) = IsNULL( @dLottable14, 0))  
-         AND (@cLottable15Required = '0' OR IsNULL( Lottable15, 0) = IsNULL( @dLottable15, 0))  
-         AND @cToLOC = ToLOC  
-  
-         IF @cBorrowed_OriginalReceiptLineNumber = ''  
-         BEGIN  
-            INSERT INTO @tRD  
-               (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,  
-               Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,  
-               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,  
-               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,  
-               FinalizeFlag, Org_ReceiptLineNumber, Org_QTYExpected, Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate) -- Added By Vicky -- (ChewKP01)  
-            VALUES  
-               --(@cReceiptLineNumber, '', @nQTYExpected_Borrowed, @nBeforeReceivedQTY, @cToID, @cToLOC,  
-               (@cNewReceiptLineNumber, '', @nQTYExpected_Borrowed, @nQTY, @cToID, @cToLOC,  
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,  
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
-               'N', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate() ) -- Added By Vicky -- (ChewKP01)  
+      IF @cDocType = 'R' AND @cExternReceiptKey = '' AND @cOrgPOKey = ''
+      BEGIN
+         INSERT INTO @tRD
+            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
+            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+            FinalizeFlag, ExternReceiptkey, Org_ReceiptLineNumber, Org_QTYExpected,
+            Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate, SubreasonCode) -- (ChewKP01)
+         VALUES
+         (  @cNewReceiptLineNumber, '', @nQTY, @nQTY, @cToID, @cToLOC,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            'N', '', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate(),
+            ISNULL(NULLIF(@cSubreasonCode, ''), (SELECT TOP 1 SubreasonCode FROM @tRD WHERE ReceiptLineNumber = @cReceiptLineNumber_Borrowed))) -- Added By Vicky -- (ChewKP01)
+      END
+      ELSE
+      BEGIN
+         IF @cDebug = '1'
+         BEGIN
+            SELECT @nQTY_Bal '@nQTY_Bal', @nQTY '@nQTY', @nQTYExpected_Borrowed '@nQTYExpected_Borrowed', @nBeforeReceivedQTY '@nBeforeReceivedQTY' , @cReceiptLineNumber_Borrowed '@cReceiptLineNumber_Borrowed'
+         END
+
+         -- Only create new line when Inserted record not from @cReceiptLineNumber_Borrowed
+         SET @cBorrowed_OriginalReceiptLineNumber = ''
+
+         -- Check if the borrowed line is exact match
+         SELECT @cBorrowed_OriginalReceiptLineNumber = ReceiptLineNumber
+         FROM @tRD
+         WHERE ReceiptLine_Borrowed = @cReceiptLineNumber_Borrowed
+         AND FinalizeFlag <> 'Y'
+         AND ToID = @cToID
+         AND (@cLottable01Required = '0' OR Lottable01 = @cLottable01)
+         AND (@cLottable02Required = '0' OR Lottable02 = @cLottable02)
+         AND (@cLottable03Required = '0' OR Lottable03 = @cLottable03)
+         AND (@cLottable04Required = '0' OR IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0))
+         AND (@cLottable05Required = '0' OR IsNULL( Lottable05, 0) = IsNULL( @dLottable05, 0))
+         AND (@cLottable06Required = '0' OR Lottable06 = @cLottable06)
+         AND (@cLottable07Required = '0' OR Lottable07 = @cLottable07)
+         AND (@cLottable08Required = '0' OR Lottable08 = @cLottable08)
+         AND (@cLottable09Required = '0' OR Lottable09 = @cLottable09)
+         AND (@cLottable10Required = '0' OR Lottable10 = @cLottable10)
+         AND (@cLottable11Required = '0' OR Lottable11 = @cLottable11)
+         AND (@cLottable12Required = '0' OR Lottable12 = @cLottable12)
+         AND (@cLottable13Required = '0' OR IsNULL( Lottable13, 0) = IsNULL( @dLottable13, 0))
+         AND (@cLottable14Required = '0' OR IsNULL( Lottable14, 0) = IsNULL( @dLottable14, 0))
+         AND (@cLottable15Required = '0' OR IsNULL( Lottable15, 0) = IsNULL( @dLottable15, 0))
+         AND @cToLOC = ToLOC
+
+         IF @cBorrowed_OriginalReceiptLineNumber = ''
+         BEGIN
+            INSERT INTO @tRD
+               (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
+               Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+               FinalizeFlag, Org_ReceiptLineNumber, Org_QTYExpected, Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate, SubreasonCode) -- Added By Vicky -- (ChewKP01)
+            VALUES
+               --(@cReceiptLineNumber, '', @nQTYExpected_Borrowed, @nBeforeReceivedQTY, @cToID, @cToLOC,
+               (@cNewReceiptLineNumber, '', @nQTYExpected_Borrowed, @nQTY, @cToID, @cToLOC,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               'N', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate(),
+               ISNULL(NULLIF(@cSubreasonCode, ''), (SELECT TOP 1 SubreasonCode FROM @tRD WHERE ReceiptLineNumber = @cReceiptLineNumber_Borrowed))) -- Added By Vicky -- (ChewKP01)
          END  
          ELSE  
          BEGIN  
@@ -2096,42 +2098,44 @@ BEGIN
   
       -- Balance insert as new ReceiptDetail line  
       -- Added By Vicky - To Cater Return without Receiptlines  
-      IF @cDocType = 'R' AND @cExternReceiptKey = '' AND @cOrgPOKey = ''  
-      BEGIN  
-         INSERT INTO @tRD  
-            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,  
-            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,  
-            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,  
-            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,  
-            FinalizeFlag, ExternReceiptkey, Org_ReceiptLineNumber, Org_QTYExpected,  
-            Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate ) -- (ChewKP01)  
-         VALUES  
-            (@cNewReceiptLineNumber, '', 0, @nQTY_Bal, @cToID, @cToLOC,  
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,  
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
-            'N', '', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate()) -- Added By Vicky -- (ChewKP01)  
-      END  
-      ELSE  
-      BEGIN  
-         IF @cDebug = '1'  
-         BEGIN  
-            SELECT @nQTY_Bal '@nQTY_Bal', @nQTY '@nQTY', @nQTYExpected_Borrowed '@nQTYExpected_Borrowed', @nBeforeReceivedQTY '@nBeforeReceivedQTY'  
-         END  
-  
-         INSERT INTO @tRD  
-            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,  
-            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,  
-            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,  
-            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,  
-            FinalizeFlag, Org_ReceiptLineNumber, Org_QTYExpected, Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate) -- Added By Vicky -- (ChewKP01)  
-         VALUES  
-            --(@cReceiptLineNumber, '', @nQTYExpected_Borrowed, @nBeforeReceivedQTY, @cToID, @cToLOC,  
-            (@cNewReceiptLineNumber, '', 0, @nQTY_Bal, @cToID, @cToLOC,  
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,  
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
-            'N', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate() ) -- Added By Vicky -- (ChewKP01)  
+      IF @cDocType = 'R' AND @cExternReceiptKey = '' AND @cOrgPOKey = ''
+      BEGIN
+         INSERT INTO @tRD
+            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
+            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+            FinalizeFlag, ExternReceiptkey, Org_ReceiptLineNumber, Org_QTYExpected,
+            Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate, SubreasonCode) -- (ChewKP01)
+         VALUES
+            (@cNewReceiptLineNumber, '', 0, @nQTY_Bal, @cToID, @cToLOC,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            'N', '', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate(),
+            ISNULL(NULLIF(@cSubreasonCode, ''), (SELECT TOP 1 SubreasonCode FROM @tRD WHERE ReceiptLineNumber = @cReceiptLineNumber_Borrowed))) -- Added By Vicky -- (ChewKP01)
+      END
+      ELSE
+      BEGIN
+         IF @cDebug = '1'
+         BEGIN
+            SELECT @nQTY_Bal '@nQTY_Bal', @nQTY '@nQTY', @nQTYExpected_Borrowed '@nQTYExpected_Borrowed', @nBeforeReceivedQTY '@nBeforeReceivedQTY'
+         END
+
+         INSERT INTO @tRD
+            (ReceiptLineNumber, POLineNumber, QTYExpected, BeforeReceivedQTY, ToID, ToLOC,
+            Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+            Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+            FinalizeFlag, Org_ReceiptLineNumber, Org_QTYExpected, Org_BeforeReceivedQTY, ReceiptLine_Borrowed, EditDate, SubreasonCode) -- Added By Vicky -- (ChewKP01)
+         VALUES
+            --(@cReceiptLineNumber, '', @nQTYExpected_Borrowed, @nBeforeReceivedQTY, @cToID, @cToLOC,
+            (@cNewReceiptLineNumber, '', 0, @nQTY_Bal, @cToID, @cToLOC,
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, --@dLottable05,
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+            'N', '', 0, 0, @cReceiptLineNumber_Borrowed, GetDate(),
+            ISNULL(NULLIF(@cSubreasonCode, ''), (SELECT TOP 1 SubreasonCode FROM @tRD WHERE ReceiptLineNumber = @cReceiptLineNumber_Borrowed))) -- Added By Vicky -- (ChewKP01)
       END  
   
       -- Update UCC  
