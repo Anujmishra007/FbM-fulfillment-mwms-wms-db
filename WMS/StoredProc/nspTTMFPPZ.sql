@@ -97,17 +97,17 @@ BEGIN
             AND TaskDetail.Status = '0'  
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')  
             AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))  
-               FROM LOTxLOCxID LLI WITH (NOLOCK)  
+               FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)  
                WHERE LLI.LOC = TaskDetail.FromLOC  
                   AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY  
             AND NOT EXISTS( SELECT 1  
-               FROM TaskDetail T1 WITH (NOLOCK)  
+               FROM dbo.TaskDetail T1 WITH (NOLOCK)  
                WHERE TaskDetail.GroupKey <> ''   
                   AND T1.GroupKey = TaskDetail.GroupKey   
                   AND T1.Status < '9'  
                   AND T1.UserKey NOT IN (@c_userid, ''))  
             AND EXISTS( SELECT 1   
-               FROM TaskManagerUserDetail tmu WITH (NOLOCK)  
+               FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)  
                WHERE PermissionType = TaskDetail.TASKTYPE  
                  AND tmu.UserKey = @c_UserID  
                  AND tmu.AreaKey = @c_AreaKey01  
@@ -129,17 +129,17 @@ BEGIN
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')  
             AND LOC.Facility = @cFacility  
             AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))  
-               FROM LOTxLOCxID LLI WITH (NOLOCK)  
+               FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)  
                WHERE LLI.LOC = TaskDetail.FromLOC  
                   AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY  
             AND NOT EXISTS( SELECT 1  
-               FROM TaskDetail T1 WITH (NOLOCK)  
+               FROM dbo.TaskDetail T1 WITH (NOLOCK)  
                WHERE TaskDetail.GroupKey <> ''   
                   AND T1.GroupKey = TaskDetail.GroupKey   
                   AND T1.Status < '9'  
                   AND T1.UserKey NOT IN (@c_userid, ''))  
             AND EXISTS( SELECT 1   
-               FROM TaskManagerUserDetail tmu WITH (NOLOCK)  
+               FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)  
                WHERE PermissionType = TaskDetail.TASKTYPE  
                  AND tmu.UserKey = @c_UserID  
                  AND tmu.Permission = '1')  
@@ -384,7 +384,7 @@ BEGIN
              @cStation = DeviceID,   
              @cPosition = DevicePosition,   
              @cIPAddress = IPAddress  
-         FROM DeviceProfile WITH (NOLOCK)   
+         FROM dbo.DeviceProfile WITH (NOLOCK)   
          WHERE StorerKey = @c_StorerKey  
             AND LOC = @cFromLOC   
             AND LogicalName = 'FCP'  
