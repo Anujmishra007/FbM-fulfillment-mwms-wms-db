@@ -5,8 +5,7 @@ GO
 /************************************************************************/  
 /* Stored Procedure: nspTTMCCON                                         */  
 /* Creation Date: 09-11-2011                                            */  
-/* Copyright: MAERSK                                                    */
-/* Written by: Chew KP                                                  */  
+/* Copyright: MAERSK                                                    */ 
 /*                                                                      */  
 /* Purpose:                                                             */ 
 /* merging to repo as a part of UWP-62594                               */ 
