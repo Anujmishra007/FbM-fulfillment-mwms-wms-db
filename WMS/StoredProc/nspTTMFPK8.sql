@@ -114,11 +114,10 @@ BEGIN
            --CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
            --,TaskDetail.Priority
            --,TaskDetail.TaskDetailKey
-           ORDER BY
-              CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END  --PSJ036 VER1.0
-              ,TaskDetail.Priority
-              , LOC.LogicalLocation
-              , LOC.LOC
+            ORDER BY
+               TaskDetail.Priority
+              ,LOC.LogicalLocation
+              ,LOC.LOC
            --INC0693341 End
    ELSE
       SET @Cursor_FPKTaskCandidates = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
