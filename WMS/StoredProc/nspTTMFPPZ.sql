@@ -13,7 +13,6 @@ GO
 /*                                                                            */  
 /* Modifications log:                                                         */  
 /* Date        Author    Ver  Purposes                                        */  
-/* 2018-03-27  Ung       1.0  WMS-3333 Created                                */ 
 /* 2026-08-04  NYE018    1.1  UWP-62594 merge to repo from stage db           */ 
 /******************************************************************************/  
 CREATE OR ALTER PROC [dbo].[nspTTMFPPZ]  
@@ -92,7 +91,7 @@ BEGIN
          SELECT TaskDetailkey  
          FROM dbo.TaskDetail WITH (NOLOCK)  
             JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)  
-            JOIN AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)  
+            JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)  
          WHERE AreaDetail.AreaKey = @c_AreaKey01  
             AND TaskDetail.TaskType IN ('FPP', 'FPP1')  
             AND TaskDetail.Status = '0'  
@@ -307,7 +306,7 @@ BEGIN
       IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (ROWLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)  
       BEGIN  
          IF @cTransitLOC = @c_ToLOC  
-            UPDATE TaskDetail WITH (ROWLOCK) SET  
+            UPDATE dbo.TaskDetail WITH (ROWLOCK) SET  
                 Status     = '3'  
                ,UserKey    = @c_UserID  
                ,ReasonKey  = ''  
@@ -319,7 +318,7 @@ BEGIN
             WHERE TaskDetailKey = @c_TaskDetailKey  
                AND Status IN ('0')  
          ELSE  
-            UPDATE TaskDetail WITH (ROWLOCK) SET  
+            UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
                 Status     = '3'  
                ,UserKey    = @c_UserID  
                ,ReasonKey  = ''  
@@ -356,7 +355,7 @@ BEGIN
    END  
   
    -- Light up entire group (for PTL location only)  
-   IF EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @c_FromLOC AND LocationType = 'PTL' AND LocationCategory = 'FLOWRACK') AND @cGroupKey <> ''  
+   IF EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @c_FromLOC AND LocationType = 'PTL' AND LocationCategory = 'FLOWRACK') AND @cGroupKey <> ''  
    BEGIN  
       DECLARE @cStation NVARCHAR(20)  
       DECLARE @cPosition NVARCHAR(10)  
@@ -370,7 +369,7 @@ BEGIN
         
       SET @curTD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
          SELECT FromLOC, SUM( QTY)  
-         FROM TaskDetail WITH (NOLOCK)   
+         FROM dbo.TaskDetail WITH (NOLOCK)   
          WHERE GroupKey = @cGroupKey  
             AND StorerKey = @c_StorerKey  
             AND TaskType = @c_TaskType  
