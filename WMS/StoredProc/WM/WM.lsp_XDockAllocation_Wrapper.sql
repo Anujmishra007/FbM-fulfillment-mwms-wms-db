@@ -207,7 +207,6 @@ BEGIN
                  JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
                  JOIN ORDERDETAIL OD (NOLOCK) ON OD.Storerkey = RD.Storerkey
             AND OD.ExternPOKey = RD.ExternPOkey
-            AND OD.ID = RD.ToID
             AND OD.Sku = RD.Sku
                  JOIN ORDERS O (NOLOCK) ON OD.Orderkey = O.Orderkey
         WHERE R.Receiptkey = @c_Receiptkey
