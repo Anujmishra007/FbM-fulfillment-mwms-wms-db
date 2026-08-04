@@ -86,7 +86,7 @@ BEGIN
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN nspTTMFPKZ -- For rollback or commit only our own transaction
+   SAVE TRAN nspTTMFPKP -- For rollback or commit only our own transaction
 
    SET @c_TaskDetailKey = ''
    
@@ -293,13 +293,13 @@ BEGIN
       GOTO Quit
    END
 
-   COMMIT TRAN nspTTMFPKZ -- Only commit change made here
+   COMMIT TRAN nspTTMFPKP -- Only commit change made here
    GOTO Quit
    
 --RollBackTran:
---   ROLLBACK TRAN nspTTMFPKZ -- Only rollback change made here
+--   ROLLBACK TRAN nspTTMFPKP -- Only rollback change made here
 Fail:
-   ROLLBACK TRAN nspTTMFPKZ -- Only rollback change made here
+   ROLLBACK TRAN nspTTMFPKP -- Only rollback change made here
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
