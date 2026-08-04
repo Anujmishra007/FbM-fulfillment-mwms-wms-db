@@ -11,7 +11,7 @@ GO
 /*                                                                      		   	*/
 /* Modifications log:                                                    		   	*/
 /* Date        Author    Ver  Purposes                                     			*/
-/* 2026-07-06  PSJ036    1.0  RITM8976012/UWP-60717 Is's a copy from SP nspTTMFPK1	*/
+/* 2026-07-06  PSJ036    1.0  RITM8976012/UWP-60717 It's a copy from SP nspTTMFPK1	*/
 /*							  this change is to find the candidates for			   	*/
 /*							  Taskdetailkey instead GroupKey. 					   	*/
 /************************************************************************************/
