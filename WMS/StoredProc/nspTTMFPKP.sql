@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/
 /* Stored Procedure: nspTTMFPKP                                         */
 /* Copyright: IDS                                                       */
@@ -85,73 +89,38 @@ BEGIN
    SAVE TRAN nspTTMFPKZ -- For rollback or commit only our own transaction
 
    SET @c_TaskDetailKey = ''
+   
+   SET @cFoundTask = ''
 
-   IF @c_AreaKey01 <> ''
-      DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT TaskDetailkey, GroupKey
-         FROM dbo.TaskDetail WITH (NOLOCK)
-            JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
-            JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-         WHERE AreaDetail.AreaKey = @c_AreaKey01
-            AND TaskDetail.TaskType = 'FPK'
-            AND TaskDetail.Status = '0'
-			AND TaskDetail.UserKeyOverRide IN (@c_userid, '')  --FRO014
-            -- Exclude GroupKey taken by others
-            AND NOT EXISTS( SELECT 1
-               FROM dbo.TaskDetail T2 WITH (NOLOCK)
-               WHERE T2.TaskDetailkey = TaskDetail.TaskDetailkey
-                  AND T2.GroupKey <> ''
-                  AND T2.UserKey <> ''
-              AND T2.UserKey <> @c_UserID)
-            AND EXISTS( SELECT 1
-               FROM TaskManagerUserDetail tmu WITH (NOLOCK)
-               WHERE PermissionType = TaskDetail.TASKTYPE
-                 AND tmu.UserKey = @c_UserID
-                 AND tmu.AreaKey = @c_AreaKey01
-                 AND tmu.Permission = '1')
-         --INC0693341 Start
-         --ORDER BY
-           --CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
-           --,TaskDetail.Priority
-           --,TaskDetail.TaskDetailKey
-           ORDER BY
-             CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END
-            ,TaskDetail.Priority
-            , LOC.LogicalLocation
-            , LOC.LOC
-         --INC0693341 End
-   ELSE
-      DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT TaskDetailkey, GroupKey
-         FROM dbo.TaskDetail WITH (NOLOCK)
-            JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
-            JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-         WHERE dbo.TaskDetail.TaskType = 'FPK'
-            AND TaskDetail.Status = '0'
-			AND TaskDetail.UserKeyOverRide IN (@c_userid, '')  --FRO014
-            -- Exclude GroupKey taken by others
-            AND NOT EXISTS( SELECT 1
-               FROM dbo.TaskDetail T2 WITH (NOLOCK)
-               WHERE T2.TaskDetailkey = TaskDetail.TaskDetailkey
-                  AND T2.GroupKey <> ''
-                  AND T2.UserKey <> ''
-                  AND T2.UserKey <> @c_UserID)
-            AND EXISTS( SELECT 1
-               FROM TaskManagerUserDetail tmu WITH (NOLOCK)
-               WHERE PermissionType = TaskDetail.TASKTYPE
-                 AND tmu.UserKey = @c_UserID
-                 AND tmu.Permission = '1')
-         --INC0693341 Start
-         --ORDER BY
-            -- CASE WHEN TaskDetail.GroupKey = @c_GroupKey THEN '0' ELSE '1' END
-            --,TaskDetail.Priority
-            --,TaskDetail.TaskDetailKey
-           ORDER BY
-             CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END
-            ,TaskDetail.Priority
-            , LOC.LogicalLocation
-            , LOC.LOC
-         --INC0693341 End
+   DECLARE Cursor_FPKTaskCandidates CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT TaskDetailkey, GroupKey
+      FROM dbo.TaskDetail WITH (NOLOCK)
+         JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
+         JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+      WHERE TaskDetail.TaskType = 'FPK'
+         AND TaskDetail.Status = '0'
+         AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
+         AND (@c_AreaKey01 = '' OR AreaDetail.AreaKey = @c_AreaKey01)
+         -- Exclude GroupKey taken by others
+         AND NOT EXISTS (
+            SELECT 1
+            FROM dbo.TaskDetail T2 WITH (NOLOCK)
+            WHERE T2.TaskDetailkey = TaskDetail.TaskDetailkey
+               AND T2.GroupKey <> ''
+               AND T2.UserKey <> ''
+               AND T2.UserKey <> @c_UserID)
+         AND EXISTS (
+            SELECT 1
+            FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)
+            WHERE PermissionType = TaskDetail.TaskType
+               AND tmu.UserKey = @c_UserID
+               AND (@c_AreaKey01 = '' OR tmu.AreaKey = @c_AreaKey01)
+               AND tmu.Permission = '1')
+      ORDER BY
+         CASE WHEN TaskDetail.TaskDetailkey = @c_TaskDetailKey THEN '0' ELSE '1' END
+         , TaskDetail.Priority
+         , LOC.LogicalLocation
+         , LOC.LOC
 
    -- Get a task
    OPEN Cursor_FPKTaskCandidates
@@ -239,7 +208,7 @@ BEGIN
                AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
                AND NOT L1.LocationCategory IN ('PND_OUT', 'PND') -- Exclude task going out from PND_OUT
                AND NOT L2.LocationCategory IN ('PND_IN', 'PND')  -- Exclude task coming in into PND_IN
-               AND UserKey <> @c_userid)
+               AND UserKey <> @c_UserID)
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
             CONTINUE
@@ -269,7 +238,7 @@ BEGIN
                   AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
                   AND NOT L1.LocationCategory IN ('PND_OUT', 'PND') -- Exclude task going out from PND_OUT
                   AND NOT L2.LocationCategory IN ('PND_IN', 'PND')  -- Exclude task coming in into PND_IN
-                  AND UserKey <> @c_userid)
+                  AND UserKey <> @c_UserID)
             BEGIN
                FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey, @c_GroupKey
                CONTINUE
@@ -280,7 +249,9 @@ BEGIN
       -- Update task as in-progress
       IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)
       BEGIN
-         UPDATE TaskDetail WITH (ROWLOCK) SET
+	  
+	    BEGIN TRY
+         UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
              Status          = '3'
             ,UserKey         = @c_UserID
             ,ReasonKey       = ''
@@ -291,13 +262,24 @@ BEGIN
             ,TrafficCop      = NULL
          WHERE TaskDetailKey = @c_TaskDetailKey
             AND Status IN ('0')
+		END TRY
+		
+	
+		BEGIN CATCH
+		   --SET @n_Err = ERROR_NUMBER()
+		   --SET @c_ErrMsg = ERROR_MESSAGE()
+		   SET @n_Err = 90701
+		   SET @c_ErrMsg = '90701 UPDTaskDtlFail'
+		   GOTO Fail
+		END CATCH
 
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-         BEGIN
-            SET @n_Err = 90701
-            SET @c_ErrMsg = '90701 UPDTaskDtlFail'
-            GOTO Fail
-         END
+		IF @@ROWCOUNT <> 1
+		BEGIN
+		   SET @n_Err = 90701
+		   SET @c_ErrMsg = '90701 UPDTaskDtlFail'
+		   GOTO Fail
+		END
+		
       END
 
       SET @cFoundTask = 'Y'
@@ -313,11 +295,19 @@ BEGIN
 
    COMMIT TRAN nspTTMFPKZ -- Only commit change made here
    GOTO Quit
-
-RollBackTran:
-   ROLLBACK TRAN nspTTMFPKZ -- Only rollback change made here
+   
+--RollBackTran:
+--   ROLLBACK TRAN nspTTMFPKZ -- Only rollback change made here
 Fail:
+   ROLLBACK TRAN nspTTMFPKZ -- Only rollback change made here
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+GRANT EXECUTE ON [dbo].[nspTTMFPKP] TO nSQL
+GO
