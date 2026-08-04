@@ -15,6 +15,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 25-04-2016  1.0  Ung         SOS368861 Created                       */
+/* 2026-07-15  1.1  Cuize       FCR-13139 Add UnassignSP config         */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_PTLPiece_Unassign (
@@ -41,7 +42,47 @@ BEGIN
    DECLARE @nPTLKey INT
    DECLARE @cIPAddress NVARCHAR(40)
    DECLARE @cPosition  NVARCHAR(10)
+   DECLARE @cSQL       NVARCHAR(MAX)
+   DECLARE @cSQLParam  NVARCHAR(MAX)
 
+   /***********************************************************************************************
+                                         Custom Unassign SP
+   ***********************************************************************************************/
+   DECLARE @cUnassignSP SYSNAME
+   SET @cUnassignSP = rdt.RDTGetConfig(@nFunc, 'UnassignSP', @cStorerKey)
+   IF @cUnassignSP = '0'
+      SET @cUnassignSP = ''
+
+   -- Custom unassign SP
+   IF @cUnassignSP <> ''
+   BEGIN
+      IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = @cUnassignSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM(@cUnassignSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+            ' @cStation, @cMethod, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            ' @nMobile    INT,           ' +
+            ' @nFunc      INT,           ' +
+            ' @cLangCode  NVARCHAR( 3),  ' +
+            ' @nStep      INT,           ' +
+            ' @nInputKey  INT,           ' +
+            ' @cFacility  NVARCHAR( 5),  ' +
+            ' @cStorerKey NVARCHAR( 15), ' +
+            ' @cStation   NVARCHAR( 10), ' +
+            ' @cMethod    NVARCHAR( 10), ' +
+            ' @nErrNo     INT            OUTPUT, ' +
+            ' @cErrMsg    NVARCHAR( 250) OUTPUT  '
+         EXEC sp_executesql @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @cStation, @cMethod, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         RETURN
+      END
+   END
+
+   /***********************************************************************************************
+                                         Standard Unassign
+   ***********************************************************************************************/
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
@@ -71,7 +112,7 @@ BEGIN
 
    COMMIT TRAN rdt_PTLPiece_Unassign
    GOTO Quit
-   
+
 RollBackTran:
    ROLLBACK TRAN rdt_PTLPiece_Unassign -- Only rollback change made here
 Quit:

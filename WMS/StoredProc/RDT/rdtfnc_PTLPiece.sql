@@ -184,6 +184,7 @@ SELECT
    @cExtendedScreenSP   = V_String28,
    @cUPC                = V_String41,
    @cCartID             = V_String42,
+   --CString1 Assigned rdt_803ExtScn04
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01, 
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02, 
@@ -923,6 +924,15 @@ BEGIN
   
       SET @nStep = @nStep - 1  
    END
+
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END
+   END
    GOTO Quit
 
    Step_3_Fail:
@@ -1534,6 +1544,9 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_99_Fail
 
+         IF @cUDF01 = 'NO UPD RDTMOBREC'
+            RETURN
+
          IF @cExtendedScreenSP = 'rdt_803ExtScn01'
          BEGIN
             SET @cIPAddress = @cUDF01
@@ -1615,6 +1628,7 @@ BEGIN
       V_String28 = @cExtendedScreenSP,
       V_String41 = @cUPC,
       V_String42 = @cCartID,
+      --CString1 Assigned rdt_803ExtScn04
 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01, 
