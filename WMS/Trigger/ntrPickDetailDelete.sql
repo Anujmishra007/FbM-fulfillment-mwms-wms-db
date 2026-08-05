@@ -66,6 +66,7 @@ GO
 /* 02-DEC-2024  Wan05      1.25  UWP-23317 - [FCR-618 819] Unpick SerialNo */
 /* 12-Aug-2025  WLChooi    1.26  FCR-5700 Trigger ITF By Wave (WL01)       */
 /* 07-Jan-2026  AndyWu01   1.27  FCR-9658 Trigger ITF By Order (AndyWu01)  */ 
+/* 05-Aug-2026  TK01       1.28  FCR-14782 SkipUpdTskQty For MultiWave UCC */ 
 /***************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailDelete]
 ON [dbo].[PICKDETAIL]
@@ -121,7 +122,10 @@ BEGIN
          , @cur_PSNDEL              CURSOR                                    --(Wan05)
          , @c_WaveKey               NVARCHAR(10)   --WL01
          , @CUR_TriggerPoints       CURSOR         --WL01
-		 , @c_OrderKey              NVARCHAR(10)   --AndyWu01
+         , @c_OrderKey              NVARCHAR(10)   --AndyWu01
+         , @c_SkipUpdTskQtyForUCC   NVARCHAR(30)   --TK01
+         , @c_UCCNo                 NVARCHAR(20)   --TK01
+         , @b_IsMultiWaveUCC        INT            --TK01
 
    -- TLTING01
    IF EXISTS ( SELECT 1 FROM DELETED WHERE [STATUS] < '9')
@@ -1050,9 +1054,9 @@ BEGIN
          SET @c_TaskStatus = ''
          SET @n_TaskQty = 0
 
-         SELECT @c_TaskStatus = Status,
-               @n_TaskQty = Qty
-               , @c_FromLoc  = FromLoc                                                                     --(Wan03)
+         SELECT @c_TaskStatus = Status
+               ,@n_TaskQty = Qty
+               ,@c_FromLoc  = FromLoc                                                                     --(Wan03)
          FROM TASKDETAIL WITH (NOLOCK)
          WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey
 
@@ -1083,6 +1087,37 @@ BEGIN
             END
             ELSE
             BEGIN
+               --(TK01) - START
+               SET @c_SkipUpdTskQtyForUCC = ''
+               SET @c_UCCNo = ''
+               SET @b_IsMultiWaveUCC = 0
+
+               SELECT @c_SkipUpdTskQtyForUCC = SC.Authority
+               FROM fnc_SelectGetRight (@c_FacilityD, @c_StorerkeyD, '', 'SkipUpdTskQtyForUCC') SC
+
+               IF @c_SkipUpdTskQtyForUCC = '1'
+               BEGIN
+
+                  SELECT @c_UCCNo = U.UCCNo
+                  FROM DELETED D (NOLOCK)
+                  JOIN UCC U
+                  ON U.UCCNo = D.DropID
+                  WHERE U.Status ='3'
+
+                  SELECT @b_IsMultiWaveUCC = 1
+                  FROM UCC U (NOLOCK)
+                  JOIN PickDetail PD (NOLOCK)
+                  ON PD.DropID = U.UCCNo
+                  AND PD.StorerKey = @c_StorerkeyD
+                  JOIN WaveDetail WD (NOLOCK)
+                  ON WD.OrderKey = PD.OrderKey
+                  WHERE U.UCCNo = @c_UCCNo
+                  GROUP BY WD.Wavekey
+                  HAVING COUNT(DISTINCT(WD.Wavekey)) > 1
+
+               END
+               --(TK01) - END
+
                --(Wan03) - START
                IF @c_StorerkeyD <> @c_StorerkeyDLast
                BEGIN
@@ -1149,22 +1184,28 @@ BEGIN
                END
                ELSE
                BEGIN
-                  UPDATE TASKDETAIL with (ROWLOCK)
-                     SET Qty = Qty - @n_PickDetQty,
-                        EditWho    = sUser_sName(),
-                        EditDate   = GetDate(),
-                        TrafficCop = NULL
-                  WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey
-                  AND TASKDETAIL.Status <> '9'
-
-                  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-                  IF @n_err <> 0
+                  --(TK01) - START
+                  --Skip Update TaskDetail.QTY when SkipUpdTskQtyForUCC flag On and UCC Allocated by multiple Wave.
+                  IF NOT (@c_SkipUpdTskQtyForUCC = '1' AND @b_IsMultiWaveUCC = 1)
                   BEGIN
-                     SELECT @n_continue = 3
-                     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63214
-                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TaskDetail Failed. (ntrPickDetailDelete)' +
-                           ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                     UPDATE TASKDETAIL with (ROWLOCK)
+                        SET Qty = Qty - @n_PickDetQty,
+                           EditWho    = sUser_sName(),
+                           EditDate   = GetDate(),
+                           TrafficCop = NULL
+                     WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey
+                     AND TASKDETAIL.Status <> '9'
+
+                     SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+                     IF @n_err <> 0
+                     BEGIN
+                        SELECT @n_continue = 3
+                        SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63214
+                        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TaskDetail Failed. (ntrPickDetailDelete)' +
+                              ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                     END
                   END
+                  --(TK01) - END
                END
                --(Wan03) - END
             END
@@ -1399,7 +1440,7 @@ BEGIN
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
-	  AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
+      AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
@@ -1432,7 +1473,7 @@ BEGIN
                                                AND STC.SValue = '1'
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
-	  AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
+      AND    ITC.ConfigKey   like 'WSLOGIRPWAVE%'  --AndyWu01
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
@@ -1471,11 +1512,11 @@ BEGIN
       SELECT DISTINCT OH.Orderkey, DEL.PickDetailKey, OH.StorerKey
       FROM   DELETED DEL
       JOIN   Orders OH WITH (NOLOCK)            ON DEL.OrderKey = OH.OrderKey
-	  JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
+      JOIN   PickDetail PD WITH (NOLOCK)        ON OH.OrderKey = PD.OrderKey
       JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
-	  AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
+      AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
@@ -1509,7 +1550,7 @@ BEGIN
                                                AND STC.SValue = '1'
       WHERE  ITC.SourceTable = 'PickDetail'
       AND    ITC.sValue      = '1'
-	  AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
+      AND    ITC.ConfigKey   like 'WSLOGIRPORORDER%'
 
       OPEN @CUR_TriggerPoints
       FETCH NEXT FROM @CUR_TriggerPoints INTO @c_OrderKey, @c_PickDetailKey, @c_Storerkey
