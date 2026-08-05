@@ -27,7 +27,9 @@ BEGIN
       @nFunc         INT,
       @nStep         INT,
       @cStorerKey    NVARCHAR( 15),
-      @cFacility     NVARCHAR( 5) 
+      @cFacility     NVARCHAR( 5),
+      @cKitKey       NVARCHAR( 10),
+      @cPalletType   NVARCHAR (125)
 
    DECLARE   @tDropDown TABLE
    (
@@ -36,8 +38,6 @@ BEGIN
       ColValue    NVARCHAR (125) NULL,
       Selected    BIT
    )
-    DECLARE @cKitKey     NVARCHAR( 10)
-    DECLARE @cPalletType NVARCHAR (125)
 
    --GET SESSION
    SELECT
@@ -79,8 +79,10 @@ BEGIN
          END
          ELSE
          BEGIN
-         IF ISNULL(@cPalletType,'') <> '' 
-            UPDATE @tDropDown SET Selected = 1 WHERE colvalue = @cPalletType
+            IF ISNULL(@cPalletType,'') <> '' 
+            BEGIN
+               UPDATE @tDropDown SET Selected = 1 WHERE colvalue = @cPalletType
+            END
          END
       END
       GOTO Quit
