@@ -221,7 +221,7 @@ BEGIN
       AND TD.Sku = @c_SKU
       AND TD.TaskType IN (SELECT TRIM([Value]) FROM STRING_SPLIT(@c_PickTaskType, ','))
       AND TD.FromLoc = @c_FinalLoc
-      AND TD.FromID = @c_FinalID
+      --AND TD.FromID = @c_FinalID
       AND TD.[Status] IN (SELECT TRIM([Value]) FROM STRING_SPLIT(@c_PickTaskStatus, ','))
       
       INSERT INTO #TMP_PICK_SHORT (Pickdetailkey, Wavekey)
