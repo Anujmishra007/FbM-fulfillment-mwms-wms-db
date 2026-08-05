@@ -273,12 +273,12 @@ BEGIN
 		   GOTO Fail
 		END CATCH
 
-		IF @@ROWCOUNT <> 1
-		BEGIN
-		   SET @n_Err = 90701
-		   SET @c_ErrMsg = '90701 UPDTaskDtlFail'
-		   GOTO Fail
-		END
+		-- IF @@ROWCOUNT <> 1
+		-- BEGIN
+		--    SET @n_Err = 90701
+		--    SET @c_ErrMsg = '90701 UPDTaskDtlFail'
+		--    GOTO Fail
+		-- END
 		
       END
 
