@@ -8,6 +8,8 @@ GO
 /* Store procedure: rdt_1580DecodeSN05                                  */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
+/* Customer: Ericsson                                                   */
+/*                                                                      */
 /* Purpose: Decode serial no                                            */
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
