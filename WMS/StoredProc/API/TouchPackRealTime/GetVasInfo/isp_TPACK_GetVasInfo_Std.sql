@@ -22,6 +22,8 @@ GO
 /* 2026-02-27   8.1  JWF011     UWP-49173 Fix Order Header VAS display 2 times          */
 /* 2026-04-03   8.2  GCH225     UWP-53582 Fix Print Type that Short column ='Y'         */
 /* 2026-07-02   8.3  GCH225     UWP-59664 Fine tune the VAS query process               */
+/* 2026-07-29   8.4  MBR282     UWP-62774 Fix 0H display issue for TPS-CtnRec case      */
+/* 2026-07-29   8.4  GCH225     UWP-62778 Further Fine tune the VAS query process       */
 /****************************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetVasInfo_Std] (
@@ -60,8 +62,10 @@ BEGIN
          , @c_Option4            NVARCHAR(50)
          , @c_Option5            NVARCHAR(4000)
 
-         , @bShowOrderHeaderVAS  BIT
-         , @nCheckQty            INT
+         , @bShowOrderHeaderVAS   BIT
+         , @nCheckQty             INT
+         , @cCurOrderKey          NVARCHAR(10) = ''
+         , @cCurWorkOrderKey      NVARCHAR(20) = ''
 
    DECLARE @VASInfo TABLE(
       nRowRef           BIGINT PRIMARY KEY IDENTITY(1,1)
@@ -87,6 +91,15 @@ BEGIN
    SET @nCheckQty             = 0
    SET @cResponseJson = '{"VASs":[]}'
 
+   IF OBJECT_ID('tempdb..#TempWorkOrder1') IS NOT NULL
+   BEGIN
+      DROP TABLE #TempWorkOrder1
+   END
+
+   IF OBJECT_ID('tempdb..#TempWorkOrder2') IS NOT NULL
+   BEGIN
+      DROP TABLE #TempWorkOrder2
+   END
    -- Get VAS Info for specific SKU only.
    IF NOT EXISTS (SELECT 1 
                   FROM WORKORDER (NOLOCK)
@@ -139,6 +152,17 @@ BEGIN
                   AND PD.CartonNo = @nCartonNo
                   AND PD.ExpQty > 0
             ) = 0
+      )  OR (@nCartonNo > 0
+            AND EXISTS(SELECT 1 
+                  FROM PACKINFO PI (NOLOCK)
+                  WHERE PI.PickSlipNo = @cPickSlipNo
+                  AND PI.CartonNo = @nCartonNo
+            )
+            AND NOT EXISTS(SELECT 1 
+                  FROM PACKDETAIL PD (NOLOCK)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.CartonNo = @nCartonNo
+            )  
       )
       BEGIN
          SET @bShowOrderHeaderVAS = 1
@@ -161,91 +185,120 @@ BEGIN
       WHERE LoadKey = @cLoadKey
    END
 
-   IF (@c_Option2 <> 'Carton' AND @cSKU <> '')
-   OR (@c_Option2 = 'Carton' AND @cSKU = '')
+   WHILE EXISTS (SELECT 1 FROM @OrderList)
    BEGIN
-      INSERT INTO @VASInfo ( cSKU
-                           , cCode
-                           , cDescr
-                           , fPrice
-                           , cType
-                           , cPrintDocID
-                           , bIsMandatory
-                           , cStatus
-                           , bShowFlag
-                           , cExternLineNo
-                           )
-                     SELECT  IIF(WOD.ExternLineNo = '0H', @cSKU, WOD.Sku)
-                           , WOD.[Type]
-                           , CLK.[Description]
-                           , WOD.Price
-                           , IIF(CLK.UDF01 <> '', 'print', '')
-                           , IIF(CLK.UDF01 <> '', CLK.UDF01, '')
-                           , @c_Option1
-                           , WOD.[Status]
-                           , IIF(CLK.Short = 'Y', 0, 1)
-                           , WOD.ExternLineNo
-                     FROM WORKORDERDETAIL WOD (NOLOCK)
-                     INNER JOIN CODELKUP CLK (NOLOCK)
-                     ON CLK.LISTNAME = 'WKOrdType'
-                     AND CLK.Code = WOD.[Type]
-                     AND CLK.StorerKey = @cStorerKey
-                     AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
-                     WHERE EXISTS (SELECT 1
-                                 FROM WORKORDER WO (NOLOCK)
-                                 WHERE EXISTS ( SELECT 1 
-                                                FROM @OrderList t
-                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                                )
-                                 AND StorerKey = @cStorerKey
-                                 AND Facility = @cFacility
-                                 AND WO.[Type] IN('PACK', 'VAS')
-                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
+      SELECT TOP 1 @cCurOrderKey = OrderKey
+      FROM @OrderList
+
+      SELECT WorkOrderKey
+      INTO #TempWorkOrder1
+      FROM WORKORDER (NOLOCK)
+      WHERE ExternWorkOrderKey = @cCurOrderKey
+
+      WHILE EXISTS (SELECT 1 FROM #TempWorkOrder1)
+      BEGIN
+         SELECT TOP 1 @cCurWorkOrderKey = WorkOrderKey
+         FROM #TempWorkOrder1
+
+         SELECT WorkOrderKey
+              , StorerKey
+              , Facility
+              , [Type]
+         INTO #TempWorkOrder2
+         FROM WORKORDER (NOLOCK)
+         WHERE WorkOrderKey = @cCurWorkOrderKey
+
+         IF (@c_Option2 <> 'Carton' AND @cSKU <> '')
+         OR (@c_Option2 = 'Carton' AND @cSKU = '')
+         BEGIN
+            INSERT INTO @VASInfo ( cSKU
+                                 , cCode
+                                 , cDescr
+                                 , fPrice
+                                 , cType
+                                 , cPrintDocID
+                                 , bIsMandatory
+                                 , cStatus
+                                 , bShowFlag
+                                 , cExternLineNo
                                  )
-                     ORDER BY CASE WOD.ExternLineNo WHEN '0H' THEN 0 ELSE 1 END
-                              , WOD.WorkOrderLineNumber     
-   END
+                           SELECT  IIF(WOD.ExternLineNo = '0H', @cSKU, WOD.Sku)
+                                 , WOD.[Type]
+                                 , CLK.[Description]
+                                 , WOD.Price
+                                 , IIF(CLK.UDF01 <> '', 'print', '')
+                                 , IIF(CLK.UDF01 <> '', CLK.UDF01, '')
+                                 , @c_Option1
+                                 , WOD.[Status]
+                                 , IIF(CLK.Short = 'Y', 0, 1)
+                                 , WOD.ExternLineNo
+                           FROM WORKORDERDETAIL WOD (NOLOCK)
+                           INNER JOIN CODELKUP CLK (NOLOCK)
+                           ON CLK.LISTNAME = 'WKOrdType'
+                           AND CLK.Code = WOD.[Type]
+                           AND CLK.StorerKey = @cStorerKey
+                           AND CLK.Short <> 'Y'  -- Not equal to Y means required to show VAS.
+                           WHERE EXISTS (SELECT 1
+                                       FROM #TempWorkOrder2 T (NOLOCK)
+                                       WHERE T.WorkOrderKey = WOD.WorkOrderKey
+                                       AND T.StorerKey = @cStorerKey
+                                       AND T.Facility = @cFacility
+                                       AND T.[Type] IN('PACK', 'VAS')
+                                       )
+                           ORDER BY CASE WOD.ExternLineNo WHEN '0H' THEN 0 ELSE 1 END
+                                    , WOD.WorkOrderLineNumber     
+         END
 
-   INSERT INTO @VASInfo ( cSKU
-                        , cCode
-                        , cDescr
-                        , fPrice
-                        , cType
-                        , cPrintDocID
-                        , bIsMandatory
-                        , cStatus
-                        , bShowFlag
-                        , cExternLineNo
-                        )
-                  SELECT  COALESCE(NULLIF(WOD.Sku,''), @cSKU)
-                        , WOD.[Type]
-                        , CLK.[Description]
-                        , WOD.Price
-                        , 'print'
-                        , CLK.UDF01
-                        , @c_Option1
-                        , WOD.[Status]
-                        , 0
-                        , ''
-                  FROM WORKORDERDETAIL WOD (NOLOCK)
-                  INNER JOIN CODELKUP CLK (NOLOCK)
-                  ON CLK.LISTNAME = 'WKOrdType'
-                  AND CLK.Code = WOD.[Type]
-                  AND CLK.StorerKey = @cStorerKey
-                  AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
-                  AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.
-                  WHERE EXISTS (SELECT 1
-                              FROM WORKORDER WO (NOLOCK)
-                              WHERE EXISTS ( SELECT 1 
-                                             FROM @OrderList t
-                                             WHERE t.OrderKey = WO.ExternWorkOrderKey
-                                             )
-                              AND StorerKey = @cStorerKey
-                              AND Facility = @cFacility
-                              AND WO.[Type] IN('PACK', 'VAS')
-                              AND WO.WorkOrderKey = WOD.WorkOrderKey
+         INSERT INTO @VASInfo ( cSKU
+                              , cCode
+                              , cDescr
+                              , fPrice
+                              , cType
+                              , cPrintDocID
+                              , bIsMandatory
+                              , cStatus
+                              , bShowFlag
+                              , cExternLineNo
                               )
+                        SELECT  COALESCE(NULLIF(WOD.Sku,''), @cSKU)
+                              , WOD.[Type]
+                              , CLK.[Description]
+                              , WOD.Price
+                              , 'print'
+                              , CLK.UDF01
+                              , @c_Option1
+                              , WOD.[Status]
+                              , 0
+                              , ''
+                        FROM WORKORDERDETAIL WOD (NOLOCK)
+                        INNER JOIN CODELKUP CLK (NOLOCK)
+                        ON CLK.LISTNAME = 'WKOrdType'
+                        AND CLK.Code = WOD.[Type]
+                        AND CLK.StorerKey = @cStorerKey
+                        AND CLK.UDF04 = 'PRICELB' -- Get the VAS info with Price for label printing, no matter it's mandatory or not, showflag is 0 as it won't display in VAS list but only used for label printing.
+                        AND CLK.UDF01 <> '' -- Only get the VAS with print doc ID for label printing.
+                        WHERE EXISTS (SELECT 1
+                                    FROM #TempWorkOrder2 T (NOLOCK)
+                                    WHERE T.WorkOrderKey = WOD.WorkOrderKey
+                                    AND T.StorerKey = @cStorerKey
+                                    AND T.Facility = @cFacility
+                                    AND T.[Type] IN('PACK', 'VAS')
+                                    )
 
+         DELETE 
+         FROM #TempWorkOrder1
+         WHERE WorkOrderKey = @cCurWorkOrderKey
+
+         DROP TABLE #TempWorkOrder2
+      END
+
+      DELETE 
+      FROM @OrderList
+      WHERE OrderKey = @cCurOrderKey
+
+      DROP TABLE #TempWorkOrder1
+   END
+   
    IF @cSKU <> '' -- for SKU Level VAS Display
    BEGIN
       IF @bShowOrderHeaderVAS = 0

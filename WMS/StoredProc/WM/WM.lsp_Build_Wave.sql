@@ -553,7 +553,7 @@ AS
          ,  ParmBuildType     NVARCHAR(20)
          ,  TableName         SYSNAME
          ,  ColName           SYSNAME
-         ,  ColType           SYSNAME
+         ,  ColType           SYSNAME NOT NULL DEFAULT ('')
       );
 
       INSERT INTO #tBuildSort (RowNum, FieldName, Operator, ParmBuildType, TableName, ColName)
@@ -594,6 +594,8 @@ AS
 
       WHILE @n_RowNum <= @n_MaxRow
       BEGIN
+         SET @c_TableName = '' --(Dilip) moved to reset tablename on next while loop iteration used for Grouping later
+
          SELECT 
             @c_FieldName         = FieldName
             ,  @c_Operator       = Operator
@@ -606,7 +608,7 @@ AS
          --(Dilip21) End
          -- Get Column Type
          --(Wan05) - START
-         SET @c_TableName = ''
+         --SET @c_TableName = '' --(Dilip) tablename was reset here and become empty that have impact later to get table group
          IF CHARINDEX('.', @c_FieldName, 1) = 0
          BEGIN
             IF @c_FieldName = 'SKU_TOTAL_OPENQTY'

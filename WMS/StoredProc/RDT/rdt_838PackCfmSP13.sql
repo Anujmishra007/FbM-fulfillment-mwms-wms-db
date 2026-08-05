@@ -13,6 +13,8 @@ GO
 /* Date       Rev      Author      Purposes                                     */
 /* 2026-07-08 1.0.0    JACKC       FCR-12984. Created                           */
 /* 2026-07-09 1.0.1    JACKC       FCR-12984. Consider B2C single               */
+/* 2026-07-27 1.0.2    JACKC       FCR-12984. Archive PackDetail.DropID         */
+/* 2026-07-28 1.0.3    JACKC       FCR-12984. Archive rdtPTLPieceLog Table      */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP13] (
@@ -63,6 +65,7 @@ BEGIN
    DECLARE @cMsg02                  NVARCHAR (60)
    DECLARE @cMsg03                  NVARCHAR (60)
    DECLARE @cUpdPKDFlag             NVARCHAR(1) = ''
+   DECLARE @cArcPTLLogFlag          NVARCHAR(1) = '' --V1.0.3
 
    --B2C Single
    DECLARE @cB2CSingleFlag          NVARCHAR(1) = ''
@@ -72,6 +75,19 @@ BEGIN
 
    DECLARE @tPickDetail TABLE (
       PickDetailKey NVARCHAR( 18)
+   )
+
+   --V1.0.2
+   DECLARE @tPackDetail TABLE (
+      PickSlipNo NVARCHAR( 10) NOT NULL,
+      CartonNo   INT           NOT NULL,
+      LabelNo    NVARCHAR( 20) NOT NULL,
+      LabelLine  NVARCHAR(  5) NOT NULL
+   )
+
+   --V1.0.3
+   DECLARE @tPTLPieceLog TABLE (
+      RowRef   INT PRIMARY KEY
    )
 
    SET @cOrderKey = ''      
@@ -114,9 +130,12 @@ BEGIN
          AND Status = @cPickStatus
 
          SELECT @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-         AND DropID = @cFromDropID
+         FROM dbo.PackDetail PD WITH (NOLOCK)
+         JOIN dbo.PackHeader PH WITH (NOLOCK) --V1.0.2
+            ON (PD.PickSlipNo = PH.PickSlipNo)
+            AND PH.Status = '0'
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cFromDropID
 
          IF @nDebugFlag = 1
             SELECT 'FromDropID PickQty and PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
@@ -139,7 +158,9 @@ BEGIN
             END CATCH
 
             IF EXISTS(SELECT 1 FROM @tPickDetail)
-               SET @cUpdPKDFlag = 'Y'
+               SET @cUpdPKDFlag = 'Y' --Upd PickDetail DropID to CaseID and status
+            
+            SET @cArcPTLLogFlag = 'Y' --V1.0.3
          END
          ELSE
          BEGIN
@@ -157,7 +178,7 @@ BEGIN
       ELSE
       BEGIN
          IF @nDebugFlag = 1
-            SELECT 'Set UpdPKDFlag, B2C Single', @cB2CSingleLabelNo AS LabelNo
+            SELECT 'Set UpdPKDFlag, B2C Single', @cB2CSingleLabelNo AS LabelNo, @cFromDropID AS FromDropID
 
          SELECT 
             @nB2CSinglePackQty = ISNULL(SUM(Qty),0),
@@ -186,7 +207,7 @@ BEGIN
             END CATCH
 
             IF EXISTS(SELECT 1 FROM @tPickDetail)
-               SET @cUpdPKDFlag = 'Y'
+               SET @cUpdPKDFlag = 'Y' --Update pickdetail DropID to CaseID and status
          END
          ELSE
          BEGIN
@@ -200,6 +221,33 @@ BEGIN
                GOTO Quit
             END
          END
+
+         IF @nDebugFlag = 1
+            SELECT 'Set ArcPTLLogFlag, B2C Single'
+
+         SELECT
+            @nFromDropID_PickQty = ISNULL(SUM(ExpQty), 0), -- Expected pack qty
+            @nFromDropID_PackQty = ISNULL(SUM(QTY), 0)
+         FROM dbo.PackDetail PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID = @cFromDropID
+
+         --V1.0.3 start
+         IF @nFromDropID_PickQty = @nFromDropID_PackQty AND @nFromDropID_PickQty > 0
+            SET @cArcPTLLogFlag = 'Y' 
+         ELSE
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT 'PickQty <> PackQty', @nFromDropID_PickQty AS PickQty, @nFromDropID_PackQty AS PackQty
+
+            IF @nFromDropID_PackQty > @nFromDropID_PickQty
+            BEGIN
+               SET @nErrNo = 273260
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+         END
+         --V1.0.3 end
       END
    END
    ELSE
@@ -350,6 +398,9 @@ BEGIN
 
    IF @nErrNo <> 0      
       GOTO Quit*/
+
+   IF @nDebugFlag = 1
+      SELECT 'Handling data', @cUpdPKDFlag AS UpdPKDFlag, @cPackConfirm AS PackConfirm, @cArcPTLLogFlag AS ArcPTLLogFlag
       
    -- Handling transaction      
    DECLARE @nTranCount  INT      
@@ -357,11 +408,11 @@ BEGIN
    BEGIN TRAN  -- Begin our own transaction      
    SAVE TRAN rdt_838PackCfmSP13 -- For rollback or commit only our own transaction
 
-   IF @cUpdPKDFlag = 'Y'
+   IF @cUpdPKDFlag = 'Y' --Update PickDetail DropID to CaseID and status
    BEGIN
       IF @nDebugFlag = 1
       BEGIN
-         SELECT 'Start update PickDetail', @cPickSlipNo AS PickSlipNo, @cFromDropID AS FromDropID
+         SELECT 'Start update PickDetail', @cPickSlipNo AS PickSlipNo, @cFromDropID AS FromDropID, @cB2CSingleFlag AS B2CSingleFlag, @cB2CSingleLabelNo AS B2CSingleLabelNo
          SELECT * FROM @tPickDetail
       END
 
@@ -395,7 +446,73 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
          GOTO RollBackTran
       END CATCH
-   END -- upd pickdetail
+
+      --V1.0.2 start
+      --Archive FromDropID in PackDetail
+      BEGIN TRY
+         INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+         SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+         FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE DropID = @cFromDropID
+            AND (LabelNo = CASE WHEN @cB2CSingleFlag = 'Y' THEN @cB2CSingleLabelNo ELSE LabelNo END)
+            AND StorerKey  = @cStorerKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273258
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK)
+         SET PD.DropID   = LEFT('ARC' + @cFromDropID, 20),
+             PD.EditDate = GETDATE(),
+             PD.EditWho  = SUSER_SNAME()
+         FROM dbo.PackDetail PD
+         JOIN @tPackDetail tPD ON (PD.PickSlipNo = tPD.PickSlipNo
+                                AND PD.CartonNo  = tPD.CartonNo
+                                AND PD.LabelNo   = tPD.LabelNo
+                                AND PD.LabelLine = tPD.LabelLine)
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273259
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UpdPackDtlDropIDFail
+         GOTO RollBackTran
+      END CATCH
+      --V1.0.2 end
+   END --Upd PickDetail
+
+   IF @cArcPTLLogFlag = 'Y' --Archive rdtPTLPieceLog Table
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Start archive rdtPTLPieceLog', @cFromDropID AS FromDropID, @cB2CSingleFlag AS B2CSingleFlag
+
+      BEGIN TRY
+         INSERT INTO @tPTLPieceLog (RowRef)
+         SELECT RowRef
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+         WHERE CartonID     = @cFromDropID
+            AND StorerKey    = @cStorerKey
+            AND UserDefine02 = 'COMPLETE'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273261
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPTLKeyFail
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         DELETE PL
+         FROM rdt.rdtPTLPieceLog PL
+         JOIN @tPTLPieceLog tPL ON (PL.RowRef = tPL.RowRef)
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 273262
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --DelPTLFail
+         GOTO RollBackTran
+      END CATCH
+
+   END -- Archive rdtPTLPieceLog
 
    -- Pack confirm      
    IF @cPackConfirm = 'Y'      

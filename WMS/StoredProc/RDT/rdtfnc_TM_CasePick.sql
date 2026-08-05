@@ -51,9 +51,12 @@ GO
 /* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
 /* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
-/* 2026-01-20 3.9.0  Dennis     FCR-9664 ExtScn08                                */
-/* 2026-03-25 4.0.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
-/* 2026-03-30 4.1.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
+/* 2026-03-25 3.9.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
+/* 2026-03-18 4.3.0  NickT      UWP-52419 Empty @cToLoc after ToLoc screen       */
+/* 2026-01-20 4.4.0  Dennis     FCR-9664 ExtScn08                                */
+/* 2026-04-03 4.5.0  NickT      UWP-52419 Rollback the changes for V4.3.0,       */
+/*                              Empty @cToLoc after ToLoc screen                 */
+/* 2026-03-03 4.6.0  Jackc      FCR-12989 add ExtScn11 to step99                 */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](

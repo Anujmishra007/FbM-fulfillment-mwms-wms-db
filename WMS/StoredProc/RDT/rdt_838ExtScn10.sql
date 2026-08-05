@@ -6,18 +6,20 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/***************************************************************************/
-/* Store procedure: rdt_838ExtScn10                                        */
-/* Copyright      : Maersk                                                 */
-/* Customer       : AEOMX                                                  */
-/*                                                                         */
-/*                                                                         */
-/* Date        Rev    Author     Purposes                                  */
-/* 2026-06-30  1.0.0  JackC      FCR-12984 Created                         */
-/* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic            */
-/* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic*/
-/* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic        */
-/***************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_838ExtScn10                                              */
+/* Copyright      : Maersk                                                       */
+/* Customer       : AEOMX                                                        */
+/*                                                                               */
+/*                                                                               */
+/* Date        Rev    Author     Purposes                                        */
+/* 2026-06-30  1.0.0  JackC      FCR-12984 Created                               */
+/* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic                  */
+/* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic      */
+/* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic              */
+/* 2026-07-27  1.2.2  JackC      FCR-12984 Get Packed Qty from open PSNO         */
+/* 2026-07-29  1.2.3  JackC      FCR-12984 Ins packdetail back for pre-pack data */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10] (
    @nMobile      INT,
@@ -520,7 +522,7 @@ BEGIN
                      Loc, --FromLoc
                      ID, --FromID
                      @cPackSTGLoc, --Toloc
-                     '', --ToID
+                     ID, --ToID
                      SKU, 
                      LOT, 
                      SUM(QTY),
@@ -759,8 +761,11 @@ BEGIN
                AND Status = @cPickStatus
 
             SELECT @nTotalPackQty = SUM(Qty)
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackHeader PH WITH (NOLOCK) --V1.2.2
+               ON (PD.PickSlipNo = PH.PickSlipNo)
+               AND PH.Status = '0'
+            WHERE PD.StorerKey = @cStorerKey
                AND DropID = @cFromDropID
 
             SET @nRemainingPackQty = ISNULL(@nTotalPickQty,0) - ISNULL(@nTotalPackQty,0)
@@ -775,6 +780,39 @@ BEGIN
          BEGIN
             IF @nDebugFlag = 1
                SELECT 'From St3 back to St2, ESC'
+
+            --V1.2.3 start
+            IF @cWaveType  = 'ECOM' AND @nCartonNo <> 0 AND @nCartonQty = 0
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND @nCartonNo = @nCartonNo)
+               BEGIN
+                  BEGIN TRY
+                     INSERT INTO dbo.PackDetail (PickSlipNo, StorerKey, CartonNo, LabelNo, LabelLine, SKU, ExpQty, Qty, DropID)
+                     SELECT
+                        @cPickSlipNo,
+                        @cStorerKey,
+                        @nCartonNo,
+                        @cLabelNo,
+                        RIGHT('00000' + CAST(ROW_NUMBER() OVER (ORDER BY SKU) AS NVARCHAR(5)), 5),
+                        SKU,
+                        SUM(Qty),
+                        0,
+                        ''
+                     FROM dbo.PickDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                       AND Status    = @cPickStatus
+                       AND CaseID    = @cLabelNo
+                       AND Qty > 0
+                     GROUP BY SKU
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo  = 272385
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDetailFail
+                     GOTO Quit
+                  END CATCH
+
+               END
+            END
 
             --Set default option on screen 4651
             IF @cWaveType = 'ECOM'

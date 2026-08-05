@@ -411,20 +411,13 @@ BEGIN
    BEGIN
       -- Get serial no info
       DECLARE @nRowCount INT
-      DECLARE @nPackSerialNoKey  INT
-      DECLARE @cChkSerialSKU NVARCHAR( 20)
-      DECLARE @nChkSerialQTY INT
-      
-      SELECT 
-         @nPackSerialNoKey = PackSerialNoKey, 
-         @cChkSerialSKU = SKU, 
-         @nChkSerialQTY = QTY
+
+      SELECT @nRowCount = COUNT(1)
       FROM dbo.PackSerialNo WITH (NOLOCK)
       WHERE PickSlipNo = @cPickSlipNo
          AND StorerKey = @cStorerKey
          AND SKU = @cSKU
          AND SerialNo = @cSerialNo
-      SET @nRowCount = @@ROWCOUNT
       
       -- New serial no
       IF @nRowCount = 0
@@ -505,7 +498,7 @@ BEGIN
    -- Customize Logic for FCR-12178, log how many Pallet/Case/EA UPC scanned for the pick slip, and save in RefNo2 of PackDetail
    DECLARE @cUPCBarcode       NVARCHAR(2000)
    DECLARE @cUOM              NVARCHAR(10)
-   DECLARE @cUPCSku           NVARCHAR(20)
+
    DECLARE @cPackRefNo2       NVARCHAR(30)
    DECLARE @nStartIndex       INT
    DECLARE @nEndIndex         INT
@@ -530,19 +523,32 @@ BEGIN
 
    IF ISNULL(@cUPCBarcode, '') <>''
    BEGIN
+      SET @cUOM = ''
       SELECT TOP 1 
-         @cUOM = UOM,
-         @cUPCSku = SKU
+         @cUOM =
+            CASE  UPC.UOM
+               WHEN Pack.PackUOM1 THEN '2' -- Case
+               WHEN Pack.PackUOM2 THEN '3' -- Inner pack
+               WHEN Pack.PackUOM3 THEN '6' -- Master unit
+               WHEN Pack.PackUOM4 THEN '1' -- Pallet
+               WHEN Pack.PackUOM8 THEN '4' -- Other unit 1
+               WHEN Pack.PackUOM9 THEN '5' -- Other unit 2
+               ELSE ''
+            END
       FROM dbo.UPC WITH(NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND UPC = @cUPCBarcode
+      INNER JOIN dbo.Pack WITH(NOLOCK) ON UPC.PackKey = Pack.PackKey
+      WHERE  UPC.StorerKey = @cStorerKey
+         AND UPC.UPC = @cUPCBarcode
+         AND  UPC.SKU = @cSKU
+      ORDER BY UPC.UPC
 
-      IF ISNULL(@cUOM, '') <> ''
+      IF @@ROWCOUNT > 0 AND ISNULL(@cUOM, '') <> ''
       BEGIN
          INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, RefNo2)
          SELECT @cPickSlipNo, CartonNo, LabelNo, LabelLine, RefNo2
          FROM dbo.PackDetail WITH(NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
+            AND SKU = @cSKU
             AND DropID = @cFromDropID
          ORDER BY AddDate ASC
 
@@ -590,16 +596,23 @@ BEGIN
                IF @@ROWCOUNT = 0
                   BREAK
 
-               UPDATE dbo.PackDetail WITH(ROWLOCK)
-               SET
-                  RefNo2 = @cPackRefNo2,
-                  EditWho = 'rdt.' + SUSER_SNAME(), 
-                  EditDate = GETDATE(), 
-                  ArchiveCop = NULL
-               WHERE PickSlipNo = @cPickSlipNo
-                  AND CartonNo = @nLoopCartonNo
-                  AND LabelNo = @cLoopLabelNo
-                  AND LabelLine = @cLoopLabelLine
+               BEGIN TRY
+                  UPDATE dbo.PackDetail WITH(ROWLOCK)
+                  SET
+                     RefNo2 = @cPackRefNo2,
+                     EditWho = 'rdt.' + SUSER_SNAME(), 
+                     EditDate = GETDATE(), 
+                     ArchiveCop = NULL
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonNo = @nLoopCartonNo
+                     AND LabelNo = @cLoopLabelNo
+                     AND LabelLine = @cLoopLabelLine
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 269419
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PackDetail Fail
+                  GOTO RollBackTran
+               END CATCH
             END
          END
       END

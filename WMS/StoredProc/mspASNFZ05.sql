@@ -67,17 +67,17 @@ BEGIN
          , @c_Lottable03         NVARCHAR(18)   = ''
          , @c_Lottable04        DATETIME       = NULL
          , @c_Lottable05        DATETIME       = NULL
-         , @c_Lottable06        NVARCHAR(18)   = ''
-         , @c_Lottable07        NVARCHAR(18)   = ''
+         , @c_Lottable06        NVARCHAR(30)   = ''
+         , @c_Lottable07        NVARCHAR(30)   = ''
          , @c_Lottable08         NVARCHAR(30)   = ''
-         , @c_Lottable09        NVARCHAR(18)   = ''
-         , @c_Lottable10        NVARCHAR(18)   = ''
-         , @c_Lottable11       NVARCHAR(18)   = ''
-         , @c_Lottable12       NVARCHAR(18)   = ''
+         , @c_Lottable09        NVARCHAR(30)   = ''
+         , @c_Lottable10        NVARCHAR(30)   = ''
+         , @c_Lottable11       NVARCHAR(30)   = ''
+         , @c_Lottable12       NVARCHAR(30)   = ''
          , @c_Lottable13       DATETIME       = NULL
          , @c_Lottable14        DATETIME       = NULL
          , @c_Lottable15        DATETIME       = NULL
-         , @c_UserDefine02       NVARCHAR(15)  = ''
+         , @c_UserDefine02       NVARCHAR(18)  = ''
          , @c_ExternPOKey        NVARCHAR(20)  = ''
          , @CUR_RECDET           CURSOR
          , @c_NewTran            NVARCHAR(1) = 'N'
@@ -91,6 +91,18 @@ BEGIN
          , @n_totweight          DECIMAL(20,4)
          , @n_totcube            DECIMAL(20,4)
          , @n_TotalCartons       INT            = 0
+         , @c_UserDefine03       NVARCHAR(18)  = ''
+         , @c_UserDefine04       NVARCHAR(18)  = ''
+         , @c_UserDefine05       NVARCHAR(18)  = ''
+         , @c_UserDefine08       NVARCHAR(18)  = ''
+         , @c_UserDefine09       NVARCHAR(18)  = ''
+         , @c_UserDefine10       NVARCHAR(18)  = ''
+         , @n_NetWgt             DECIMAL(20,4) = 0
+         , @n_OtherUnit1         DECIMAL(20,4) = 0
+         , @n_OtherUnit2         DECIMAL(20,4) = 0
+         , @n_UnitPrice          DECIMAL(20,4) = 0
+         , @n_GrossWgt           DECIMAL(20,4) = 0
+         , @n_Cube               DECIMAL(20,4) = 0
 
 
    SET @b_Success= 1
@@ -119,6 +131,7 @@ BEGIN
       ,  UserDefine01       NVARCHAR(20)   NULL       DEFAULT ('')
       ,  UserDefine02       NVARCHAR(20)   NULL       DEFAULT ('')
       ,  UserDefine06       DATETIME       NULL
+      ,  UserDefine07       DATETIME       NULL
       ,  B_contact1         NVARCHAR(30)   NULL
       ,  B_Contact2         NVARCHAR(30)   NULL
       ,  B_Company          NVARCHAR(45)   NULL
@@ -135,12 +148,19 @@ BEGIN
       ,  XDockFlag          NVARCHAR(1)    NULL       DEFAULT ('0')
       ,  XDOCKPOKEY         NVARCHAR(20)   NULL
       ,  DocType            NVARCHAR(1)    NULL       DEFAULT ('0')
-      ,  IntermodalVehicle NVARCHAR(30)    NULL       DEFAULT ('')
+      ,  IntermodalVehicle  NVARCHAR(30)   NULL       DEFAULT ('')
+      ,  Door               NVARCHAR(10)   NULL       DEFAULT ('99')
+      ,  Route              NVARCHAR(10)   NULL       DEFAULT ('99')
+      ,  Stop               NVARCHAR(10)   NULL       DEFAULT ('99')
+      ,  UserDefine03       NVARCHAR(20)   NULL       DEFAULT ('')
+      ,  UserDefine04       NVARCHAR(40)   NULL       DEFAULT ('')
+      ,  UserDefine05       NVARCHAR(20)   NULL       DEFAULT ('')
       )
 
 
    CREATE TABLE #TMP_ORDDTL
       (  OrderKey          NVARCHAR(10)   NOT NULL   DEFAULT('')
+      ,  ExternOrderKey    NVARCHAR(50)   NOT NULL   DEFAULT ('')
       ,  ExternLineNo      NVARCHAR(20)   NOT NULL   DEFAULT('')
       ,  POkey             NVARCHAR(10)   NULL
       ,  StorerKey         NVARCHAR(15)   NULL
@@ -166,6 +186,18 @@ BEGIN
       ,  Lottable13        NVARCHAR(30)   NULL
       ,  Lottable14        DATETIME       NULL
       ,  Lottable15        DATETIME       NULL
+      ,  UserDefine03       NVARCHAR(30)   NULL
+      ,  UserDefine04       NVARCHAR(30)   NULL
+      ,  UserDefine05       NVARCHAR(30)   NULL
+      ,  UserDefine06       NVARCHAR(30)   NULL
+      ,  UserDefine07       NVARCHAR(30)   NULL
+      ,  UserDefine08       NVARCHAR(30)   NULL
+      ,  UnitPrice          DECIMAL(20,4)  NULL
+      ,  Tax01              DECIMAL(20,4)  NULL
+      ,  Tax02              DECIMAL(20,4)  NULL
+      ,  ExtendedPrice      DECIMAL(20,4)  NULL
+      ,  GrossWeight        DECIMAL(20,4)  NULL
+      ,  Capacity           DECIMAL(20,4)  NULL
       )
 
               
@@ -247,7 +279,18 @@ BEGIN
             ,  RD.Lottable13
             ,  RD.Lottable14
             ,  RD.Lottable15
-
+            ,  RD.UserDefine03
+            ,  RD.UserDefine04
+            ,  RD.UserDefine05
+            ,  RD.UserDefine08
+            ,  RD.UserDefine09
+            ,  RD.UserDefine10
+            ,  RD.NetWgt
+            ,  RD.OtherUnit1
+            ,  RD.OtherUnit2
+            ,  RD.UnitPrice
+            ,  RD.GrossWgt
+            ,  RD.Cube
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
          OUTER APPLY ( SELECT TOP 1 O.Orderkey, O.Status
@@ -268,6 +311,8 @@ BEGIN
          , @n_OriginalQty,@n_OpenQty,@c_Lottable01,@c_Lottable02, @c_Lottable03,@c_Lottable04, @c_Lottable05
          , @c_UserDefine02, @c_ExistingOrderKey, @c_ExistingOrderStatus, @c_Lottable06, @c_Lottable07, @c_Lottable08
          , @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @c_Lottable13, @c_Lottable14, @c_Lottable15
+         , @c_UserDefine03, @c_UserDefine04, @c_UserDefine05, @c_UserDefine08, @c_UserDefine09, @c_UserDefine10
+         , @n_NetWgt, @n_OtherUnit1, @n_OtherUnit2, @n_UnitPrice, @n_GrossWgt, @n_Cube
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
@@ -353,6 +398,7 @@ BEGIN
                   ,  Userdefine01
                   ,  UserDefine02
                   ,  Userdefine06
+                  ,  Userdefine07
                   ,  B_Contact1
                   ,  B_Contact2
                   ,  B_Company
@@ -368,6 +414,12 @@ BEGIN
                   ,  XDockFlag
                   ,  DocType
                   ,  InterModalVehicle
+                  ,  Door
+                  ,  Route
+                  ,  Stop
+                  ,  UserDefine03
+                  ,  UserDefine04
+                  ,  UserDefine05
                   )
                   SELECT TOP 1
                      @c_Orderkey
@@ -387,7 +439,8 @@ BEGIN
                   ,  CountryDestination = PO.DestinationCountry
                   ,  Userdefine01       = PO.PlaceOfLoading
                   ,  UserDefine02       = PO.placeOfDischarge
-                  ,  UserDefine06         = PO.EditDate
+                  ,  UserDefine06         = RH.UserDefine06
+                  ,  UserDefine07     = RH.Userdefine07
                   ,  B_Contact1         = PO.BuyerName
                   ,  B_Contact2         = PO.BuyerAddress1
                   ,  B_Company          = PO.BuyerAddress2
@@ -403,7 +456,12 @@ BEGIN
                   ,  XDockFlag     = RH.XDockFlag
                   ,  DocType       = 'X'
                   ,  InterModalVehicle = RH.Containerkey
-
+                  ,  Door          = RH.UserDefine01
+                  ,  Route         = RH.UserDefine02
+                  ,  Stop          = RH.UserDefine03
+                  ,  UserDefine03  = RH.UserDefine05
+                  ,  UserDefine04  = RH.WeightUnit
+                  ,  UserDefine05  = RH.CubeUnit
                   FROM  RECEIPT RH  (NOLOCK)
                   JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
                   JOIN  PO PO WITH (NOLOCK) ON  RD.Pokey = PO.Pokey
@@ -414,6 +472,7 @@ BEGIN
 
 	        INSERT INTO #TMP_ORDDTL
             (  OrderKey
+            ,  ExternOrderKey
             ,  ExternLineNo
             ,  Storerkey
             ,  Sku
@@ -439,13 +498,28 @@ BEGIN
             ,  Lottable13
             ,  Lottable14
             ,  Lottable15
-            ) values (@c_Orderkey,  @c_ExternLineNo,@c_Storerkey,@c_Sku
+            ,  UserDefine03
+            ,  UserDefine04
+            ,  UserDefine05
+            ,  UserDefine06
+            ,  UserDefine07
+            ,  UserDefine08
+            ,  UnitPrice
+            ,  Tax01
+            ,  Tax02
+            ,  ExtendedPrice
+            ,  GrossWeight
+            ,  Capacity
+            ) values (@c_Orderkey, @c_ExternPOKey, @c_ExternLineNo,@c_Storerkey,@c_Sku
                      , @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable01
-                     ,@c_Lottable02, @c_Lottable03, @c_Lottable04, @c_Lottable05
+                     , @c_Lottable02, @c_Lottable03, @c_Lottable04, @c_Lottable05
                      , @c_UserDefine02, @c_POKey, @c_ExternPOKey,   @c_Lottable06
                      , @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                      , @c_Lottable11, @c_Lottable12, @c_Lottable13, @c_Lottable14
-                     , @c_Lottable15)
+                     , @c_Lottable15,  @c_UserDefine03, @c_UserDefine04
+                     , @c_UserDefine05, @c_UserDefine08, @c_UserDefine09
+                     , @c_UserDefine10, @n_NetWgt, @n_OtherUnit1, @n_OtherUnit2
+                     , @n_UnitPrice, @n_GrossWgt, @n_Cube)
             
             NEXT_RECD:
 
@@ -453,6 +527,8 @@ BEGIN
                   , @n_OriginalQty,@n_OpenQty,@c_Lottable01,@c_Lottable02, @c_Lottable03,@c_Lottable04, @c_Lottable05
                   , @c_UserDefine02, @c_ExistingOrderKey, @c_ExistingOrderStatus, @c_Lottable06, @c_Lottable07, @c_Lottable08
                   , @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @c_Lottable13, @c_Lottable14, @c_Lottable15
+                  , @c_UserDefine03, @c_UserDefine04, @c_UserDefine05, @c_UserDefine08, @c_UserDefine09, @c_UserDefine10
+                  , @n_NetWgt, @n_OtherUnit1, @n_OtherUnit2, @n_UnitPrice, @n_GrossWgt, @n_Cube
 
          END
          CLOSE CUR_RECDET
@@ -493,6 +569,7 @@ BEGIN
       ,  UserDefine01
       ,  UserDefine02
       ,  UserDefine06
+      ,  UserDefine07
       ,  B_contact1
       ,  B_Contact2
       ,  B_Company
@@ -508,6 +585,12 @@ BEGIN
       ,  XDockFlag
       ,  DocType
       ,  IntermodalVehicle
+      ,  Door
+      ,  Route
+      ,  Stop
+      ,  UserDefine03
+      ,  UserDefine04
+      ,  UserDefine05
       )
       SELECT
          OrderKey
@@ -532,6 +615,7 @@ BEGIN
       ,  UserDefine01
       ,  UserDefine02
       ,  UserDefine06
+      ,  UserDefine07
       ,  B_contact1
       ,  B_Contact2
       ,  B_Company
@@ -547,6 +631,12 @@ BEGIN
       ,  XDockFlag
       ,  DocType
       ,  IntermodalVehicle
+      ,  Door
+      ,  Route
+      ,  Stop
+      ,  UserDefine03
+      ,  UserDefine04
+      ,  UserDefine05
       FROM #TMP_ORD
       ORDER BY RowID
 
@@ -561,6 +651,7 @@ BEGIN
    
       INSERT INTO ORDERDETAIL
             (  Orderkey
+            ,  ExternOrderKey
             ,  OrderLineNumber
             ,  POKey
             ,  ExternLineNo
@@ -590,8 +681,21 @@ BEGIN
             ,  ManufacturerSku
             ,  RetailSku
             ,  AltSku
+            ,  UserDefine03
+            ,  UserDefine04
+            ,  UserDefine05
+            ,  UserDefine06
+            ,  UserDefine07
+            ,  UserDefine08
+            ,  UnitPrice
+            ,  Tax01
+            ,  Tax02
+            ,  ExtendedPrice
+            ,  GrossWeight
+            ,  Capacity
             )
       SELECT td.Orderkey
+            ,td.ExternOrderKey
             ,OrderLineNumber =  RIGHT('00000' + CONVERT(NVARCHAR(5),
                                  ROW_NUMBER() OVER ( PARTITION BY td.Orderkey
                                                    ORDER BY td.ExternLineNo
@@ -624,6 +728,18 @@ BEGIN
             ,ISNULL(s.ManufacturerSku,'')
             ,ISNULL(s.RetailSku,'')
             ,ISNULL(s.AltSku,'')
+            ,td.UserDefine03
+            ,td.UserDefine04
+            ,td.UserDefine05
+            ,td.UserDefine06
+            ,td.UserDefine07
+            ,td.UserDefine08
+            ,td.UnitPrice
+            ,td.Tax01
+            ,td.Tax02
+            ,td.ExtendedPrice
+            ,td.GrossWeight
+            ,td.Capacity
       FROM #TMP_ORDDTL td
           JOIN dbo.SKU s (NOLOCK) ON  td.Storerkey = s.Storerkey
           AND td.Sku = s.Sku

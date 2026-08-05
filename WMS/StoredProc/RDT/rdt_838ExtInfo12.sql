@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_838ExtInfo12                                    */
-/* Copyright      : Maersk                                              */
-/* Customer       : AEOMX                                               */
-/*                                                                      */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 2026-07-01 1.0  JackC       FCR-12984 Created                        */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_838ExtInfo12                                       */
+/* Copyright      : Maersk                                                 */
+/* Customer       : AEOMX                                                  */
+/*                                                                         */
+/*                                                                         */
+/* Date       Rev    Author      Purposes                                  */
+/* 2026-07-01 1.0.0  JackC       FCR-12984 Created                         */
+/* 2026-07-27 1.0.1  JackC       FCR-12984 Only get packQty from open PSNO */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtInfo12] (
    @nMobile        INT,
@@ -81,8 +82,11 @@ BEGIN
             AND Status = @cPickStatus
 
          SELECT @nTotalPackQty = SUM(Qty)
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
+         FROM dbo.PackDetail PD WITH (NOLOCK)
+         JOIN dbo.PackHeader PH WITH (NOLOCK) --V1.0.1
+            ON (PD.PickSlipNo = PH.PickSlipNo)
+            AND PH.Status = '0'
+         WHERE PD.StorerKey = @cStorerKey
             AND DropID = @cFromDropID
 
          SET @nRemainingPackQty = ISNULL(@nTotalPickQty,0) - ISNULL(@nTotalPackQty,0)

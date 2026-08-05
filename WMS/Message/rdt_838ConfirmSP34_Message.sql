@@ -20,5 +20,6 @@ execute rdt.rdtAddMsg 269415, 10, '269415INS RDSNo Fail', 'us_english', 838
 execute rdt.rdtAddMsg 269416, 10, '269416SNO ady scan  ', 'us_english', 838
 execute rdt.rdtAddMsg 269417, 10, '269417INS PDInfoFail', 'us_english', 838
 execute rdt.rdtAddMsg 269418, 10, '269418UPD PDInfoFail', 'us_english', 838
+execute rdt.rdtAddMsg 269419, 10, '269419UPDPckDetlFail', 'us_english', 838, 0, '269419 Update PackDetail Fail'
 
 SELECT * FROM rdt.rdtMsg WITH (NOLOCK) WHERE Message_ID BETWEEN 269401 AND 269450

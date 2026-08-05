@@ -306,8 +306,9 @@ BEGIN
          SELECT X.WaveKey
          FROM ( SELECT DISTINCT W.WaveKey
                               , ROW_NUMBER() OVER (
-                                   ORDER BY IIF(W.UserDefine04 = 'ACTIVE', 1, 2)
-                                              , W.Wavekey
+                                   ORDER BY IIF(W.WaveKey = @c_Wavekey, 0, 1)
+                                          , IIF(W.UserDefine04 = 'ACTIVE', 1, 2)
+                                          , W.Wavekey
                                 ) AS Seq
                 FROM PICKDETAIL PD WITH (NOLOCK)
                 JOIN WAVEDETAIL WD WITH (NOLOCK) ON PD.Orderkey = WD.Orderkey

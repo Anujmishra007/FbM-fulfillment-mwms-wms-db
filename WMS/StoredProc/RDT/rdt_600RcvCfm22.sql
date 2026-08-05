@@ -10,10 +10,11 @@ GO
 /*                                                                         */  
 /* Purpose: Client VNM Michelin                                            */
 /*                                                                         */
-/* Date       Rev  Author  Purposes                                        */  
+/* Date       Rev  Author  Purposes                                        */
 /* 2025-05-20 1.0  CYU027   FCR-4213 Created                               */
 /* 2026-06-29 1.1  Sreeja   FCR-14112 Default QTY for PC&TB tires          */
-/***************************************************************************/  
+/* 2026-07-28 1.2  Cuize    FCR-14406 Configurable cutoff, PC class only   */
+/***************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600RcvCfm22](
    @nFunc          INT,             
@@ -95,6 +96,20 @@ BEGIN
       GOTO Receive
    END
 
+   -- FCR-14406: Get facility prefix for sub-inventory code
+   DECLARE @cFacilityPrefix NVARCHAR(30)
+   SELECT @cFacilityPrefix = UserDefine01
+   FROM dbo.Facility WITH (NOLOCK)
+   WHERE Facility = @cFacility
+
+   -- FCR-14406: DOT logic only applies to SKU.Class = 'PC'
+   -- Other classes default to FRESH
+   IF ISNULL(@cSKUType, '') <> 'PC'
+   BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
+      GOTO Receive
+   END
+
    -- Determine correct MIN DOT BEFORE date conversion
    -- First tire on pallet: MIN DOT defaults to PCS DOT
    IF ISNULL(@cLottable02, '') = '' AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
@@ -153,11 +168,13 @@ BEGIN
       END
       ELSE
       BEGIN
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
          GOTO Receive
       END
    END
    ELSE
    BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
    END
 
@@ -166,22 +183,61 @@ BEGIN
    DECLARE @CurrentDate DATETIME
    SET @CurrentDate = GETDATE()
 
-   IF @TargetDate>@CurrentDate OR YEAR(@TargetDate) > 2000+@Year
+   IF @TargetDate > @CurrentDate OR YEAR(@TargetDate) > 2000 + @Year
    BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
    END
 
+   -- FCR-14406: Get cutoff date from CODELKUP based on SKU Class
+   DECLARE @cCutoffMMDD NVARCHAR(10)
+   DECLARE @dCutoffDate DATE
+   DECLARE @nThisYear INT = YEAR(@CurrentDate)
+   DECLARE @nDotYear INT = 2000 + @Year
 
-   DECLARE @cFacilityPrefix NVARCHAR(30)
-   SELECT @cFacilityPrefix = UserDefine01 
-   FROM dbo.Facility WITH (NOLOCK) 
-   WHERE Facility = @cFacility
+   SELECT TOP 1 @cCutoffMMDD = Short
+   FROM dbo.CODELKUP WITH (NOLOCK)
+   WHERE ListName = 'MICDOTCTOF'
+     AND Code = @cSKUType
+     AND Storerkey = @cStorerKey
 
-   IF (MONTH(@CurrentDate) < 7 AND YEAR(@TargetDate) < (YEAR(@CurrentDate)-1))
-      OR (MONTH(@CurrentDate) >= 7 AND YEAR(@TargetDate) < YEAR(@CurrentDate))
-      SET @cLottable03 =  @cFacilityPrefix +'-'+'OLD'
+   -- Validate cutoff date exists and has correct format (MMDD)
+   IF ISNULL(@cCutoffMMDD, '') = ''
+   BEGIN
+      SET @nErrNo = 275901
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END
+
+   IF LEN(@cCutoffMMDD) <> 4 OR ISNUMERIC(@cCutoffMMDD) = 0
+   BEGIN
+      SET @nErrNo = 275902
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END
+
+   -- Build cutoff date from MMDD
+   BEGIN TRY
+      SET @dCutoffDate = DATEFROMPARTS(
+         @nThisYear,
+         CAST(LEFT(@cCutoffMMDD, 2) AS INT),
+         CAST(RIGHT(@cCutoffMMDD, 2) AS INT)
+      )
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 275903
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END CATCH
+
+   -- FCR-14406: Apply FRESH/OLD logic based on cutoff date
+   -- If today < cutoff: DOT year < (ThisYear - 1) → OLD, else FRESH
+   -- If today >= cutoff: DOT year < ThisYear → OLD, else FRESH
+   IF (@CurrentDate < @dCutoffDate AND @nDotYear < (@nThisYear - 1))
+      OR (@CurrentDate >= @dCutoffDate AND @nDotYear < @nThisYear)
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'OLD'
    ELSE
-      SET @cLottable03 = @cFacilityPrefix +'-'+'FRESH'
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
 
 --    UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET
 --                                               Lottable04 = @dLottable04,
@@ -258,7 +314,8 @@ BEGIN
       @cSubreasonCode = '',
       @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
 
-END  
+   Quit:
+END
 GO
 
 SET QUOTED_IDENTIFIER OFF

@@ -15,6 +15,8 @@ GO
 /* 2026-06-17   3.0  JWF011     FCR-13553: Add logic for diff style&color SKU    */
 /* 2026-06-23   3.1  JWF011     FCR-13553: Fix diff style&color SKU validation   */
 /* 2026-06-29   3.2  JWF011     FCR-13553: Fix bug                               */
+/* 2026-07-21   3.3  JWF011     UWP-62055: Support Scan By UPC                   */
+/* 2026-07-28   3.4  JWF011     UWP-62579: Support SKU format style-color_size   */
 /*********************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPACK_ValidateInput05] (
@@ -55,6 +57,7 @@ BEGIN
          , @cSKUToValidate       NVARCHAR(20)     = ''
          , @nPackQty             INT              = 0
          , @nPickQty             INT              = 0
+         , @cTempSKU             NVARCHAR(20)     = ''
    
    DECLARE @cADList TABLE (
 		cValue NVARCHAR(100)
@@ -102,32 +105,45 @@ BEGIN
       END
    END
 
-   IF @cScanType = 'sku'
-      AND EXISTS (SELECT 1
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-PackDetail'
-      )
-      AND LEN(@cSKU) - LEN(REPLACE(@cSKU, '_', '')) = 2
-      AND PARSENAME(REPLACE(@cSKU, '_', '.'), 3) <> ''  -- style
-      AND PARSENAME(REPLACE(@cSKU, '_', '.'), 2) <> ''  -- color
-      AND PARSENAME(REPLACE(@cSKU, '_', '.'), 1) <> ''  -- size
+   --FCR-13553
+   IF EXISTS ( SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+               AND ConfigKey = 'TPS-PackDetail'
+   )
    BEGIN
       DECLARE CUR_SKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT(SKU)
-      FROM PICKDETAIL (NOLOCK)
+      FROM PACKDETAIL (NOLOCK)
       WHERE StorerKey = @cStorerKey
-      AND OrderKey = @cOrderKey
-      AND LEN(SKU) - LEN(REPLACE(SKU, '_', '')) = 2
-      AND PARSENAME(REPLACE(SKU, '_', '.'), 3) <> ''  -- style
-      AND PARSENAME(REPLACE(SKU, '_', '.'), 2) <> ''  -- color
-      AND PARSENAME(REPLACE(SKU, '_', '.'), 1) <> ''  -- size
-      AND SKU NOT LIKE ISNULL(LEFT(@cSKU, CHARINDEX('_', @cSKU, CHARINDEX('_', @cSKU) + 1) - 1), '') + '_%'
+      AND PickSlipNo = @cPickSlipNo
+      AND CHARINDEX('_', SKU) > 0
+      AND LEN(SKU) - LEN(REPLACE(SKU, '-', '')) < 2
       OPEN CUR_SKU
       FETCH NEXT FROM CUR_SKU INTO @cSKUToValidate
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         SELECT @cStyleColor = ISNULL(LEFT(@cSKUToValidate, CHARINDEX('_', @cSKUToValidate, CHARINDEX('_', @cSKUToValidate) + 1) - 1), '')
+         --SKU Format Check
+         IF CHARINDEX('-', @cSKUToValidate) > 0
+         AND CHARINDEX('-', @cSKUToValidate) > CHARINDEX('_', @cSKUToValidate)
+         BEGIN
+            GOTO NEXT_SKU
+         END
+         SET @cTempSKU = REPLACE(@cSKUToValidate, '-', '_')
+         IF LEN(@cTempSKU) - LEN(REPLACE(@cTempSKU, '_', '')) <> 2
+         OR CHARINDEX('_', @cTempSKU) <= 1
+         OR CHARINDEX('_', @cTempSKU, CHARINDEX('_', @cTempSKU) + 1) <= CHARINDEX('_', @cTempSKU) + 1
+         OR LEN(@cTempSKU) <= CHARINDEX('_', @cTempSKU, CHARINDEX('_', @cTempSKU) + 1)
+         BEGIN
+            GOTO NEXT_SKU
+         END
+         --Same Style Color Check
+         SELECT @cStyleColor = LEFT(@cSKUToValidate, LEN(@cSKUToValidate) - CHARINDEX('_', REVERSE(@cSKUToValidate)))
+         IF @cStyleColor = LEFT(@cSKU, LEN(@cSKU) - CHARINDEX('_', REVERSE(@cSKU)))
+         BEGIN
+            GOTO NEXT_SKU
+         END
+         --QTY Check
          SET @nPackQty = ( SELECT COALESCE(SUM(QTY), 0)
                            FROM PACKDETAIL (NOLOCK)
                            WHERE StorerKey = @cStorerKey
@@ -146,10 +162,11 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_ErrNo = 14904
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + '(' + @cStyleColor + ')' --'Not allow to pack current SKU when previous SKU with different style_color not finished packing. (@cStyleColor)'
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + '(' + @cStyleColor + ')' --'Not allow to pack current SKU when previous SKU with different style color not finished packing. (@cStyleColor)'
                GOTO EXIT_SP
             END
          END
+         NEXT_SKU:
          FETCH NEXT FROM CUR_SKU INTO @cSKUToValidate
       END
       CLOSE CUR_SKU

@@ -38,5 +38,6 @@ execute rdt.rdtAddMsg 272381, 10, '272381^UpdPackDetailFail',     'us_english', 
 execute rdt.rdtAddMsg 272382, 10, '272382^ExecCfmSPFail',         'us_english', 838, 0, '272382: Execute Confirm SP failed'
 execute rdt.rdtAddMsg 272383, 10, '272383^ExecCfmSPFail',         'us_english', 838, 0, '272383: Execute Confirm SP failed'
 execute rdt.rdtAddMsg 272384, 10, '272384^NoPKDForPacking',       'us_english', 838, 0, '272384: No PickDetail available for packing'
+execute rdt.rdtAddMsg 272385, 10, '272385^InsPackDetailFail',     'us_english', 838, 0, '272385: Insert PackDetail failed'
 
 select * from rdt.rdtmsg (nolock) where message_id between 272351 and 272400
