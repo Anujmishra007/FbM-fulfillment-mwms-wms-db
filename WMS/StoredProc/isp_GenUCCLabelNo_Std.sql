@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'isp_GenUCCLabelNo_Std' AND type = 'P')
-   DROP PROC isp_GenUCCLabelNo_Std
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -32,7 +29,7 @@ GO
 /* 21-Jul-2025  AndyWu01  1.2   FCR-14446 AEO V2  add additional logic  */ 
 /************************************************************************/
 
-CREATE PROC isp_GenUCCLabelNo_Std (
+CREATE OR ALTER PROC isp_GenUCCLabelNo_Std (
    @cPickslipNo   NVARCHAR(10),
    @nCartonNo     INT            = 0,     --(Wan01)
    @cLabelNo      NVARCHAR(20)   OUTPUT, 
