@@ -18,7 +18,6 @@ execute rdt.rdtAddMsg 215313, 10, '215313^PalletClosed',                        
 
 --FCR-13229
 execute rdt.rdtAddMsg 215314, 10, '215314^VASNeeded',                            'us_english', 898, 0, '215314 VAS Needed'
-execute rdt.rdtAddMsg 215315, 10, '215315^LVSCodeMiss',                          'us_english', 898, 0, '215315 LVS data is missing in CODELKUP'
 execute rdt.rdtAddMsg 215316, 10, '215316^VASCodeMiss',                          'us_english', 898, 0, '215316 VAS data is missing in CODELKUP'
 execute rdt.rdtAddMsg 215317, 10, '215317^InvPalletID',                          'us_english', 898, 0, '215317 Pallet ID prefix is invalid'
 

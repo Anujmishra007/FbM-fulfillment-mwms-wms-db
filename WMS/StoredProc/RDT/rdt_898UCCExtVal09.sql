@@ -190,19 +190,6 @@ BEGIN
       SET @cIVAS = ISNULL(@cIVAS, '')
       IF @cIVAS = 'Y'
       BEGIN
-         IF NOT EXISTS(SELECT 1
-            FROM CODELKUP WITH (NOLOCK) 
-            WHERE LISTNAME = @cLVSIDPrefix
-               AND Long IS NOT NULL
-               AND Long = @cLVS
-               AND TRIM(Code) <> ''
-               AND Storerkey = @cStorerKey)
-         BEGIN
-            SET @nErrNo = 215315
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --   LVS data is missing in CODELKUP
-            GOTO Quit
-         END
-
          IF EXISTS(SELECT 1
             FROM CODELKUP WITH (NOLOCK) 
             WHERE LISTNAME = @cLVSIDPrefix
