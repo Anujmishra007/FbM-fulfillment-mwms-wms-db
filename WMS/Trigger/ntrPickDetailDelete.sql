@@ -1099,8 +1099,8 @@ BEGIN
                BEGIN
 
                   SELECT @c_UCCNo = U.UCCNo
-                  FROM DELETED D (NOLOCK)
-                  JOIN UCC U
+                  FROM DELETED D 
+                  JOIN UCC U (NOLOCK)
                   ON U.UCCNo = D.DropID
                   WHERE U.Status ='3'
 
