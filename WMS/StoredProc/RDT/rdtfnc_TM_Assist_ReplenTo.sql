@@ -19,6 +19,7 @@ GO
 /* 2024-12-04 1.6.0YYS027   FCR-1489 Fn1836 TM Assist Replen To         */
 /* 2025-05-29 0.0  JACKC    !!!Cutover. Use V0 for development !!!      */
 /* 2026-02-04 1.7.0 NickT   FCR-10467 Add transaction in step 1         */
+/* 2026-08-06 1.8.0 Sreeja  FCR-14862 LOCCheckDigit validation Step_1   */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (
@@ -87,8 +88,10 @@ DECLARE
    @cCurrentTaskDetailKey  NVARCHAR( 10), -- (james01)      
    @nSuggestQty         INT,           -- (james02)
    @cCLRPutawayZone     NVARCHAR( 20), -- (yys027)
+   @cLOCCheckDigitSP    NVARCHAR( 20),   -- FCR-14862
+   @cCheckDigitLOC      NVARCHAR( 20),   -- FCR-14862
 
-   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    
+   @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    
    @cInField04 NVARCHAR( 60),   @cOutField04 NVARCHAR( 60),    
@@ -154,8 +157,9 @@ SELECT
    @cCurrentTaskDetailKey = V_string18,
    @cFinalLOC           = V_string19,
    @cCLRPutawayZone     = V_string20,     --(yys027) config for skipping the checking the putaway zone LULUCP (step 0)
+   @cLOCCheckDigitSP    = V_String21,  -- FCR-14862
 
-   @cInField01 = I_Field01,   @cOutField01 = O_Field01,    
+   @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,    
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,    
    @cInField04 = I_Field04,   @cOutField04 = O_Field04,    
@@ -252,6 +256,7 @@ BEGIN
    set @cCLRPutawayZone = rdt.rdtGetConfig( @nFunc, 'CLRPutawayZone', @cStorerKey)
    IF @cCLRPutawayZone = '0'
       SET @cCLRPutawayZone = ''
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig( @nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-14862
 
    
    -- EventLog    
@@ -417,10 +422,26 @@ BEGIN
       BEGIN    
          SET @nErrNo = 142951    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TO LOC needed    
-         GOTO Step_1_Fail    
-      END    
-    
-      -- Check if FromLOC match    
+         GOTO Step_1_Fail
+      END
+
+      -- FCR-14862
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         SET @cCheckDigitLOC = @cFinalLOC
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cCheckDigitLOC OUTPUT,
+            @nErrNo         OUTPUT,
+            @cErrMsg        OUTPUT
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_1_Fail
+         END
+         SET @cFinalLOC = @cCheckDigitLOC
+      END
+      -- FCR-14862
+
+      -- Check if FromLOC match
       IF @cFinalLOC <> @cSuggToLOC AND @cSuggToLOC <> ''    
       BEGIN    
          IF @cOverwriteToLOC = '0'    
@@ -1709,8 +1730,9 @@ BEGIN
       V_string18 = @cCurrentTaskDetailKey,
       V_string19 = @cFinalLOC,
       V_string20 = @cCLRPutawayZone,       --(yys027)
+      V_String21 = @cLOCCheckDigitSP,  -- FCR-14862
 
-      I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,    
       I_Field04 = @cInField04,  O_Field04 = @cOutField04,    
