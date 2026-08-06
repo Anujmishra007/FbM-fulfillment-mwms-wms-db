@@ -1104,17 +1104,22 @@ BEGIN
                   ON U.UCCNo = D.DropID
                   WHERE U.Status ='3'
 
-                  SELECT @b_IsMultiWaveUCC = 1
-                  FROM UCC U (NOLOCK)
-                  JOIN PickDetail PD (NOLOCK)
-                  ON PD.DropID = U.UCCNo
-                  AND PD.StorerKey = @c_StorerkeyD
-                  JOIN WaveDetail WD (NOLOCK)
-                  ON WD.OrderKey = PD.OrderKey
-                  WHERE U.UCCNo = @c_UCCNo
-                  GROUP BY WD.Wavekey
-                  HAVING COUNT(DISTINCT(WD.Wavekey)) > 1
-
+                  IF ISNULL(@c_UCCNo, '') <> ''
+                  BEGIN
+                     SELECT @b_IsMultiWaveUCC = CASE WHEN COUNT(DISTINCT WD.WaveKey) > 1 THEN 1 ELSE 0 END
+                     FROM (
+                        SELECT PD.OrderKey
+                        FROM PickDetail PD WITH (NOLOCK)
+                        WHERE PD.DropID = @c_UCCNo
+                        AND PD.StorerKey = @c_StorerkeyD
+                        AND PD.SKU = @c_SkuD
+                        UNION
+                        SELECT D.OrderKey
+                        FROM DELETED D
+                        WHERE D.PickDetailKey = @c_DelPickDetKey
+                     ) PD
+                     JOIN WaveDetail WD WITH (NOLOCK) ON WD.OrderKey = PD.OrderKey
+                  END
                END
                --(TK01) - END
 
