@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.5                                                  */
+/* GitHub Version: 1.6                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,6 +31,7 @@ GO
 /*                            condition (WL04)                          */
 /* 22-Jun-2026 WLChooi  1.5   FCR-12719 Cross-wave UCC short pick       */
 /*                            reallocation (WL05)                       */
+/* 06-Aug-2026 WLChooi  1.6   FCR-12719 CUR_PTASK order by RowID (WL06) */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -1169,6 +1170,7 @@ BEGIN
                              AND OD.Storerkey = P.Storerkey
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
+         JOIN #T_RelatedWaves RW ON RW.WaveKey = P.WaveKey   --WL06
          --WL05 S
          WHERE EXISTS ( SELECT 1
                         FROM #T_ShortOrders T
@@ -1195,7 +1197,8 @@ BEGIN
                ,  L.LogicalLocation
                ,  L.LocationType
                ,  L.PutawayZone
-         ORDER BY P.UOM
+         ORDER BY MIN(RW.RowID)   --WL06
+               ,  P.UOM
                ,  CASE WHEN P.UOM = '2' THEN P.Orderkey ELSE '' END
                ,  CASE WHEN P.UOM = '2' THEN P.OrderLineNumber ELSE '' END
                ,  P.PickMethod
