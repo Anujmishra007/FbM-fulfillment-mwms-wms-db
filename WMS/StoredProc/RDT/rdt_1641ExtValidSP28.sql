@@ -13,6 +13,7 @@ GO
 /* Date       Rev    Author     Purposes                                */
 /* 2026-06-24 1.0.0  NickT      FCR-13319 Created                       */
 /* 2026-07-22 1.0.1  Jackc      FCR-13319 Post Pick status is 3         */
+/* 2026-08-07 1.1.0  NickT      UWP-63642 Fix some issues.              */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP28 (
@@ -69,7 +70,30 @@ BEGIN
 
    IF @nFunc = 1641
    BEGIN
-      IF @nStep = 3 -- UCC
+      IF @nStep = 2 -- Loc
+      BEGIN
+         IF @nInputKey = 1 -- Enter
+         BEGIN
+            SELECT
+               @cLoc     = I_Field02
+            FROM rdt.RDTMOBREC WITH(NOLOCK)
+            WHERE Mobile = @nMobile
+
+            SELECT @cLocationType = LocationType
+            FROM dbo.LOC WITH(NOLOCK)
+            WHERE Facility = @cFacility
+               AND Loc = @cLoc
+            SET @cLocationType = ISNULL(@cLocationType, '')
+
+            IF @cLocationType NOT IN (@cPOSTPICK, @cSTAGEOB)
+            BEGIN
+               SET @nErrNo = 271263
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Location Type must be POSTPICK or STAGEOB
+               GOTO Quit
+            END
+         END
+      END
+      ELSE IF @nStep = 3 -- UCC
       BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN
@@ -90,7 +114,6 @@ BEGIN
                FROM dbo.PickDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cUCCNo
-                  AND Loc = @cLoc
                   AND WaveKey IS NOT NULL
                   AND WaveKey <> ''
                ORDER BY PickDetailKey
@@ -117,36 +140,15 @@ BEGIN
                   GOTO Quit
                END
 
-               -- Get WaveKey from packed UCC
-               SET @cPackedUCCNo = ''
-               SELECT TOP 1 @cPackedUCCNo = ChildID
-               FROM dbo.DropIDDetail WITH(NOLOCK)
-               WHERE DropID = @cDropID
-               AND ChildID IS NOT NULL
-               AND ChildID <> ''
-               ORDER BY ChildID
-
-               IF @cPackedUCCNo IS NOT NULL AND @cPackedUCCNo <> ''
+               -- Check different WaveKey than the one packed
+               IF EXISTS(SELECT 1
+                        FROM dbo.DropIDDetail WITH(NOLOCK)
+                        WHERE DropID = @cDropID
+                           AND ISNULL(UserDefine02, '') <> @cWaveKey)
                BEGIN
-                  SELECT TOP 1 @cPackedWaveKey = WaveKey
-                  FROM dbo.PickDetail WITH(NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                     AND DropID = @cPackedUCCNo
-                     AND Status = '3' --V1.0.1 Post pick status is 3
-                     AND WaveKey IS NOT NULL
-                     AND WaveKey <> ''
-                  ORDER BY PickDetailKey
-                  SELECT @nRowCount = @@ROWCOUNT
-
-                  IF @nRowCount > 0 AND ISNULL(@cPackedWaveKey, '') <> ''
-                  BEGIN
-                     IF @cPackedWaveKey <> @cWaveKey
-                     BEGIN
-                        SET @nErrNo = 271254
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different WaveKey than the one packed
-                        GOTO Quit
-                     END
-                  END
+                  SET @nErrNo = 271254
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Different WaveKey than the one packed
+                  GOTO Quit
                END
             END
             ELSE IF @cLocationType = @cSTAGEOB
