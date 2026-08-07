@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-05-07   1.0  GCH225     UWP-55977: Custom Cartonization process for CSC  */
 /* 2026-07-07   1.1  MBR282     UWP-60792: Update logic for #tItemForCartonize   */
+/* 2026-08-03   1.2  GCH225     UWP-63169: fine tune the SP                      */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization01] (
      @cType                NVARCHAR(30)      = ''
@@ -186,7 +187,7 @@ BEGIN
 
    IF @cOrdDocType <> 'All'
    BEGIN
-      IF @bIsDiscrete = 1
+      IF @cOrderKey <> ''
       BEGIN
          IF EXISTS ( SELECT 1
                      FROM ORDERS (NOLOCK)
@@ -197,7 +198,7 @@ BEGIN
             GOTO EXIT_SP
          END
       END
-      ELSE
+      ELSE IF @cLoadKey <> ''
       BEGIN
          IF EXISTS ( SELECT 1
                      FROM ORDERS O (NOLOCK)
@@ -276,7 +277,7 @@ BEGIN
          END
       END
 
-      IF @bIsDiscrete = 1
+      IF @cOrderKey <> ''
       BEGIN
          INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
          SELECT  1 AS Batch
@@ -294,7 +295,7 @@ BEGIN
          ON PD1.SKU = PD2.SKU
          AND PD1.OrderKey = PD2.OrderKey
       END
-      ELSE
+      ELSE IF @cLoadKey <> ''
       BEGIN
          INSERT INTO #tItemForCartonize (Batch, SKU, Qty)
          SELECT  1 AS Batch
@@ -321,7 +322,7 @@ BEGIN
       BEGIN
          GOTO EXIT_SP
       END
-
+      
       IF EXISTS ( SELECT 1 
                   FROM #tItemForCartonize (NOLOCK) 
                   WHERE Qty < 0
@@ -371,7 +372,7 @@ BEGIN
    SELECT @nTotalCube = SUM(Qty * ISNULL([Cube], 0))
       , @nTotalWeight = SUM(Qty * ISNULL([Weight], 0))
    FROM #tItemForCartonize
-   
+
    IF @bIncWeight = 1
    BEGIN
       INSERT INTO @tCartonType (CartonType)
@@ -512,45 +513,27 @@ BEGIN
    
    IF ISNULL(@cCartonType,'') <> ''
    BEGIN
-      SELECT @nMaxCartonNo = CartonNo
-      FROM PACKINFO (NOLOCK)
-      WHERE PickSlipNo = @cPickSlipNo
-      AND CartonType <> ''
-      AND Qty = 0
-      AND [Weight] = 0
-      AND [Cube] = 0
-      ORDER BY CartonNo DESC
-      
-      SET @nRowCount = @@ROWCOUNT
-
-      IF @nRowCount = 1
+      IF @nCartonizeStep = 1
       BEGIN
-         UPDATE PACKINFO WITH (ROWLOCK)
-         SET CartonType = @cCartonType
-            ,CartonStatus = 'INPROGRESS'
-            ,EditDate = dbo.fnc_GetDate()
-            ,EditWho = @c_UserID
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonNo = @nMaxCartonNo 
-      END
-      ELSE
-      BEGIN
-         IF @nRowCount > 1
+         IF EXISTS ( SELECT 1 
+                     FROM PACKINFO (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                     AND CartonType <> ''
+                     AND Qty = 0
+                     AND [Weight] = 0
+                     AND [Cube] = 0  
+         )
          BEGIN
-            -- Only when user after reset carton and does not want to keep the existing carton, 
-            -- then delete the existing carton and create new carton with the same carton no and new carton type.
             DELETE FROM PACKINFO
             WHERE PickSlipNo = @cPickSlipNo
-            AND CartonStatus IN('INPROGRESS', 'HOLD')
             AND CartonType <> ''
             AND Qty = 0
             AND [Weight] = 0
-            AND [Cube] = 0
+            AND [Cube] = 0  
          END
-
+         
          IF @nCartonNo > 0
          BEGIN
-            -- Only applicable for reset carton scenario, if user wants to keep the existing carton no, then use the same carton no for new carton.
             SET @nMaxCartonNo = @nCartonNo
          END
          ELSE
@@ -560,70 +543,60 @@ BEGIN
             WHERE PickSlipNo = @cPickSlipNo
          END
 
-         IF EXISTS ( SELECT 1 
-                    FROM PACKINFO (NOLOCK)
-                    WHERE PickSlipNo = @cPickSlipNo
-                    AND CartonNo = @nMaxCartonNo
+         INSERT INTO PACKINFO(
+            PickSlipNo
+            , CartonNo
+            , [Weight]
+            , [Cube]
+            , Qty
+            , AddDate
+            , AddWho
+            , EditDate
+            , EditWho
+            , CartonType
+            , [Length]
+            , [Width]
+            , [Height]
+            , CartonStatus
          )
-         BEGIN
-            UPDATE PACKINFO WITH (ROWLOCK)
-            SET CartonType = @cCartonType,
-                CartonStatus = 'INPROGRESS',
-                EditDate = dbo.fnc_GetDate(),
-                EditWho = @c_UserID
-            WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nMaxCartonNo
+         VALUES(
+            @cPickSlipNo
+            , @nMaxCartonNo
+            , 0
+            , 0
+            , 0
+            , dbo.fnc_GetDate()
+            , @c_UserID
+            , dbo.fnc_GetDate()
+            , @c_UserID
+            , @cCartonType
+            , ''
+            , ''
+            , ''
+            , 'INPROGRESS'
+         )
 
-            IF @@ERROR <> 0
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_ErrNo = 14508
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to update cartonization result into PACKINFO table.'
-               GOTO EXIT_SP
-            END
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 14509
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to insert cartonization result into PACKINFO table.'
+            GOTO EXIT_SP
          END
-         ELSE
-         BEGIN
-            INSERT INTO PACKINFO(
-               PickSlipNo
-               , CartonNo
-               , [Weight]
-               , [Cube]
-               , Qty
-               , AddDate
-               , AddWho
-               , EditDate
-               , EditWho
-               , CartonType
-               , [Length]
-               , [Width]
-               , [Height]
-               , CartonStatus
-            )
-            VALUES(
-               @cPickSlipNo
-               , @nMaxCartonNo
-               , 0
-               , 0
-               , 0
-               , dbo.fnc_GetDate()
-               , @c_UserID
-               , dbo.fnc_GetDate()
-               , @c_UserID
-               , @cCartonType
-               , ''
-               , ''
-               , ''
-               , 'INPROGRESS'
-            )
+      END
+      ELSE IF @nCartonizeStep = 2
+      BEGIN
+         UPDATE PACKINFO WITH (ROWLOCK)
+         SET CartonType = @cCartonType
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
 
-            IF @@ERROR <> 0
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_ErrNo = 14509
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to insert cartonization result into PACKINFO table.'
-               GOTO EXIT_SP
-            END
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_ErrNo = 14506
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') --'Failed to update cartonization result to PACKINFO table.'
+            GOTO EXIT_SP
          END
       END
    END
