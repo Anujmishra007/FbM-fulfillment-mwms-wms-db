@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author     Purposes                                */
 /* 2026-06-24 1.0.0  NickT      FCR-13319 Created                       */
+/* 2026-08-07 1.1.0  NickT      UWP-63642 Fix some issues               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP22] (
@@ -169,21 +170,6 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 271459
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
-                     GOTO ROLLBACK_TRAN
-                  END CATCH
-
-                  BEGIN TRY
-                     UPDATE PD WITH(ROWLOCK) 
-                     SET
-                        DropID = @cDropID,
-                        EditDate = GETDATE(),
-                        EditWho = @cUserName
-                     FROM dbo.PickDetail PD WITH(ROWLOCK)
-                     INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
-                  END TRY
-                  BEGIN CATCH
-                     SET @nErrNo = 271464
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Fail to update pickdetail DropID
                      GOTO ROLLBACK_TRAN
                   END CATCH
 

@@ -35,8 +35,9 @@ GO
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
 /* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
 /* 2026-03-19 3.0.1 JACKC   UWP-52474 Fix DefaultToLoc = 0 issue (jackc01)    */
-/* 2026-02-16 4.0.0 NYE018  FCR-10366 add loc check digit                     */
-/* 2026-03-01 4.0.1 Dennis  DefaultLoc init value should be ''                */
+/* 2026-03-01 3.1.0 Dennis  FCR-10354 DefaultLoc init value should be ''      */
+/* 2026-02-16 3.2.0 NYE018  FCR-10366 add loc check digit                     */
+/* 2026-08-07 3.3.0 NickT   UWP-63642 add ExntendedVal in step 2              */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -314,8 +315,8 @@ BEGIN
 
    --(yeekung02)
    SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey)
-   IF @cDefaultLoc = '0'           -- Added this check to remove 0 in the screen Loc field - NYE018
-      SET @cDefaultLoc = ''        -- NYE018
+   IF @cDefaultLoc = '0'    --(jackc01)
+      SET @cDefaultLoc = ''
 
    -- (james01)
    SET @cPltBuildNotInsDropID = rdt.RDTGetConfig( @nFunc, 'PltBuildNotInsDropID', @cStorerKey)
@@ -429,7 +430,7 @@ BEGIN
       SET @nScn  = 2320
       SET @nStep = 1
    END
-   IF @cExtScnSP <> '' 
+   IF @cExtScnSP <> ''
       AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
       GOTO Step_99
@@ -749,6 +750,44 @@ BEGIN
          GOTO Step_2_Fail
       END
       -- FCR-10366 bug fix to check the loc is valid or not
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cDropID, @cUCCNo, @cPrevLoadKey, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cDropID       NVARCHAR( 20), ' +
+               '@cUCCNo        NVARCHAR( 20), ' +
+               '@cPrevLoadKey  NVARCHAR( 10), ' +
+               '@cParam1       NVARCHAR(20),  ' +
+               '@cParam2       NVARCHAR(20),  ' +
+               '@cParam3       NVARCHAR(20),  ' +
+               '@cParam4       NVARCHAR(20),  ' +
+               '@cParam5       NVARCHAR(20),  ' +
+               '@nErrNo        INT           OUTPUT, ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cDropID, @cUCCNo, '', @cParam1, @cParam2, @cParam3, @cParam4, @cParam5,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Step_2_Fail
+            END
+         END
+      END
 
       SET @cOutField01 = @cDropID
       SET @cOutField02 = @cDropLOC
@@ -1532,7 +1571,7 @@ BEGIN
    SET @cFieldAttr06 = ''
    SET @cFieldAttr08 = ''
    SET @cFieldAttr10 = ''
-   
+
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
       GOTO Step_99
@@ -1964,7 +2003,7 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
          IF @nErrNo <> 0
             GOTO Step_99_Fail
-         
+
          IF @cExtScnSP = 'rdt_1641ExtScn02'
          BEGIN
             IF @nScnBackup = 6825 AND @nInputKey = 0 AND @nStep <> 5
