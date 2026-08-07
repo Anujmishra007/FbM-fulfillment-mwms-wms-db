@@ -43,12 +43,12 @@ GO
 /* 2024-12-02 3.0.3  PXL009             Save/restore @cToLoc                    */
 /* 2024-11-28 3.1    JCH507     UWP-27664 Throw printing error from st6 to st7  */
 /* 2025-06-09 3.2.0  JCH507     FCR-3959 1.Standardized check Loc digit         */
-/* 2025-06-09 3.3.0  Dennis     FCR-3959 Extended Screen                         */
+/* 2025-06-09 3.3.0  Dennis     FCR-3959 Extended Screen                        */
 /* 2025-06-23 3.4.0  NickT      FCR-5753 No need CAST @nDecodeQTY to @nUCCQty,  */
 /*                              expand QTY to support 6 digitals                */
 /* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
 /* 2025-11-24 3.6.0  NickT      UWP-44566 Reset QTY when get new task or on ToLoc*/
-/* 2025-12-18 3.7.0  NickT      UWP-45705 Fix issue: MQty is 1 while short pick  */
+/* 2025-12-18 3.7.0  NickT      UWP-45705 Fix an issue for short pick            */
 /* 2026-01-05 3.8.0  PPA374     UWP-46338 Adding  extended update to step 4      */
 /* 2026-01-12 3.8.1  PPA374     UWP-47065 Adding Extended Validate in step 3     */
 /* 2026-03-25 3.9.0  Jackc      FCR-11571 Add extscn09 logic under st99          */
@@ -57,6 +57,7 @@ GO
 /* 2026-04-03 4.5.0  NickT      UWP-52419 Rollback the changes for V4.3.0,       */
 /*                              Empty @cToLoc after ToLoc screen                 */
 /* 2026-03-03 4.6.0  Jackc      FCR-12989 add ExtScn11 to step99                 */
+/* 2026-08-07 4.7.0  NickT      UWP-63641 Use @nStep for @cExtendedUpdateSP      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -1925,7 +1926,7 @@ BEGIN
                '@nAfterStep      INT            '
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 5, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -3543,7 +3544,7 @@ BEGIN
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN      
+      BEGIN
          Goto Step_99
       END
    END
@@ -3679,6 +3680,7 @@ BEGIN
                SET @cToLoc = ''
             END
          END
+
          IF @cExtScnSP = 'rdt_1812ExtScn08'
          BEGIN
             IF @nStep = 3 AND ISNULL(@cSuggID, '') = ''
