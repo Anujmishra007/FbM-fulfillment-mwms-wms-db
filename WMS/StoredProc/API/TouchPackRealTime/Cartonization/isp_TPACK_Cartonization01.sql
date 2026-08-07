@@ -12,6 +12,7 @@ GO
 /* 2026-05-07   1.0  GCH225     UWP-55977: Custom Cartonization process for CSC  */
 /* 2026-07-07   1.1  MBR282     UWP-60792: Update logic for #tItemForCartonize   */
 /* 2026-08-03   1.2  GCH225     UWP-63169: fine tune the SP                      */
+/* 2026-08-07   1.3  MBR282     UWP-63511: Update logic for cube case            */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_Cartonization01] (
      @cType                NVARCHAR(30)      = ''
@@ -421,10 +422,16 @@ BEGIN
    BEGIN
       SELECT TOP 1 @cCartonType =ISNULL(RTRIM(C.CartonType), '')
       FROM CARTONIZATION C (NOLOCK)
+      LEFT JOIN CODELKUP CL (NOLOCK)
+      ON C.CartonType = CL.Short
       WHERE C.CartonizationGroup = @c_CTNGroup
+      AND CL.Storerkey = @cStorerKey
+      AND CL.LISTNAME = 'CSCUK01GCR' 
+      AND CL.Long='ECO' 
+      AND CL.UDF01 = 'Y'
       AND (C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0)) <= @nTotalCube
-      ORDER BY   C.UseSequence DESC
-               , C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0) DESC
+      ORDER BY   (C.[Cube] * (ISNULL(C.FillTolerance, 100) / 100.0)) DESC
+               , C.UseSequence ASC
    END
 
    IF @cRecommendBy = 'Cube'
