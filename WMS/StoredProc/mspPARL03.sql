@@ -30,6 +30,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2026-08-07  wan      1.0   FCR-14639. Fix Merge..update..delete      */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL03
@@ -567,11 +568,10 @@ BEGIN
          BEGIN
             ;  WITH cte AS 
             (
-               SELECT TOP 1 WITH TIES 
-                     s.LocationGroup, s.SortIdx
+               SELECT s.LocationGroup, s.SortIdx
                FROM #TMP_ID_STYLE AS s
                WHERE s.LocationGroup > ''
-               ORDER BY s.SeqNo
+               GROUP BY s.LocationGroup, s.SortIdx                                  --wan 2026-08-07
             )
             MERGE #TMP_GRP_LPN AS t
             USING cte AS s

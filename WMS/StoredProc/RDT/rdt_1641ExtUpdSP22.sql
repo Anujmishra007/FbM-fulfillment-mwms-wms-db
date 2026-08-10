@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author     Purposes                                */
 /* 2026-06-24 1.0.0  NickT      FCR-13319 Created                       */
+/* 2026-08-07 1.1.0  NickT      UWP-63642 Fix some issues               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP22] (
@@ -42,6 +43,7 @@ BEGIN
       @cIntermodalVehicle        NVARCHAR(30) = '',
       @cWaveKey                  NVARCHAR(10) = '',
       @cConsigneeKey             NVARCHAR(15) = '',
+      @cOption                   NVARCHAR(10) = '',
       @cPOSTPICK                 NVARCHAR(8) = 'POSTPICK',
       @cSTAGEOB                  NVARCHAR(8) = 'STAGEOB'
 
@@ -55,9 +57,15 @@ BEGIN
       OrderKey NVARCHAR(20)
    )
 
+   DECLARE @tPickDetail TABLE
+   (
+      PickDetailKey NVARCHAR(18) NOT NULL PRIMARY KEY
+   )
+
    SELECT @nStep = Step,
           @nInputKey = InputKey,
-          @cLoc = V_String5
+          @cLoc = V_String5,
+          @cOption = I_Field01
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -74,6 +82,8 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+            SET @cLocationType= ''
+
             SELECT @cLocationType = LocationType
             FROM dbo.LOC WITH(NOLOCK)
             WHERE Loc = @cLoc
@@ -99,6 +109,14 @@ BEGIN
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.DropID = @cUCCNo
                   ORDER BY OD.OrderKey
+
+                  DELETE FROM @tPickDetail
+                  INSERT INTO @tPickDetail (PickDetailKey)
+                  SELECT
+                     PD.PickDetailKey
+                  FROM dbo.PickDetail PD WITH(NOLOCK)
+                  WHERE PD.StorerKey = @cStorerKey
+                     AND PD.DropID = @cUCCNo
                   
                   SET @cIntermodalVehicle = ''
                   SET @cWaveKey = ''
@@ -143,7 +161,9 @@ BEGIN
                   BEGIN TRY
                      UPDATE O WITH(ROWLOCK) 
                      SET
-                        UserDefine03 = @cDropID
+                        UserDefine03 = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho = @cUserName
                      FROM dbo.ORDERS O WITH(ROWLOCK)
                      INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
                   END TRY
@@ -152,6 +172,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
                      GOTO ROLLBACK_TRAN
                   END CATCH
+
                   GOTO Quit
                END
             END
@@ -175,6 +196,14 @@ BEGIN
                   WHERE PD.StorerKey = @cStorerKey
                      AND PD.DropID = @cUCCNo
                   ORDER BY OD.OrderKey
+
+                  DELETE FROM @tPickDetail
+                  INSERT INTO @tPickDetail (PickDetailKey)
+                  SELECT
+                     PD.PickDetailKey
+                  FROM dbo.PickDetail PD WITH(NOLOCK)
+                  WHERE PD.StorerKey = @cStorerKey
+                     AND PD.DropID = @cUCCNo
 
                   SET @cIntermodalVehicle = ''
                   SET @cWaveKey = ''
@@ -219,13 +248,30 @@ BEGIN
                   BEGIN TRY
                      UPDATE O WITH(ROWLOCK) 
                      SET
-                        UserDefine03 = @cDropID
+                        UserDefine03 = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho = @cUserName
                      FROM dbo.ORDERS O WITH(ROWLOCK)
                      INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 271460
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                     GOTO ROLLBACK_TRAN
+                  END CATCH
+
+                  BEGIN TRY
+                     UPDATE PD WITH(ROWLOCK) 
+                     SET
+                        DropID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho = @cUserName
+                     FROM dbo.PickDetail PD WITH(ROWLOCK)
+                     INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 271465
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Fail to update pickdetail DropID
                      GOTO ROLLBACK_TRAN
                   END CATCH
                   GOTO Quit
@@ -254,6 +300,18 @@ BEGIN
                   WHERE PI.TrackingNo = @cUCCNo
                      AND PD.StorerKey = @cStorerKey
                   ORDER BY PD.LabelNo
+
+                  DELETE FROM @tPickDetail
+                  INSERT INTO @tPickDetail (PickDetailKey)
+                  SELECT DISTINCT
+                     PKD.PickDetailKey
+                  FROM dbo.PackDetail PD WITH(NOLOCK)
+                  INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
+                  INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo AND PD.StorerKey = PH.StorerKey
+                  INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PH.OrderKey = OD.OrderKey AND PH.StorerKey = OD.StorerKey
+                  INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKD.OrderKey = OD.OrderKey AND PKD.StorerKey = OD.StorerKey AND PD.LabelNo = PKD.DropID
+                  WHERE PI.TrackingNo = @cUCCNo
+                     AND PD.StorerKey = @cStorerKey
                   
                   SET @cLabelNo = ''
                   SET @cIntermodalVehicle = ''
@@ -301,13 +359,30 @@ BEGIN
                   BEGIN TRY
                      UPDATE O WITH(ROWLOCK) 
                      SET
-                        UserDefine03 = @cDropID
+                        UserDefine03 = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho = @cUserName
                      FROM dbo.ORDERS O WITH(ROWLOCK)
                      INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 271461
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
+                     GOTO ROLLBACK_TRAN
+                  END CATCH
+
+                  BEGIN TRY
+                     UPDATE PD WITH(ROWLOCK) 
+                     SET
+                        DropID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho = @cUserName
+                     FROM dbo.PickDetail PD WITH(ROWLOCK)
+                     INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 271466
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Fail to update pickdetail DropID
                      GOTO ROLLBACK_TRAN
                   END CATCH
                   GOTO Quit
@@ -338,6 +413,18 @@ BEGIN
                      WHERE PI.TrackingNo = @cUCCNo12
                         AND PD.StorerKey = @cStorerKey
                      ORDER BY PD.LabelNo
+
+                     DELETE FROM @tPickDetail
+                     INSERT INTO @tPickDetail (PickDetailKey)
+                     SELECT DISTINCT
+                        PKD.PickDetailKey
+                     FROM dbo.PackDetail PD WITH(NOLOCK)
+                     INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PD.PickSlipNo = PI.PickSlipNo AND PD.CartonNo = PI.CartonNo
+                     INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo AND PD.StorerKey = PH.StorerKey
+                     INNER JOIN dbo.ORDERS OD WITH(NOLOCK) ON PH.OrderKey = OD.OrderKey AND PH.StorerKey = OD.StorerKey
+                     INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKD.OrderKey = OD.OrderKey AND PKD.StorerKey = OD.StorerKey AND PD.LabelNo = PKD.DropID
+                     WHERE PI.TrackingNo = @cUCCNo12
+                        AND PD.StorerKey = @cStorerKey
 
                      SET @cLabelNo = ''
                      SET @cIntermodalVehicle = ''
@@ -390,7 +477,9 @@ BEGIN
                      BEGIN TRY
                         UPDATE O WITH(ROWLOCK) 
                         SET
-                           UserDefine03 = @cDropID
+                           UserDefine03 = @cDropID,
+                           EditDate = GETDATE(),
+                           EditWho = @cUserName
                         FROM dbo.ORDERS O WITH(ROWLOCK)
                         INNER JOIN @tPalletData PD ON O.OrderKey = PD.OrderKey AND O.StorerKey = @cStorerKey
                      END TRY
@@ -399,8 +488,47 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update ORDERS with DropID
                         GOTO ROLLBACK_TRAN
                      END CATCH
+
+                     BEGIN TRY
+                        UPDATE PD WITH(ROWLOCK) 
+                        SET
+                           DropID = @cDropID,
+                           EditDate = GETDATE(),
+                           EditWho = @cUserName
+                        FROM dbo.PickDetail PD WITH(ROWLOCK)
+                        INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 271467
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Fail to update pickdetail DropID
+                        GOTO ROLLBACK_TRAN
+                     END CATCH
                   END
                END
+            END
+         END
+      END
+
+      ELSE IF @nStep = 4 -- Close Pallet
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cOption = '1' -- Option 1: Close Pallet
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.DropID WITH(ROWLOCK) 
+                  SET 
+                     Status = '9',
+                     EditDate = GETDATE(),
+                     EditWho = @cUserName
+                  WHERE DropID = @cDropID
+                     AND Status <> '9'
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 271463
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Fail to close DropID
+                  GOTO ROLLBACK_TRAN
+               END CATCH
             END
          END
       END

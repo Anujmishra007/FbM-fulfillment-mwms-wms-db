@@ -70,6 +70,7 @@ GO
 /* 2025-12-04 4.11  Dennis    FCR-3959 ExtScnSp                               */
 /* 2026-01-13 4.12  Jackc     FCR-10031 Add extscn entry to step_shortpick    */
 /* 2026-04-13 4.13  NickT     FCR-12136 Support PickMode, for USA levis       */
+/* 2026-07-31 4.14  NickT     FCR-14963 Add ExtVal in step 5, ExtScn in step 7*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -879,7 +880,6 @@ BEGIN
       SET @nFromStep = @nStep
       SET @nScn  = @nScn_Reason
       SET @nStep = @nStep_Reason
-
    END
 
    -- Extended info
@@ -2246,6 +2246,32 @@ BEGIN
          GOTO Step_NextTask_Fail
       END
 
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep, @cDropID '
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT,' +
+               '@nAfterStep      INT,        ' +
+               '@cDropID         NVARCHAR( 20)  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep, @cDropID
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- New replen task
       IF @cOption = '1'
       BEGIN
@@ -3093,7 +3119,7 @@ BEGIN
          SET @nFunc = 1756
          SET @nScn = 2100
          SET @nStep = 1
-         GOTO QUIT
+         GOTO Step_Exit_ExtScn
       END
 
       -- Have next task
@@ -3179,6 +3205,7 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+
       EXEC RDT.rdt_STD_EventLog
        @cActionType = '9', -- Sign Out function
        @cUserID     = @cUserName,
@@ -3199,6 +3226,16 @@ BEGIN
       SET @cAreaKey = ''
       SET @cOutField01 = ''  -- Area
    END
+
+   Step_Exit_ExtScn:
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_Exit_Fail:
@@ -3369,7 +3406,6 @@ BEGIN
          GOTO Step_99
       END
    END
-
    GOTO Quit
 
    Step_ShortPick_Fail:

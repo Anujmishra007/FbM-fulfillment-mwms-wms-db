@@ -15,4 +15,7 @@ EXECUTE rdt.rdtAddMsg 271260, 10, '271260^DiffWaveKey',      'us_english', 1641,
 EXECUTE rdt.rdtAddMsg 271261, 10, '271261^DiffConsigneeKey', 'us_english', 1641, 0, '271261 Different ConsigneeKey'
 EXECUTE rdt.rdtAddMsg 271262, 10, '271262^InvLoc',           'us_english', 1641, 0, '271262 Invalid Loc'
 
+-- UWP-63642
+EXECUTE rdt.rdtAddMsg 271263, 10, '271263^InvLocType',       'us_english', 1641, 0, '271263 Location Type must be POSTPICK or STAGEOB'
+
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 271251 AND 271300

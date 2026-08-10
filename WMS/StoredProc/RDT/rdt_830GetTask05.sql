@@ -132,7 +132,8 @@ BEGIN
       SET @cPickConfirmStatus = '5'
    SET @cVerifyID = rdt.RDTGetConfig( @nFunc, 'VerifyID', @cStorerKey)
 
-   -- Get PickHeader info
+   SELECT @cPUOM = V_UOM FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+
    SET @cOrderKey = ''
    SET @cLoadKey  = ''
    SET @cZone     = ''

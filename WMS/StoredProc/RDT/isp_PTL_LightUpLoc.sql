@@ -95,82 +95,83 @@ BEGIN
 		AND ll.DevicePosition=@c_DevicePos 
 		AND ll.IPAddress=@c_DeviceIP
 
-   IF  @c_DeviceModel NOT IN ('TMS')
+   -- FCR-13139: AMX_Sorter/AMX_Packer use LOC (not DevicePosition) for CODELKUP lookup, skip DeviceProfile validation
+   IF  @c_DeviceModel NOT IN ('TMS', 'AMX_Sorter', 'AMX_Packer')
    BEGIN
-      IF (@c_DeviceID = '' AND  @c_DevicePos = '' AND  @c_DeviceIP = '' )       
-      BEGIN    
-         IF ISNULL(@n_PTLKey,0) = 0    
-         BEGIN    
-            SET @n_Err = 94051    
-            SET @c_ErrMsg = '94051 - PTLKey Requied'    
-            SET @n_Continue=3    
-            GOTO Quit    
-         END    
-    
-    
-         --SET @c_DeviceIP = ''    
-         SELECT @c_StorerKey = p.Storerkey,    
-                @c_DeviceID  = p.DeviceID,    
-                @c_DeviceIP  = p.IPAddress,    
-                @c_DevicePos = p.DevicePosition,    
-                @c_LModMode  = p.LightMode    
-                --@c_DisplayValue = p.DisplayValue    
-         FROM   PTL.PTLTran AS p WITH (NOLOCK)    
-         WHERE p.PTLKey = @n_PTLKey    
-         AND   p.[Status]<>'9'    
-    
-    
-      END    
-      ELSE --IF @c_DeviceID <> ''    
-      BEGIN    
-         SELECT   @c_DeviceType = ll.DeviceType    
-                 --,@c_DeviceProLogKey = ll.DeviceProfileLogKey    
-                 ,@c_StorerKey = ll.StorerKey  
+      IF (@c_DeviceID = '' AND  @c_DevicePos = '' AND  @c_DeviceIP = '' )
+      BEGIN
+         IF ISNULL(@n_PTLKey,0) = 0
+         BEGIN
+            SET @n_Err = 94051
+            SET @c_ErrMsg = '94051 - PTLKey Requied'
+            SET @n_Continue=3
+            GOTO Quit
+         END
+
+
+         --SET @c_DeviceIP = ''
+         SELECT @c_StorerKey = p.Storerkey,
+                @c_DeviceID  = p.DeviceID,
+                @c_DeviceIP  = p.IPAddress,
+                @c_DevicePos = p.DevicePosition,
+                @c_LModMode  = p.LightMode
+                --@c_DisplayValue = p.DisplayValue
+         FROM   PTL.PTLTran AS p WITH (NOLOCK)
+         WHERE p.PTLKey = @n_PTLKey
+         AND   p.[Status]<>'9'
+
+
+      END
+      ELSE --IF @c_DeviceID <> ''
+      BEGIN
+         SELECT   @c_DeviceType = ll.DeviceType
+                 --,@c_DeviceProLogKey = ll.DeviceProfileLogKey
+                 ,@c_StorerKey = ll.StorerKey
                  , @cLoc=  ll.Loc
-         FROM DeviceProfile ll WITH (NOLOCK)    
-         WHERE ll.DeviceID = @c_DeviceID   
-         AND ll.DevicePosition=@c_DevicePos 
+         FROM DeviceProfile ll WITH (NOLOCK)
+         WHERE ll.DeviceID = @c_DeviceID
+         AND ll.DevicePosition=@c_DevicePos
          AND ll.IPAddress=@c_DeviceIP
-      END    
-    
-      IF ISNULL(RTRIM(@c_LModMode),'')  = ''    
-      BEGIN    
-         SET @c_LModMode = rdt.RDTGetConfig( @n_Func, 'LightMode', @c_StorerKey)    
-      END    
-    
-      IF ISNULL(RTRIM(@c_DeviceIP), '') = '' AND  @c_DeviceModel NOT IN ('TMS')      
-      BEGIN    
-         SET @n_Err = 94053    
-         SET @c_ErrMsg = '94053 - IP Address cannot be NULL'    
-         SET @n_Continue=3    
-         GOTO Quit    
-      END    
-    
-      IF ISNULL(RTRIM(@c_DevicePos),'') = ''    
-      BEGIN    
-         SET @n_Err = 94054    
-         SET @c_ErrMsg = '94054 - DevicePosition cannot be NULL'    
-         SET @n_Continue = 3    
-         GOTO Quit    
-      END    
-    
-      IF ISNULL(RTRIM(@c_LModMode),'') = ''    
-      BEGIN    
-         SET @n_Err = 94055    
-         SET @c_ErrMsg = '94055 - LightMode cannot be NULL'    
-         SET @n_Continue =3    
-         GOTO Quit    
-      END    
-    
-      IF NOT EXISTS(SELECT 1 FROM DeviceProfile As dp WITH (NOLOCK)    
-                    WHERE dp.IPAddress = @c_DeviceIP    
-                    AND   dp.DevicePosition = @c_DevicePos)    
-      BEGIN    
-         SET @n_Err = 94056    
-         SET @c_ErrMsg = '94055 - Device Position and Location cannot be found in DeviceProfile'    
-         SET @n_Continue = 3    
-         GOTO Quit    
-      END   
+      END
+
+      IF ISNULL(RTRIM(@c_LModMode),'')  = ''
+      BEGIN
+         SET @c_LModMode = rdt.RDTGetConfig( @n_Func, 'LightMode', @c_StorerKey)
+      END
+
+      IF ISNULL(RTRIM(@c_DeviceIP), '') = '' AND  @c_DeviceModel NOT IN ('TMS')
+      BEGIN
+         SET @n_Err = 94053
+         SET @c_ErrMsg = '94053 - IP Address cannot be NULL'
+         SET @n_Continue=3
+         GOTO Quit
+      END
+
+      IF ISNULL(RTRIM(@c_DevicePos),'') = ''
+      BEGIN
+         SET @n_Err = 94054
+         SET @c_ErrMsg = '94054 - DevicePosition cannot be NULL'
+         SET @n_Continue = 3
+         GOTO Quit
+      END
+
+      IF ISNULL(RTRIM(@c_LModMode),'') = ''
+      BEGIN
+         SET @n_Err = 94055
+         SET @c_ErrMsg = '94055 - LightMode cannot be NULL'
+         SET @n_Continue =3
+         GOTO Quit
+      END
+
+      IF NOT EXISTS(SELECT 1 FROM DeviceProfile As dp WITH (NOLOCK)
+                    WHERE dp.IPAddress = @c_DeviceIP
+                    AND   dp.DevicePosition = @c_DevicePos)
+      BEGIN
+         SET @n_Err = 94056
+         SET @c_ErrMsg = '94056 - Device Position and Location cannot be found in DeviceProfile'
+         SET @n_Continue = 3
+         GOTO Quit
+      END
    END
 
    IF @c_DeviceModel ='TOWER'
@@ -310,7 +311,107 @@ BEGIN
 
 
    END
-  
+   ELSE IF @c_DeviceModel  = 'AMX_Sorter'-- For American Egale
+   BEGIN
+      -- FCR-13139: Convert LOC + Color to actual light position from CODELKUP.AEO_PTWSTG
+      -- @c_DevicePos = LOC (e.g., M5WHW01A1)
+      -- @c_ForceColor = Color name (YELLOW/GREEN/RED)
+      -- Result: UDF01 for YELLOW, UDF02 for GREEN, UDF03 for RED
+
+      -- Get StorerKey, Facility, PortNo from DeviceProfile using DeviceID and LOC
+      IF ISNULL(@c_StorerKey, '') = ''
+      BEGIN
+         SELECT TOP 1 @c_StorerKey = StorerKey, @cFacility = Facility, @cPORT = PortNo
+         FROM dbo.DeviceProfile WITH (NOLOCK)
+         WHERE DeviceID = @c_DeviceID
+           AND LOC = @c_DevicePos
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @cFacility = Facility, @cPORT = PortNo
+         FROM dbo.DeviceProfile WITH (NOLOCK)
+         WHERE DeviceID = @c_DeviceID
+           AND LOC = @c_DevicePos
+      END
+
+      DECLARE @cLightPos NVARCHAR(20)
+      SELECT TOP 1 @cLightPos = CASE @c_ForceColor
+            WHEN 'YELLOW' THEN UDF01
+            WHEN 'GREEN' THEN UDF02
+            WHEN 'RED' THEN UDF03
+            ELSE ''
+         END
+      FROM dbo.CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'AEO_PTWSTG'
+        AND Code = @c_DevicePos
+        AND StorerKey = @c_StorerKey
+
+      -- Only send if position found
+      IF ISNULL(@cLightPos, '') <> ''
+      BEGIN
+         -- FCR-13139: Sorter Side Light for AEOMX PTW/PTL
+         -- Scenario 1: Show qty with user's color
+         --   Full UCC: qty = '01' always
+         --   Unit Level: qty = remaining SKU count (e.g., '04')
+         -- Scenario 2: Sort complete -> GREEN light with 'FF'
+         -- Format: P100{LONG} {QTY} - single P, LONG=position from CODELKUP, QTY=4 digits (only last 2 displayed)
+         -- @c_DisplayValue is already 2 digits (e.g., '01', '04', 'FF'), pad to 4 digits
+         DECLARE @cQty4Digit NVARCHAR(4)
+         SET @cQty4Digit = RIGHT('00' + @c_DisplayValue, 4)
+         SET @c_LightCommand = 'P100' + @cLightPos + ' ' + @cQty4Digit
+         --Ex: P1000027 0001 (Full UCC, position 0027, qty 01)
+         --Ex: P1000028 0004 (Unit level, position 0028, 4 remaining)
+         --Ex: P1000027 00FF (Sort complete, position 0027, flashy)
+      END
+      ELSE
+      BEGIN
+         -- Position not found, skip sending
+         SET @n_Continue = 0
+         GOTO Quit
+      END
+   END
+   ELSE IF @c_DeviceModel = 'AMX_Packer' -- FCR-13139: Packer side for AEOMX PTW/PTL
+   BEGIN
+      -- @c_DevicePos = Packer light position from CODELKUP.AEO_PTWSTG.UDF04
+      -- @c_ForceColor = 'GREEN' or 'BLUE'
+      -- Scenario 3 (Green): ECOM always, or WHSLE/RTL when back loc empty (inventory moved to back)
+      -- Scenario 4 (Blue): WHSLE/RTL only, when back loc occupied (inventory stayed in front)
+      -- Format: PP1050000m1$21$XX$21m2$11$11$11m4$50ma$40{position}$20$20101
+      --   m1$21$XX$21 = Initial behavior (21=Green ON, 12=Blue ON)
+      --   m2$11$11$11 = After button press: light OFF
+      --   m4$50ma$40{position} = Packer side light address
+      --   $20$20101 = Trailer
+
+      -- FCR-13139: Get Facility and PortNo from DeviceProfile using DeviceID and IPAddress
+      IF ISNULL(@cFacility, '') = ''
+      BEGIN
+         SELECT TOP 1 @cFacility = Facility, @cPORT = PortNo
+         FROM dbo.DeviceProfile WITH (NOLOCK)
+         WHERE DeviceID = @c_DeviceID
+           AND IPAddress = @c_DeviceIP
+      END
+
+      IF ISNULL(@c_DevicePos, '') <> ''
+      BEGIN
+         DECLARE @cPackerColorCode NVARCHAR(2)
+         SET @cPackerColorCode = CASE @c_ForceColor
+            WHEN 'GREEN' THEN '21'
+            WHEN 'BLUE' THEN '12'
+            ELSE '21'  -- Default to GREEN
+         END
+
+         SET @c_LightCommand = 'PP1050000m1$21$' + @cPackerColorCode + '$21m2$11$11$11m4$50ma$40'
+         SET @c_LightCommand = @c_LightCommand + @c_DevicePos + '$20$20101'
+         --Ex: PP1050000m1$21$21$21m2$11$11$11m4$50ma$401005$20$20101 (Scenario 3: Green)
+         --Ex: PP1050000m1$21$12$21m2$11$11$11m4$50ma$401005$20$20101 (Scenario 4: Blue)
+      END
+      ELSE
+      BEGIN
+         SET @n_Continue = 0
+         GOTO Quit
+      END
+   END
+
   	SET @cFacility = CASE WHEN ISNULL(@cFacility,'') ='' THEN '' ELSE @cFacility END
 
    SET @dAddDate = Getdate()    

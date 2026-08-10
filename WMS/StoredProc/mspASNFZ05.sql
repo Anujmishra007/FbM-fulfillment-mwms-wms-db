@@ -67,17 +67,17 @@ BEGIN
          , @c_Lottable03         NVARCHAR(18)   = ''
          , @c_Lottable04        DATETIME       = NULL
          , @c_Lottable05        DATETIME       = NULL
-         , @c_Lottable06        NVARCHAR(18)   = ''
-         , @c_Lottable07        NVARCHAR(18)   = ''
+         , @c_Lottable06        NVARCHAR(30)   = ''
+         , @c_Lottable07        NVARCHAR(30)   = ''
          , @c_Lottable08         NVARCHAR(30)   = ''
-         , @c_Lottable09        NVARCHAR(18)   = ''
-         , @c_Lottable10        NVARCHAR(18)   = ''
-         , @c_Lottable11       NVARCHAR(18)   = ''
-         , @c_Lottable12       NVARCHAR(18)   = ''
+         , @c_Lottable09        NVARCHAR(30)   = ''
+         , @c_Lottable10        NVARCHAR(30)   = ''
+         , @c_Lottable11       NVARCHAR(30)   = ''
+         , @c_Lottable12       NVARCHAR(30)   = ''
          , @c_Lottable13       DATETIME       = NULL
          , @c_Lottable14        DATETIME       = NULL
          , @c_Lottable15        DATETIME       = NULL
-         , @c_UserDefine02       NVARCHAR(15)  = ''
+         , @c_UserDefine02       NVARCHAR(18)  = ''
          , @c_ExternPOKey        NVARCHAR(20)  = ''
          , @CUR_RECDET           CURSOR
          , @c_NewTran            NVARCHAR(1) = 'N'
@@ -91,12 +91,12 @@ BEGIN
          , @n_totweight          DECIMAL(20,4)
          , @n_totcube            DECIMAL(20,4)
          , @n_TotalCartons       INT            = 0
-         , @c_UserDefine03       NVARCHAR(30)  = ''
-         , @c_UserDefine04       NVARCHAR(30)  = ''
-         , @c_UserDefine05       NVARCHAR(30)  = ''
-         , @c_UserDefine08       NVARCHAR(30)  = ''
-         , @c_UserDefine09       NVARCHAR(30)  = ''
-         , @c_UserDefine10       NVARCHAR(30)  = ''
+         , @c_UserDefine03       NVARCHAR(18)  = ''
+         , @c_UserDefine04       NVARCHAR(18)  = ''
+         , @c_UserDefine05       NVARCHAR(18)  = ''
+         , @c_UserDefine08       NVARCHAR(18)  = ''
+         , @c_UserDefine09       NVARCHAR(18)  = ''
+         , @c_UserDefine10       NVARCHAR(18)  = ''
          , @n_NetWgt             DECIMAL(20,4) = 0
          , @n_OtherUnit1         DECIMAL(20,4) = 0
          , @n_OtherUnit2         DECIMAL(20,4) = 0
@@ -160,6 +160,7 @@ BEGIN
 
    CREATE TABLE #TMP_ORDDTL
       (  OrderKey          NVARCHAR(10)   NOT NULL   DEFAULT('')
+      ,  ExternOrderKey    NVARCHAR(50)   NOT NULL   DEFAULT ('')
       ,  ExternLineNo      NVARCHAR(20)   NOT NULL   DEFAULT('')
       ,  POkey             NVARCHAR(10)   NULL
       ,  StorerKey         NVARCHAR(15)   NULL
@@ -471,6 +472,7 @@ BEGIN
 
 	        INSERT INTO #TMP_ORDDTL
             (  OrderKey
+            ,  ExternOrderKey
             ,  ExternLineNo
             ,  Storerkey
             ,  Sku
@@ -508,7 +510,7 @@ BEGIN
             ,  ExtendedPrice
             ,  GrossWeight
             ,  Capacity
-            ) values (@c_Orderkey,  @c_ExternLineNo,@c_Storerkey,@c_Sku
+            ) values (@c_Orderkey, @c_ExternPOKey, @c_ExternLineNo,@c_Storerkey,@c_Sku
                      , @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable01
                      , @c_Lottable02, @c_Lottable03, @c_Lottable04, @c_Lottable05
                      , @c_UserDefine02, @c_POKey, @c_ExternPOKey,   @c_Lottable06
@@ -649,6 +651,7 @@ BEGIN
    
       INSERT INTO ORDERDETAIL
             (  Orderkey
+            ,  ExternOrderKey
             ,  OrderLineNumber
             ,  POKey
             ,  ExternLineNo
@@ -692,6 +695,7 @@ BEGIN
             ,  Capacity
             )
       SELECT td.Orderkey
+            ,td.ExternOrderKey
             ,OrderLineNumber =  RIGHT('00000' + CONVERT(NVARCHAR(5),
                                  ROW_NUMBER() OVER ( PARTITION BY td.Orderkey
                                                    ORDER BY td.ExternLineNo
