@@ -56,44 +56,57 @@ BEGIN
          , @c_Notes                 NVARCHAR(100)  = ''
 
          , @n_Qty                   INT            = 0
-         , @n_QtyLeft               INT            = 0
          , @n_Qty_pd                INT            = 0
          , @n_QtyToPack             INT            = 0
          , @n_QtyToPack_cd          INT            = 0
          , @n_QtyToPack_ins         INT            = 0
-         , @n_MaxQtyPerCtn          INT            = 0
          , @n_QtyPacked             INT            = 0
          , @n_CartonSeqNo           INT            = 0
          , @n_CartonNo_Last         INT            = 0
          , @n_RowID_cd              INT            = 0
 
-         , @n_Length                FLOAT          = 0.00
-         , @n_Width                 FLOAT          = 0.00
-         , @n_Height                FLOAT          = 0.00
          , @n_Weight                FLOAT          = 0.00
-         , @n_Cube                  FLOAT          = 0.00
+         , @n_CartonCube            FLOAT          = 0.00
          , @n_CubeUOM3              FLOAT          = 0.00
          , @n_NetWgt                FLOAT          = 0.00
-         , @n_LineCBM               FLOAT          = 0.00
          , @n_CartonWeight          FLOAT          = 0.00
+         , @b_NewCarton             BIT            = 1
 
          , @cur_ORD                 CURSOR
          , @cur_UOM6                CURSOR
          , @cur_LBL                 CURSOR
          , @cur_SPLPD               CURSOR
-         , @cur_PDSKU               CURSOR
 
-   DECLARE @t_CZ                 TABLE
-         (  [CartonizationKey]   [nvarchar](10)    PRIMARY KEY                   
-         ,  [CartonizationGroup] [nvarchar](10)    NOT NULL     
-         ,  [CartonType]         [nvarchar](30)    NOT NULL  
-         ,  [Cube]               [float]           NOT NULL  
-         ,  [MaxWeight]          [float]           NOT NULL  
-         ,  [CartonWeight]       [float]           NULL  
-         ,  [CartonLength]       [float]           NULL  
-         ,  [CartonWidth]        [float]           NULL  
-         ,  [CartonHeight]       [float]           NULL  
-         ) 
+         , @n_ItemCBM               FLOAT          = 0.00
+         , @n_ItemWgt               FLOAT          = 0.00
+         , @n_TotalCBM              FLOAT          = 0.00
+         , @n_TotalWgt              FLOAT          = 0.00
+         , @n_CBMLeftToFulFill      FLOAT          = 0.00
+         , @n_WgtLeftToFulFill      FLOAT          = 0.00
+         , @n_QtyCBM                INT            = 0
+         , @n_QtyWgt                INT            = 0
+         , @c_CartonType_Max        NVARCHAR(10)   = ''
+         , @n_CartonCube_Max        FLOAT          = 0.00
+         , @n_CartonWeight_Max      FLOAT          = 0.00
+         , @n_Length                FLOAT          = 0.00
+         , @n_Width                 FLOAT          = 0.00
+         , @n_Height                FLOAT          = 0.00
+         , @n_CartonLength_Max      FLOAT          = 0.00
+         , @n_CartonWidth_Max       FLOAT          = 0.00
+         , @n_CartonHeight_Max      FLOAT          = 0.00
+         , @n_GetSmaller            INT            = 1
+
+   CREATE TABLE #CTNZ
+      (  RowID                INT            IDENTITY(1,1) PRIMARY KEY
+      ,  CartonizationGroup   NVARCHAR(10)   NOT NULL DEFAULT ('')
+      ,  CartonType           NVARCHAR(10)   NOT NULL DEFAULT ('')
+      ,  [Cube]               FLOAT          NOT NULL DEFAULT (0.00)
+      ,  MaxWeight            FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonWeight         FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonLength         FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonWidth          FLOAT          NOT NULL DEFAULT (0.00)
+      ,  CartonHeight         FLOAT          NOT NULL DEFAULT (0.00)
+      )
 
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -206,18 +219,17 @@ BEGIN
    
    IF @n_Continue = 1
    BEGIN
-      INSERT INTO @t_CZ
-            (  CartonizationKey, CartonizationGroup, CartonType, [Cube], MaxWeight
-            ,  CartonWeight, CartonLength, CartonWidth, CartonHeight )
-      SELECT   cz.CartonizationKey, cz.CartonizationGroup, cz.CartonType, cz.[Cube], cz.MaxWeight
-            ,  0.00   --ISNULL(cz.CartonWeight,0.00)
-            ,  ISNULL(cz.CartonLength,0.00)
-            ,  ISNULL(cz.CartonWidth,0.00), ISNULL(cz.CartonHeight,0.00)
+      INSERT INTO #CTNZ ( CartonizationGroup, CartonType, [Cube], MaxWeight
+                        , CartonWeight, CartonLength, CartonWidth, CartonHeight )
+      SELECT  cz.CartonizationGroup, cz.CartonType, cz.[Cube], cz.MaxWeight
+            , 0.00   --ISNULL(cz.CartonWeight,0.00)
+            , ISNULL(cz.CartonLength,0.00)
+            , ISNULL(cz.CartonWidth,0.00), ISNULL(cz.CartonHeight,0.00)
       FROM CARTONIZATION cz (NOLOCK)
       WHERE cz.CartonizationGroup = @c_CartonGroup
-      ORDER BY cz.[Cube]
+      ORDER BY cz.[Cube] DESC
 
-      IF NOT EXISTS (SELECT 1 FROM @t_CZ)
+      IF NOT EXISTS (SELECT 1 FROM #CTNZ)
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 64010
@@ -243,6 +255,23 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
       BEGIN
+         SET @b_NewCarton        = 1
+         SET @n_TotalCBM         = 0.00
+         SET @n_TotalWgt         = 0.00
+         SET @n_CBMLeftToFulFill = 0.00
+         SET @n_WgtLeftToFulFill = 0.00
+         SET @c_CartonType       = ''
+         SET @n_CartonCube       = 0.00
+         SET @n_CartonWeight     = 0.00
+         SET @n_Length           = 0.00
+         SET @n_Width            = 0.00
+         SET @n_Height           = 0.00
+         SET @c_PickDetailKey    = ''
+         SET @n_Qty_pd           = 0
+         SET @c_RefPickKey       = ''
+         SET @c_RefPickMode      = ''
+         SET @n_QtyPacked        = 0
+
          -------------------------------------------------------
          -- UOM = '2'
          -------------------------------------------------------
@@ -311,6 +340,16 @@ BEGIN
          WHERE cd.OrderKey = @c_Orderkey
          ORDER BY cd.CartonSeqNo DESC
 
+         SELECT TOP 1
+                @c_CartonType_Max    = cz.CartonType
+              , @n_CartonCube_Max    = cz.[Cube]
+              , @n_CartonWeight_Max  = ISNULL(cz.MaxWeight,0)
+              , @n_CartonLength_Max  = ISNULL(cz.CartonLength,0)
+              , @n_CartonWidth_Max   = ISNULL(cz.CartonWidth,0)
+              , @n_CartonHeight_Max  = ISNULL(cz.CartonHeight,0)
+         FROM #CTNZ AS cz
+         ORDER BY cz.RowID ASC
+
          SET @cur_UOM6 = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT pw.Sku
               , Qty      = SUM(pw.Qty)
@@ -332,164 +371,310 @@ BEGIN
 
          WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
          BEGIN
-            SET @n_QtyLeft = @n_Qty
-            SET @n_LineCBM = @n_CubeUOM3 * @n_QtyLeft
-            SET @c_CartonType = ''
-            SET @n_Length = 0
-            SET @n_Width  = 0
-            SET @n_Height = 0
-            SET @n_Cube   = 0
-            SET @n_CartonWeight = 0
             SET @c_PickDetailKey = ''
-            SET @n_Qty_pd = 0
-            SET @c_RefPickKey = ''
-            SET @c_RefPickMode = ''
-            
-            -- Prefer smallest carton that fits total SKU volume
-            SELECT TOP 1
-                   @c_CartonType   = cz.CartonType
-                 , @n_Cube         = cz.[Cube]
-                 , @n_Length       = cz.CartonLength
-                 , @n_Width        = cz.CartonWidth
-                 , @n_Height       = cz.CartonHeight
-                 , @n_CartonWeight = ISNULL(cz.CartonWeight,0)
-            FROM @t_CZ AS cz
-            WHERE cz.[Cube] >= @n_LineCBM
-            ORDER BY cz.[Cube]
+            SET @n_Qty_pd        = 0
+            SET @c_RefPickKey    = ''
+            SET @c_RefPickMode   = ''
+            SET @n_QtyPacked     = 0
 
-            -- Else use largest and split across cartons
-            IF ISNULL(@c_CartonType,'') = ''
+            WHILE @n_Qty > 0 AND @n_Continue = 1
             BEGIN
-               SELECT TOP 1
-                      @c_CartonType   = cz.CartonType
-                    , @n_Cube         = cz.[Cube]
-                    , @n_Length       = cz.CartonLength
-                    , @n_Width        = cz.CartonWidth
-                    , @n_Height       = cz.CartonHeight
-                    , @n_CartonWeight = ISNULL(cz.CartonWeight,0)
-               FROM @t_CZ AS cz
-               ORDER BY cz.[Cube] DESC
-            END
+               SET @n_GetSmaller = 1
 
-            IF ISNULL(@c_CartonType,'') = ''
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_Err = 64040
-               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err)
-                              + ': Carton Type not found for OrderKey=' + TRIM(@c_Orderkey)
-                              + ' SKU=' + TRIM(@c_Sku)
-                              + ' (mspRLWAV14_PACK)'
-               BREAK
-            END
-            
-            IF @n_CubeUOM3 > 0 AND @n_Cube > 0
-               SET @n_MaxQtyPerCtn = FLOOR(@n_Cube / @n_CubeUOM3)
-            ELSE
-               SET @n_MaxQtyPerCtn = @n_QtyLeft
-
-            IF @n_MaxQtyPerCtn <= 0
-               SET @n_MaxQtyPerCtn = @n_QtyLeft
-
-            -- Keep @n_Qty_pd / @c_RefPickKey / @c_RefPickMode across cartons
-            -- so remaining qty on the same pickdetail continues into the next carton
-            WHILE @n_QtyLeft > 0 AND @n_Continue = 1
-            BEGIN
-               SET @n_QtyToPack = CASE WHEN @n_QtyLeft > @n_MaxQtyPerCtn
-                                       THEN @n_MaxQtyPerCtn
-                                       ELSE @n_QtyLeft END
-               SET @n_CartonSeqNo = @n_CartonSeqNo + 1
-               SET @n_QtyToPack_cd = @n_QtyToPack
-               SET @n_QtyPacked = 0
-
-               -- Do not get next record if pickdetail still have remainqty
-               WHILE @n_QtyToPack_cd > 0 AND @n_Continue = 1
+               IF @n_Qty > 0
                BEGIN
-                  IF @n_Qty_pd = 0
+                  IF @b_NewCarton = 1
                   BEGIN
-                     SET @c_RefPickMode = ''
-                     SET @c_RefPickKey  = ''
-                     SET @c_Notes       = ''
+                     SET @c_CartonType    = @c_CartonType_Max   
+                     SET @n_CartonCube    = @n_CartonCube_Max   
+                     SET @n_CartonWeight  = @n_CartonWeight_Max 
+                     SET @n_Length        = @n_CartonLength_Max 
+                     SET @n_Width         = @n_CartonWidth_Max  
+                     SET @n_Height        = @n_CartonHeight_Max
 
-                     SELECT TOP 1
-                            @c_RefPickKey = pw.PickDetailKey
-                          , @n_Qty_pd     = pw.Qty
-                     FROM #PICKDETAIL_WIP AS pw
-                     WHERE pw.OrderKey = @c_Orderkey
-                     AND pw.Sku = @c_Sku
-                     AND pw.UOM = '6'
-                     AND ISNULL(pw.CaseID,'') = ''
-                     AND pw.Qty > 0
-                     AND pw.PickDetailKey > @c_PickDetailKey
-                     ORDER BY pw.PickDetailKey
-
-                     SET @n_RowCount = @@ROWCOUNT
-                     IF @n_RowCount = 0
-                        BREAK
-
-                     SET @c_PickDetailKey = @c_RefPickKey
-
-                     SET @c_Notes = 'RefPickKey: ' + TRIM(@c_RefPickKey)
-                                  + ' Qty: ' + CONVERT(NVARCHAR(10), @n_Qty_pd)
+                     SET @n_CartonSeqNo = @n_CartonSeqNo + 1
+                     SET @n_TotalCBM   = 0.00   --Reset CBM
+                     SET @n_TotalWgt   = 0.00   --Reset Wgt
+                     SET @n_CBMLeftToFulFill = @n_CartonCube
+                     SET @n_WgtLeftToFulFill = @n_CartonWeight
                   END
 
-                  SET @n_QtyToPack_ins = @n_QtyToPack_cd
-                  IF @n_Qty_pd <= @n_QtyToPack_cd
-                     SET @n_QtyToPack_ins = @n_Qty_pd
+                  IF @n_Continue = 1
+                  BEGIN
+                     SET @n_QtyToPack = 0
+                     SET @n_ItemCBM = 0.00
+                     SET @n_ItemWgt = 0.00
+                     SET @n_ItemCBM = @n_CubeUOM3 * @n_Qty
+                     SET @n_ItemWgt = @n_NetWgt * @n_Qty
+                     SET @n_QtyCBM = 0
+                     SET @n_QtyWgt = 0
 
-                  -- blank -> S (first portion of this pickdetail)
-                  -- S -> N (subsequent cartons from same pickdetail)
-                  IF @c_RefPickMode = ''
-                     SET @c_RefPickMode = 'S'
-                  ELSE IF @c_RefPickMode = 'S'
-                     SET @c_RefPickMode = 'N'
+                     IF @n_CubeUOM3 > 0
+                     BEGIN
+                        IF @n_CubeUOM3 > @n_CBMLeftToFulFill
+                        BEGIN
+                           SET @n_QtyCBM = 0
+                        END
+                        ELSE IF @n_CBMLeftToFulFill > @n_ItemCBM
+                        BEGIN
+                           SET @n_QtyCBM = FLOOR(ROUND(@n_ItemCBM / @n_CubeUOM3, 12))
+                        END
+                        ELSE
+                        BEGIN
+                           SET @n_QtyCBM = FLOOR(ROUND(@n_CBMLeftToFulFill / @n_CubeUOM3, 12))
+                        END
+                     END
 
-                  SET @n_Qty_pd = @n_Qty_pd - @n_QtyToPack_ins
-                  SET @n_QtyToPack_cd = @n_QtyToPack_cd - @n_QtyToPack_ins
-                  SET @n_QtyPacked = @n_QtyPacked + @n_QtyToPack_ins
+                     IF @n_NetWgt > 0 AND @n_CartonWeight > 0
+                     BEGIN
+                        IF @n_NetWgt > @n_WgtLeftToFulFill
+                        BEGIN
+                           SET @n_QtyWgt = 0
+                        END
+                        ELSE IF @n_WgtLeftToFulFill > @n_ItemWgt
+                        BEGIN
+                           SET @n_QtyWgt = FLOOR(ROUND(@n_ItemWgt / @n_NetWgt, 12))
+                        END
+                        ELSE
+                        BEGIN
+                           SET @n_QtyWgt = FLOOR(ROUND(@n_WgtLeftToFulFill / @n_NetWgt, 12))
+                        END
+                     END
+                     
+                     IF @n_CubeUOM3 > 0 AND @n_NetWgt > 0 AND @n_CartonWeight > 0
+                     BEGIN
+                        IF @n_QtyWgt < @n_QtyCBM
+                           SET @n_QtyToPack = @n_QtyWgt
+                        ELSE
+                           SET @n_QtyToPack = @n_QtyCBM
+                     END
+                     ELSE IF @n_CubeUOM3 > 0
+                        SET @n_QtyToPack = @n_QtyCBM
+                     ELSE IF @n_NetWgt > 0 AND @n_CartonWeight > 0
+                        SET @n_QtyToPack = @n_QtyWgt
+                     ELSE
+                        SET @n_QtyToPack = 0
+                  END
 
-                  SET @n_Weight = @n_NetWgt * @n_QtyToPack_ins
+                  SET @n_QtyToPack = IIF(@n_QtyToPack < 0, 0, @n_QtyToPack)
 
-                  INSERT INTO #CartonDetail
-                     (  PickDetailKey, OrderKey, CartonGroup, CartonType, CartonSeqNo
-                     ,  CartonCube, CartonWeight, LabelNo, Storerkey, Sku
-                     ,  [Length], [Width], [Height], [Weight], UOM, Qty
-                     ,  DropID, RefPickKey, RefPickMode, Notes, [Status] )
-                  SELECT
-                        pw.PickDetailKey
-                     ,  pw.OrderKey
-                     ,  @c_CartonGroup
-                     ,  @c_CartonType
-                     ,  @n_CartonSeqNo
-                     ,  @n_Cube
-                     ,  @n_CartonWeight
-                     ,  ''
-                     ,  @c_Storerkey
-                     ,  pw.Sku
-                     ,  @n_Length
-                     ,  @n_Width
-                     ,  @n_Height
-                     ,  @n_Weight
-                     ,  '6'
-                     ,  @n_QtyToPack_ins
-                     ,  ''
-                     ,  @c_RefPickKey
-                     ,  @c_RefPickMode
-                     ,  @c_Notes
-                     ,  '9'
-                  FROM #PICKDETAIL_WIP AS pw
-                  WHERE pw.PickDetailKey = @c_RefPickKey
-               END  -- consume pickdetails for this carton
+                  IF @n_QtyToPack = 0 AND @b_NewCarton = 0
+                  BEGIN
+                     SET @b_NewCarton = 1
+                     GOTO CLOSE_CTN
+                  END
 
-               -- Only deduct qty actually packed (avoid phantom drain if no pickdetail found)
-               SET @n_QtyLeft = @n_QtyLeft - @n_QtyPacked
-               IF @n_QtyPacked <= 0
-                  BREAK
-            END  -- WHILE SKU qty left
+                  -- Item Cannot pack into Large Carton (1 qty per empty max carton)
+                  IF @n_QtyToPack = 0 AND @b_NewCarton = 1 AND @n_TotalCBM = 0 AND @n_TotalWgt = 0
+                  BEGIN
+                     SET @n_QtyToPack    = 1
+                     SET @n_GetSmaller   = 0
+                     SET @c_CartonType   = @c_CartonType_Max
+                     SET @n_CartonCube   = @n_CartonCube_Max
+                     SET @n_CartonWeight = @n_CartonWeight_Max
+                     SET @n_Length       = @n_CartonLength_Max
+                     SET @n_Width        = @n_CartonWidth_Max
+                     SET @n_Height       = @n_CartonHeight_Max
+                     SET @n_CBMLeftToFulFill = @n_CartonCube
+                     SET @n_WgtLeftToFulFill = @n_CartonWeight
+                  END
+
+                  IF @n_QtyToPack = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                     SET @n_Err = 64060
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err)
+                                    + ': Unable to pack OrderKey=' + TRIM(@c_Orderkey)
+                                    + ' SKU=' + TRIM(@c_Sku)
+                                    + ' QtyLeft=' + CONVERT(NVARCHAR(10), @n_Qty)
+                                    + ' (mspRLWAV14_PACK)'
+                     BREAK
+                  END
+
+                  IF @n_QtyToPack > 0
+                  BEGIN
+                     SET @b_NewCarton = 0
+                     IF @n_Continue = 1 AND @n_QtyToPack > 0
+                     BEGIN
+                        SET @n_QtyToPack_cd = @n_QtyToPack
+                        SET @n_QtyPacked    = 0
+
+                        -- Do not get next record if pickdetail still have remainqty
+                        WHILE @n_QtyToPack_cd > 0 AND @n_Continue = 1
+                        BEGIN
+                           IF @n_Qty_pd = 0
+                           BEGIN
+                              SET @c_RefPickMode = ''
+                              SET @c_RefPickKey  = ''
+                              SET @c_Notes       = ''
+                        
+                              SELECT TOP 1
+                                     @c_RefPickKey = pw.PickDetailKey
+                                   , @n_Qty_pd     = pw.Qty
+                              FROM #PICKDETAIL_WIP AS pw
+                              WHERE pw.OrderKey = @c_Orderkey
+                              AND pw.Sku = @c_Sku
+                              AND pw.UOM = '6'
+                              AND ISNULL(pw.CaseID,'') = ''
+                              AND pw.Qty > 0
+                              AND pw.PickDetailKey > @c_PickDetailKey
+                              ORDER BY pw.PickDetailKey
+                        
+                              SET @n_RowCount = @@ROWCOUNT
+                              IF @n_RowCount = 0
+                                 BREAK
+                        
+                              SET @c_PickDetailKey = @c_RefPickKey
+                        
+                              SET @c_Notes = 'RefPickKey: ' + TRIM(@c_RefPickKey)
+                                           + ' Qty: ' + CONVERT(NVARCHAR(10), @n_Qty_pd)
+                           END
+                        
+                           SET @n_QtyToPack_ins = @n_QtyToPack_cd
+                           IF @n_Qty_pd <= @n_QtyToPack_cd
+                              SET @n_QtyToPack_ins = @n_Qty_pd
+                        
+                           -- blank -> S (first portion of this pickdetail)
+                           -- S -> N (subsequent cartons from same pickdetail)
+                           IF @c_RefPickMode = ''
+                              SET @c_RefPickMode = 'S'
+                           ELSE IF @c_RefPickMode = 'S'
+                              SET @c_RefPickMode = 'N'
+                        
+                           SET @n_Qty_pd = @n_Qty_pd - @n_QtyToPack_ins
+                           SET @n_QtyToPack_cd = @n_QtyToPack_cd - @n_QtyToPack_ins
+                           SET @n_QtyPacked = @n_QtyPacked + @n_QtyToPack_ins
+                        
+                           SET @n_Weight = @n_NetWgt * @n_QtyToPack_ins
+                        
+                           INSERT INTO #CartonDetail
+                              (  PickDetailKey, OrderKey, CartonGroup, CartonType, CartonSeqNo
+                              ,  CartonCube, CartonWeight, LabelNo, Storerkey, Sku
+                              ,  [Length], [Width], [Height], [Weight], UOM, Qty
+                              ,  DropID, RefPickKey, RefPickMode, Notes, [Status] )
+                           SELECT
+                                 pw.PickDetailKey
+                              ,  pw.OrderKey
+                              ,  @c_CartonGroup
+                              ,  @c_CartonType
+                              ,  @n_CartonSeqNo
+                              ,  @n_CartonCube
+                              ,  @n_CartonWeight
+                              ,  ''
+                              ,  @c_Storerkey
+                              ,  pw.Sku
+                              ,  @n_Length
+                              ,  @n_Width
+                              ,  @n_Height
+                              ,  @n_Weight
+                              ,  '6'
+                              ,  @n_QtyToPack_ins
+                              ,  ''
+                              ,  @c_RefPickKey
+                              ,  @c_RefPickMode
+                              ,  @c_Notes
+                              ,  '0'
+                           FROM #PICKDETAIL_WIP AS pw
+                           WHERE pw.PickDetailKey = @c_RefPickKey
+                        END
+                        
+                        IF @n_QtyPacked <= 0
+                        BEGIN
+                           SET @n_Continue = 3
+                           SET @n_Err = 64070
+                           SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err)
+                                          + ': PickDetail not found/consumed for OrderKey=' + TRIM(@c_Orderkey)
+                                          + ' SKU=' + TRIM(@c_Sku)
+                                          + ' QtyToPack=' + CONVERT(NVARCHAR(10), @n_QtyToPack)
+                                          + ' (mspRLWAV14_PACK)'
+                           BREAK
+                        END
+
+                        SET @n_TotalCBM            = @n_TotalCBM + (@n_CubeUOM3 * @n_QtyPacked)
+                        SET @n_TotalWgt            = @n_TotalWgt + (@n_NetWgt * @n_QtyPacked)
+                        SET @n_CBMLeftToFulFill    = @n_CartonCube - @n_TotalCBM
+                        SET @n_WgtLeftToFulFill    = @n_CartonWeight - @n_TotalWgt
+                        SET @n_Qty                 = @n_Qty - @n_QtyPacked
+                        IF @n_CBMLeftToFulFill < 0
+                           SET @n_CBMLeftToFulFill = 0
+                        IF @n_WgtLeftToFulFill < 0
+                           SET @n_WgtLeftToFulFill = 0
+                     END
+
+                     CLOSE_CTN:
+                     IF @n_Continue = 1 AND @b_NewCarton = 1
+                     BEGIN
+                        IF @n_GetSmaller = 1
+                        BEGIN
+                           SELECT TOP 1
+                                @c_CartonType   = cz.CartonType
+                              , @n_CartonCube   = cz.[Cube]
+                              , @n_CartonWeight = cz.MaxWeight
+                              , @n_Length       = cz.CartonLength
+                              , @n_Width        = cz.CartonWidth
+                              , @n_Height       = cz.CartonHeight
+                           FROM #CTNZ cz
+                           WHERE cz.[Cube] >= @n_TotalCBM
+                           AND (cz.MaxWeight <= 0 OR cz.MaxWeight >= @n_TotalWgt)
+                           ORDER BY cz.RowID DESC
+                        END
+
+                        UPDATE cd
+                        SET CartonType    = @c_CartonType
+                          , CartonCube    = @n_CartonCube
+                          , CartonWeight  = @n_CartonWeight
+                          , [Length]      = @n_Length
+                          , [Width]       = @n_Width
+                          , [Height]      = @n_Height
+                          , [Status]      = '9'
+                        FROM #CartonDetail AS cd
+                        WHERE cd.OrderKey = @c_Orderkey
+                        AND   cd.CartonSeqNo = @n_CartonSeqNo
+                     END
+                  END   -- @n_QtyToPack > 0
+               END
+            END
 
             FETCH NEXT FROM @cur_UOM6 INTO @c_Sku, @n_Qty, @n_CubeUOM3, @n_NetWgt
          END
          CLOSE @cur_UOM6
          DEALLOCATE @cur_UOM6
+
+         IF @n_Continue = 1
+         BEGIN
+            SET @c_CartonType   = @c_CartonType_Max
+            SET @n_CartonCube   = @n_CartonCube_Max
+            SET @n_CartonWeight = @n_CartonWeight_Max
+            SET @n_Length       = @n_CartonLength_Max
+            SET @n_Width        = @n_CartonWidth_Max
+            SET @n_Height       = @n_CartonHeight_Max
+
+            SELECT TOP 1
+                 @c_CartonType   = cz.CartonType
+               , @n_CartonCube   = cz.[Cube]
+               , @n_CartonWeight = cz.MaxWeight
+               , @n_Length       = cz.CartonLength
+               , @n_Width        = cz.CartonWidth
+               , @n_Height       = cz.CartonHeight
+            FROM #CTNZ cz
+            WHERE cz.[Cube] >= @n_TotalCBM
+            AND (cz.MaxWeight <= 0 OR cz.MaxWeight >= @n_TotalWgt)
+            ORDER BY cz.RowID DESC
+
+            UPDATE cd
+            SET CartonType    = @c_CartonType
+              , CartonCube    = @n_CartonCube
+              , CartonWeight  = @n_CartonWeight
+              , [Length]      = @n_Length
+              , [Width]       = @n_Width
+              , [Height]      = @n_Height
+              , [Status]      = '9'
+            FROM #CartonDetail AS cd
+            WHERE cd.OrderKey = @c_Orderkey
+            AND   cd.CartonSeqNo = @n_CartonSeqNo
+            AND   cd.[Status] = '0'
+            AND   cd.UOM = '6'
+         END
 
          IF @n_debug = 1
          BEGIN
@@ -794,7 +979,7 @@ BEGIN
                      ,  [Length], [Width], [Height], RefNo, TrackingNo, UCCNo )
                   SELECT PickSlipNo = @c_PickSlipNo
                         ,CartonNo   = cd.CartonSeqNo + @n_CartonNo_Last
-                        ,[Weight]   = SUM(cd.[Weight]) + MAX(cd.CartonWeight)
+                        ,[Weight]   = SUM(cd.[Weight])
                         ,[Cube]     = MAX(cd.CartonCube)
                         ,Qty        = SUM(cd.Qty)
                         ,CartonType = MAX(cd.CartonType)
@@ -877,6 +1062,9 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#CartonDetail') IS NOT NULL
       DROP TABLE #CartonDetail
+
+   IF OBJECT_ID('tempdb..#CTNZ') IS NOT NULL
+      DROP TABLE #CTNZ
 
    IF @n_Continue = 3  -- Error Occured - Process And Return
    BEGIN
