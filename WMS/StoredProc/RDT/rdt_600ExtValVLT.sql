@@ -151,7 +151,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218004
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Receive to trolley'
-			BEGIN
+			BEGIN --V1.4 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
@@ -170,7 +170,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218005
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Receive to INB stage'
-			BEGIN
+			BEGIN --V1.4 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
@@ -198,7 +198,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218039
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No shelfpick loc set'
-			BEGIN
+			BEGIN --V1.4 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
