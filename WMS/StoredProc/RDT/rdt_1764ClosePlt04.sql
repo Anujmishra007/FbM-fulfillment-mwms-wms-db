@@ -26,6 +26,8 @@ GO
 /* 2025-12-31  1.7.0    NLT013    FCR-7928 Trigger WSSOAlloUpd for real short  */
 /* 2026-01-07  1.8.0    NLT013    UWP-46553 Update Task failed if last task is short*/
 /* 2026-04-18  1.9.0    NLT013    FCR-12136 Support PickMode                   */
+/* 2026-06-24  2.0.0    Cuize     FCR-12679 Multi-wave UCC allocation support  */
+/* 2026-07-28  2.1.0    Cuize     FCR-12679 Fix: process all CaseIDs in ListKey*/
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -684,10 +686,12 @@ BEGIN
 
       DELETE FROM @tPickDetail
 
+      -- FCR-12679: Update all PickDetail records linked to the same UCC (CaseID = DropID)
+      -- This ensures all related records across multiple waves are updated consistently
       INSERT INTO @tPickDetail( PickDetailKey )
       SELECT DISTINCT PD.PickDetailKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
-      INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
+      INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.DropID = TD.CaseID
       INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU
       WHERE PD.StorerKey = @cStorerKey
          AND TD.ListKey = @cListKey
@@ -850,7 +854,7 @@ BEGIN
    SET @cRealloNumberofRetry = rdt.RDTGetConfig( @nFunc, 'RealloNumberofRetry', @cStorerKey)
    IF @cRealloNumberofRetry = '0'
       SET @cRealloNumberofRetry = '99'
-   
+
    IF LEFT(@cMessage02, 4) = 'SKIP' AND LEN(@cMessage02) > 4
       SET @cTryQty = RIGHT(@cMessage02, LEN(@cMessage02) - 4)
 
@@ -869,37 +873,182 @@ BEGIN
 
          IF @nRowCount > 0 AND @cWSCTOTALLOCLOG = '1'
          BEGIN
-            SELECT @nRowCount = COUNT(*)
-            FROM dbo.Transmitlog2 WITH (NOLOCK)
-            WHERE TableName = 'WSCTOTALLOCLOG'
-               AND Key1 = @cWaveKey
-               AND Key2 = @cCaseID
-               AND Key3 = @cStorerKey
+            -- FCR-12679: Multi-wave UCC allocation support
+            -- Process ALL CaseIDs in the ListKey, not just the current one
+            DECLARE @tAllCaseIDs TABLE (
+               ID INT IDENTITY(1,1),
+               CaseID NVARCHAR(20)
+            )
+            DECLARE @tWaveKeys TABLE (
+               ID INT IDENTITY(1,1),
+               WaveKey NVARCHAR(10)
+            )
+            DECLARE @nCaseLoopIndex INT
+            DECLARE @cLoopCaseID NVARCHAR(20)
+            DECLARE @nWaveLoopIndex INT
+            DECLARE @cLoopWaveKey NVARCHAR(10)
+            DECLARE @nWaveCount INT
 
-            IF @nRowCount = 0 -- No record exist, then generate TransmitLog
+            -- Get all completed CaseIDs from the same ListKey
+            INSERT INTO @tAllCaseIDs (CaseID)
+            SELECT DISTINCT TD.CaseID
+            FROM dbo.TaskDetail TD WITH (NOLOCK)
+            INNER JOIN dbo.SkuInfo SI WITH (NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU
+            WHERE TD.StorerKey = @cStorerKey
+               AND TD.ListKey = @cListKey
+               AND TD.Status = '9'
+               AND TD.TaskType = 'RPF'
+               AND TD.Qty > 0
+               AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE'
+               AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+
+            -- Loop through each CaseID
+            SET @nCaseLoopIndex = 0
+            WHILE 1 = 1
             BEGIN
-               BEGIN TRY
-                  EXEC ispGenTransmitLog2
-                     @c_TableName        = 'WSCTOTALLOCLOG'
-                     ,@c_Key1             = @cWaveKey
-                     ,@c_Key2             = @cCaseID
-                     ,@c_Key3             = @cStorerKey
-                     ,@c_TransmitBatch    = ''
-                     ,@b_Success          = @bSuccess   OUTPUT
-                     ,@n_err              = @nErrNo     OUTPUT
-                     ,@c_errmsg           = @cErrMsg    OUTPUT
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 233652
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
-                  GOTO RollBackTran
-               END CATCH
+               SELECT TOP 1
+                  @cLoopCaseID = CaseID,
+                  @nCaseLoopIndex = ID
+               FROM @tAllCaseIDs
+               WHERE ID > @nCaseLoopIndex
+               ORDER BY ID
 
-               IF @bSuccess <> 1
+               IF @@ROWCOUNT = 0
+                  BREAK
+
+               -- Get all unique WaveKeys for this CaseID
+               DELETE FROM @tWaveKeys
+
+               INSERT INTO @tWaveKeys (WaveKey)
+               SELECT DISTINCT PD.WaveKey
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.StorerKey = @cStorerKey
+                  AND PD.DropID = @cLoopCaseID
+                  AND PD.Status IN ('0', '3')
+
+               SELECT @nWaveCount = COUNT(*) FROM @tWaveKeys
+
+               IF @nWaveCount > 0
                BEGIN
-                  GOTO RollBackTran
+                  -- Step 1: Generate WSCTOTALLOCLOG records with TransmitFlag = 'H' for each WaveKey
+                  SET @nWaveLoopIndex = 0
+                  WHILE 1 = 1
+                  BEGIN
+                     SELECT TOP 1
+                        @cLoopWaveKey = WaveKey,
+                        @nWaveLoopIndex = ID
+                     FROM @tWaveKeys
+                     WHERE ID > @nWaveLoopIndex
+                     ORDER BY ID
+
+                     IF @@ROWCOUNT = 0
+                        BREAK
+
+                     -- Check if record already exists
+                     IF NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.Transmitlog2 WITH (NOLOCK)
+                        WHERE TableName = 'WSCTOTALLOCLOG'
+                           AND Key1 = @cLoopWaveKey
+                           AND Key2 = @cLoopCaseID
+                           AND Key3 = @cStorerKey
+                     )
+                     BEGIN
+                        BEGIN TRY
+                           -- Generate TransmitLog2 record (default TransmitFlag = '0')
+                           EXEC ispGenTransmitLog2
+                              @c_TableName        = 'WSCTOTALLOCLOG'
+                              ,@c_Key1             = @cLoopWaveKey
+                              ,@c_Key2             = @cLoopCaseID
+                              ,@c_Key3             = @cStorerKey
+                              ,@c_TransmitBatch    = ''
+                              ,@b_Success          = @bSuccess   OUTPUT
+                              ,@n_err              = @nErrNo     OUTPUT
+                              ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                           IF @bSuccess <> 1
+                           BEGIN
+                              GOTO RollBackTran
+                           END
+
+                           -- Update to 'H' (Hold) if multiple waves
+                           IF @nWaveCount > 1
+                           BEGIN
+                              UPDATE dbo.Transmitlog2 WITH (ROWLOCK)
+                              SET TransmitFlag = 'H',
+                                 EditDate = GETDATE(),
+                                 EditWho = SUSER_SNAME()
+                              WHERE TableName = 'WSCTOTALLOCLOG'
+                                 AND Key1 = @cLoopWaveKey
+                                 AND Key2 = @cLoopCaseID
+                                 AND Key3 = @cStorerKey
+                                 AND TransmitFlag = '0'
+                           END
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 233652
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
+                           GOTO RollBackTran
+                        END CATCH
+                     END
+                  END
+
+                  -- Step 2: Release one record based on priority (only if multiple waves)
+                  -- Only release if this CaseID does NOT already have a '0' or '9' record
+                  IF @nWaveCount > 1
+                  BEGIN
+                     -- Check if this CaseID already has a released or sent record
+                     IF NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.Transmitlog2 WITH (NOLOCK)
+                        WHERE TableName = 'WSCTOTALLOCLOG'
+                           AND Key2 = @cLoopCaseID
+                           AND Key3 = @cStorerKey
+                           AND TransmitFlag IN ('0', '9')
+                     )
+                     BEGIN
+                        DECLARE @cReleaseWaveKey NVARCHAR(10) = NULL
+
+                        -- First, try to find an Active wave (Wave.UserDefine04 = 'Active')
+                        SELECT TOP 1 @cReleaseWaveKey = TL.Key1
+                        FROM dbo.Transmitlog2 TL WITH (NOLOCK)
+                        INNER JOIN dbo.Wave W WITH (NOLOCK) ON TL.Key1 = W.WaveKey
+                        WHERE TL.TableName = 'WSCTOTALLOCLOG'
+                           AND TL.Key2 = @cLoopCaseID
+                           AND TL.Key3 = @cStorerKey
+                           AND TL.TransmitFlag = 'H'
+                           AND W.UserDefine04 = 'Active'
+                        ORDER BY TL.AddDate
+
+                        -- If no Active wave found, release the oldest record
+                        IF @cReleaseWaveKey IS NULL
+                        BEGIN
+                           SELECT TOP 1 @cReleaseWaveKey = Key1
+                           FROM dbo.Transmitlog2 WITH (NOLOCK)
+                           WHERE TableName = 'WSCTOTALLOCLOG'
+                              AND Key2 = @cLoopCaseID
+                              AND Key3 = @cStorerKey
+                              AND TransmitFlag = 'H'
+                           ORDER BY AddDate
+                        END
+
+                        -- Release the selected record
+                        IF @cReleaseWaveKey IS NOT NULL
+                        BEGIN
+                           UPDATE dbo.Transmitlog2 WITH (ROWLOCK)
+                           SET TransmitFlag = '0',
+                              EditDate = GETDATE(),
+                              EditWho = SUSER_SNAME()
+                           WHERE TableName = 'WSCTOTALLOCLOG'
+                              AND Key1 = @cReleaseWaveKey
+                              AND Key2 = @cLoopCaseID
+                              AND Key3 = @cStorerKey
+                              AND TransmitFlag = 'H'
+                        END
+                     END
+                  END
                END
-            END
+            END -- End of CaseID loop
          END
       END
       ELSE
