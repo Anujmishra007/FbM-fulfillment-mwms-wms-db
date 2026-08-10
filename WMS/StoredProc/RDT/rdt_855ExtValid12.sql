@@ -158,7 +158,7 @@ BEGIN
 
                IF @nRowCount > 0
                BEGIN
-                  SET @nErrNo = 273304
+                  SET @nErrNo = 273313
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedQC
                   GOTO Quit
                END
@@ -185,23 +185,77 @@ BEGIN
                   END
                END
 
-               SELECT @cPPAStatus = Status
-               FROM RDT.RDTPPA WITH(NOLOCK)
-               WHERE StorerKey = @cStorerKey
-                  AND DropID = @cDropID
-                  AND Sku = @cSKU
+               -- FCR-13167: For SUO, check if there are other uncompleted CaseIDs with this SKU
+               -- @cDropID may be a CaseID from previous scan, use ToteID (C_STRING3) instead
+               IF @cSingleUnitOrdFlag = 'Y'
+               BEGIN
+                  DECLARE @cToteID NVARCHAR(20)
+                  SELECT @cToteID = C_STRING3 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
 
-               IF @cPPAStatus = '2'
-               BEGIN
-                  SET @nErrNo = 273304
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedQC
-                  GOTO Quit
+                  -- Check if any CaseID with this SKU has Status = '2' (NeedQC)
+                  IF EXISTS (
+                     SELECT 1
+                     FROM dbo.PackDetail PD WITH(NOLOCK)
+                     INNER JOIN rdt.RDTPPA PPA WITH(NOLOCK)
+                        ON PD.StorerKey = PPA.StorerKey
+                        AND PD.LabelNo = PPA.DropID
+                        AND PD.SKU = PPA.SKU
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.DropID = @cToteID
+                        AND PD.SKU = @cSKU
+                        AND PPA.Status = '2'
+                  )
+                  BEGIN
+                     SET @nErrNo = 273311
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedQC
+                     GOTO Quit
+                  END
+
+                  -- Check if ALL CaseIDs with this SKU are completed
+                  -- If any CaseID is still not in RDTPPA or has CQty < expected, allow scan
+                  IF NOT EXISTS (
+                     SELECT 1
+                     FROM dbo.PackInfo PI WITH(NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH(NOLOCK)
+                        ON PI.PickSlipNo = PD.PickSlipNo
+                        AND PI.CartonNo = PD.CartonNo
+                     LEFT JOIN rdt.RDTPPA PPA WITH(NOLOCK)
+                        ON PD.StorerKey = PPA.StorerKey
+                        AND PD.LabelNo = PPA.DropID
+                        AND PD.SKU = PPA.SKU
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.DropID = @cToteID
+                        AND PD.SKU = @cSKU
+                        AND ISNULL(PI.CartonStatus,'') <> 'PACKED'
+                        AND (PPA.RowRef IS NULL OR ISNULL(PPA.CQty, 0) < PD.Qty)
+                  )
+                  BEGIN
+                     SET @nErrNo = 273312
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- AuditFinished
+                     GOTO Quit
+                  END
                END
-               ELSE IF @cPPAStatus = '5'
+               ELSE
                BEGIN
-                  SET @nErrNo = 273305
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- AuditFinished
-                  GOTO Quit
+                  -- Normal Order: use original @cDropID logic
+                  SELECT @cPPAStatus = Status
+                  FROM RDT.RDTPPA WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cDropID
+                     AND Sku = @cSKU
+
+                  IF @cPPAStatus = '2'
+                  BEGIN
+                     SET @nErrNo = 273304
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedQC
+                     GOTO Quit
+                  END
+                  ELSE IF @cPPAStatus = '5'
+                  BEGIN
+                     SET @nErrNo = 273305
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- AuditFinished
+                     GOTO Quit
+                  END
                END
             END
          END--scn 6911

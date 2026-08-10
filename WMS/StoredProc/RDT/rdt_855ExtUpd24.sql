@@ -211,17 +211,9 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER key
          BEGIN
-            -- Get total counts for this SKU
-            SELECT @nTotalPQty = SUM(PQty), @nTotalCQty = SUM(CQty)
-            FROM RDT.RDTPPA WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cDropID
-               AND Sku = @cSKU
-
-            -- SKU audit finished - print VAS labels
-            IF @nTotalPQty = @nTotalCQty
-            BEGIN
-               -- FCR-13167: Build VAS label list (from ExtUpd13)
+            -- FCR-13167: Print VAS label for each SKU scan (1 copy per scan)
+            -- Previously waited until @nTotalPQty = @nTotalCQty to print all at once
+            -- FCR-13167: Build VAS label list (from ExtUpd13)
                -- 1. Price Labels from LVSPRICELB
                DECLARE @tCODELKUP_Step3 TABLE
                (
@@ -350,6 +342,7 @@ BEGIN
                   IF @nRowCount = 0
                      BREAK
 
+                  -- FCR-13167: Print 1 copy per scan instead of @nWorkOrderDetailQty copies at completion
                   IF @cLabelListName = 'LVSPRICELB'
                   BEGIN
                      DELETE FROM @tPriceLabelList_Step3
@@ -365,7 +358,7 @@ BEGIN
                         'rdt_855ExtUpd24',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT,
-                        @nNoOfCopy = @nWorkOrderDetailQty
+                        @nNoOfCopy = 1
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -387,7 +380,7 @@ BEGIN
                         'rdt_855ExtUpd24',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT,
-                        @nNoOfCopy = @nWorkOrderDetailQty
+                        @nNoOfCopy = 1
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -409,7 +402,7 @@ BEGIN
                         'rdt_855ExtUpd24',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT,
-                        @nNoOfCopy = @nWorkOrderDetailQty
+                        @nNoOfCopy = 1
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -417,10 +410,8 @@ BEGIN
                      END
                   END
                END
-               -- Clear @tLabels for potential reuse in print screen
-               DELETE FROM @tLabels
-            END
-            -- End of SKU audit finished
+            -- Clear @tLabels for potential reuse in print screen
+            DELETE FROM @tLabels
          END
          -- End of @nInputKey = 1
       END
