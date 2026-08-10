@@ -225,7 +225,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218016
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Not SHLV storage loc'
-			BEGIN
+			BEGIN --V1.5 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
@@ -241,7 +241,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218017
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT set for loc'
-			BEGIN
+			BEGIN --V1.5 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
@@ -256,7 +256,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 218018
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT shelf type'
-			BEGIN
+			BEGIN --V1.5 PPA374 30/07/2026
 			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
 			   BEGIN
 			      SET @nErrNo = ''
