@@ -58,6 +58,7 @@ GO
 /*                              Empty @cToLoc after ToLoc screen                 */
 /* 2026-03-03 4.6.0  Jackc      FCR-12989 add ExtScn11 to step99                 */
 /* 2026-08-07 4.7.0  NickT      UWP-63641 Use @nStep for @cExtendedUpdateSP      */
+/* 2026-08-04 4.8.0  Jackc      FCR-14961 Handle NO UPD RDTMOBREC in Step99      */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -346,7 +347,7 @@ BEGIN
    IF @nStep = 6 GOTO Step_6   -- Scn = 4025 To LOC
    IF @nStep = 7 GOTO Step_7   -- Scn = 4026 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_8   -- Scn = 4027 Short pick / Close pallet
-   IF @nStep = 9 GOTO Step_9   -- Scn = 2100 Reason code
+   IF @nStep = 9 GOTO Step_9   -- Scn = 2109 Reason code
    IF @nStep = 99  GOTO Step_99  -- Scn = Extended Screen   -- Scn = 4028 Is the location completely empty?
 END
 
@@ -1021,13 +1022,13 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-/*
+      /*
       SET @cDropID = ''
       SET @cOutField01 = '' -- DropID
 
       SET @nScn  = @nScn - 1
       SET @nStep = @nStep - 1
-*/
+      */
       -- Partial pallet
       IF @cPickMethod = 'PP'
       BEGIN
@@ -2137,7 +2138,7 @@ BEGIN
 
          SET @cTaskDetailKey = @cNextTaskDetailKey
          SET @nQTY = 0
-/*
+         /*
          EXEC rdt.rdt_TM_CasePick_GetNextTask @nMobile, @nFunc, @cLangCode,
             @cUserName,
             @cAreaKey,
@@ -2148,7 +2149,7 @@ BEGIN
             @cErrMsg            OUTPUT
          IF @nErrNo <> 0
             GOTO Step_5_Fail
-*/
+         */
 
          -- Disable QTY field
          IF @cDisableQTYFieldSP <> ''
@@ -3225,7 +3226,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Step 9. screen = 2100. Reason code screen
+Step 9. screen = 2109. Reason code screen
      REASON CODE (Field01, input)
 ********************************************************************************/
 Step_9:
@@ -3720,6 +3721,9 @@ BEGIN
                END --FromID scn
             END --Skip FromID scn
          END -- extscn09, extscn11
+
+         IF @cUDF01 = 'NO UPD RDTMOBREC' --V4.2.0
+            RETURN
       END
    END --extscn <> ''
 
