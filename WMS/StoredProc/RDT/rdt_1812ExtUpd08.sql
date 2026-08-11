@@ -62,6 +62,7 @@ BEGIN
       @cTaskStatus         NVARCHAR(10),
       @cTaskReasonKey      NVARCHAR(10),
       @cTaskType           NVARCHAR(10),
+      @cListKey            NVARCHAR(10),
       @cInField01          NVARCHAR(60),
       @cOption             NVARCHAR(1)
 
@@ -199,6 +200,7 @@ BEGIN
 
             SELECT 
                @cSuggID       = FromID,
+               @cSuggFromLOC  = FromLoc,
                @cTaskType     = TaskType,
                @cTaskStatus   = Status
             FROM dbo.TaskDetail WITH (NOLOCK)
@@ -210,13 +212,14 @@ BEGIN
             SELECT TaskDetailKey
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
+               AND FromLoc  = @cSuggFromLOC
                AND FromID   = @cSuggID
                AND TaskType = @cTaskType
                AND Status NOT IN ('3', '5', '9', 'X')
 
             SELECT @nRowCount = COUNT(*) FROM @tTaskKeys
 
-            IF @nRowCount > 0  AND @nFromStep <> 8 AND @cTaskStatus NOT IN ('3', '5', '9') -- not from short screen
+            IF @nRowCount > 0  AND @nFromStep = 99 AND @nFromScn = 4022 AND @cTaskStatus NOT IN ('3', '5', '9') -- from FromID screen
             BEGIN
                BEGIN TRY
                   UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
@@ -242,20 +245,33 @@ BEGIN
          IF @nInputKey = 1
          BEGIN
             IF @nDebugFlag = 1
-               SELECT 'Executing rdt_1812ExtUpd08 Step 5, Enter'
+               SELECT 'Executing rdt_1812ExtUpd08 Step 6, Enter'
 
             SELECT 
                @cPickMethod   = TD.PickMethod,
                @cSuggID       = TD.FromID,
-               @cOrderGroup   = OrderGroup
+               @cOrderGroup   = OrderGroup,
+               @cListKey      = TD.ListKey
             FROM dbo.PickDetail PD WITH (NOLOCK) 
             JOIN dbo.TASKDETAIL TD WITH (NOLOCK) ON PD.TaskDetailKey = TD.TaskDetailKey
             JOIN dbo.ORDERS O WITH (NOLOCK) ON PD.OrderKey = O.OrderKey 
             WHERE PD.TaskDetailKey = @cTaskdetailKey 
                AND PD.StorerKey = @cStorerKey
 
-            IF ISNULL(@cPickMethod, '') = 'PP'
+            IF ISNULL(@cPickMethod, '') = 'PP' AND ISNULL(@cDropID,'') <> ''
+               AND EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) 
+                           WHERE StorerKey = @cStorerKey 
+                              AND TaskType = 'FCP'
+                              AND [Status] = '9'
+                              AND DropID = @cDropID) -- only print label after executing PP tasks
             BEGIN
+               -- Common params (To check)
+               INSERT INTO @tPalletLBLParam (Variable, Value) VALUES
+                  ( '@cStorerKey',     @cStorerKey),
+                  ( '@cFacility',      @cFacility),
+                  ( '@cDropID',        @cSuggID),
+                  ( '@cTaskdetailKey', @cTaskdetailKey)
+
                IF ISNULL(@cOrderGroup, '') = 'STANDARD'
                BEGIN
                   SELECT @nSKUCountOnID = COUNT(DISTINCT(lli.Sku)) 
@@ -265,13 +281,6 @@ BEGIN
                      AND lli.Loc = @cSuggFromLOC
                      AND lli.Id = @cSuggID
                   GROUP BY lli.Id
-
-                  -- Common params (To check)
-                  INSERT INTO @tPalletLBLParam (Variable, Value) VALUES
-                     ( '@cStorerKey',     @cStorerKey),
-                     ( '@cFacility',      @cFacility),
-                     ( '@cDropID',        @cSuggID),
-                     ( '@cTaskdetailKey', @cTaskdetailKey)	
 
                   IF @nSKUCountOnID = 1
                   BEGIN

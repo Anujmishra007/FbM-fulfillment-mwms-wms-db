@@ -391,10 +391,11 @@ BEGIN
               UserKeyOverRide = @c_UserID
              ,EditDate        = CURRENT_TIMESTAMP
              ,EditWho         = @c_UserID
-         WHERE FromID         = @c_FromID
-           AND OrderKey       = @cOrderKey
-           AND TaskType       IN ('FCP', 'FCP1')
-           AND Status         = '0'
+         WHERE FromLoc  = @c_FromLOC
+           AND FromID   = @c_FromID
+           AND OrderKey = @cOrderKey
+           AND TaskType IN ('FCP', 'FCP1')
+           AND Status   = '0'
            AND UserKeyOverRide = ''
            AND TaskDetailKey  <> @c_TaskDetailKey
       END TRY
