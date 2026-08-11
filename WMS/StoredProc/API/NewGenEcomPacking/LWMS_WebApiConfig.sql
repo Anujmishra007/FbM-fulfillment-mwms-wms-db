@@ -173,3 +173,9 @@ SELECT 'ECOMP_VALIDATE_CTNTYPE_CUST', @c_TargetDB, 'API', 'isp_ECOMP_API_Validat
 WHERE NOT EXISTS (
     SELECT 1 FROM dbo.LWMS_WebApiConfig (NOLOCK) WHERE OperationType = 'ECOMP_VALIDATE_CTNTYPE_CUST'
 )
+
+INSERT INTO dbo.LWMS_WebApiConfig (OperationType, TargetDB, TargetSchema, WSPostingSP01, SPTJSON, SPTXML, [Descr], ResponseOriContent)
+SELECT 'ECOMP_GETALLORDERS_S', @c_TargetDB, 'API', 'isp_ECOMP_API_GetAllOrderList_S', 'Y', 'N', 'Get All Orders', 1
+WHERE NOT EXISTS (
+    SELECT 1 FROM dbo.LWMS_WebApiConfig (NOLOCK) WHERE OperationType = 'ECOMP_GETALLORDERS_S'
+)
