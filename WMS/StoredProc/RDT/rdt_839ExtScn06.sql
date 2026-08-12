@@ -170,7 +170,7 @@ BEGIN
       @nTotalLocReqQty        INT,
       @nTotalLocPickedQty     INT,
       @nTotalPSNReqQty        INT,
-      @nTotalPSNPickeQty      INT,
+      @nTotalPSNPickedQty      INT,
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -1130,12 +1130,12 @@ BEGIN
                      @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                      @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                      @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                     @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                      @nErrNo                 = @nErrNo OUTPUT,
                      @cErrMsg                = @cErrMsg OUTPUT
 
                   SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
 
                   SET @nAfterStep = 99
@@ -1350,12 +1350,12 @@ BEGIN
                         @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                         @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                         @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                        @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                        @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                         @nErrNo                 = @nErrNo OUTPUT,
                         @cErrMsg                = @cErrMsg OUTPUT
 
                      SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                         SET @nAfterScn = 6774
                         SET @nAfterStep = 99
@@ -1502,12 +1502,12 @@ BEGIN
                   @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                   @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                   @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                  @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                   @nErrNo                 = @nErrNo OUTPUT,
                   @cErrMsg                = @cErrMsg OUTPUT
 
                SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                SET @nAfterStep = 99
                SET @nAfterScn = 6774
@@ -3344,12 +3344,12 @@ BEGIN
                            @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                            @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                            @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                           @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                            @nErrNo                 = @nErrNo OUTPUT,
                            @cErrMsg                = @cErrMsg OUTPUT
 
                         SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
 
                         COMMIT TRAN rdt_839ExtScn06_6775 -- Only commit change made here
@@ -3555,12 +3555,12 @@ BEGIN
                      @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                      @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                      @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                     @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                      @nErrNo                 = @nErrNo OUTPUT,
                      @cErrMsg                = @cErrMsg OUTPUT
 
                   SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
 
                   SET @nAfterStep = 99
@@ -3775,12 +3775,12 @@ BEGIN
                            @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                            @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                            @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                           @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                            @nErrNo                 = @nErrNo OUTPUT,
                            @cErrMsg                = @cErrMsg OUTPUT
 
                         SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
 
                         SET @nAfterScn = 6774
@@ -3876,12 +3876,12 @@ BEGIN
                   @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                   @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                   @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                  @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                   @nErrNo                 = @nErrNo OUTPUT,
                   @cErrMsg                = @cErrMsg OUTPUT
 
                SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                SET @cBarcode = ''
 
@@ -4382,12 +4382,12 @@ BEGIN
                      @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                      @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                      @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                     @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                      @nErrNo                 = @nErrNo OUTPUT,
                      @cErrMsg                = @cErrMsg OUTPUT
 
                   SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                   -- Go to SKU QTY screen
                   SET @nAfterScn = 6774
@@ -4616,12 +4616,12 @@ BEGIN
                            @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                            @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                            @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                           @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                            @nErrNo                 = @nErrNo OUTPUT,
                            @cErrMsg                = @cErrMsg OUTPUT
 
                         SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
 
                         -- Go to SKU QTY screen
@@ -4746,12 +4746,12 @@ BEGIN
                   @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                   @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                   @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                  @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                   @nErrNo                 = @nErrNo OUTPUT,
                   @cErrMsg                = @cErrMsg OUTPUT
 
                SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                -- Go to SKU QTY screen
                SET @nAfterScn = 6774
@@ -4912,12 +4912,12 @@ BEGIN
                         @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                         @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                         @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                        @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                        @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                         @nErrNo                 = @nErrNo OUTPUT,
                         @cErrMsg                = @cErrMsg OUTPUT
 
                      SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                      -- Go to SKU QTY screen
                      SET @nAfterScn = 6774
@@ -5046,12 +5046,12 @@ BEGIN
                      @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
                      @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
                      @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-                     @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
                      @nErrNo                 = @nErrNo OUTPUT,
                      @cErrMsg                = @cErrMsg OUTPUT
 
                   SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                   -- Go to SKU QTY screen
                   SET @nAfterScn = 6774
@@ -5152,12 +5152,12 @@ BEGIN
             @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
             @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
             @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
-            @nTotalPSNPickeQty      = @nTotalPSNPickeQty OUTPUT,
+            @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
             @nErrNo                 = @nErrNo OUTPUT,
             @cErrMsg                = @cErrMsg OUTPUT
 
          SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
-         SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickeQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+         SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
          SET @cBarcode = ''
          SET @cOutField05 = ''

@@ -27,7 +27,7 @@ CREATE OR ALTER PROC rdt.rdt_839GetBalQty01 (
    @nTotalLocReqQty           INT           OUTPUT,
    @nTotalLocPickedQty        INT           OUTPUT,
    @nTotalPSNReqQty           INT           OUTPUT,
-   @nTotalPSNPickeQty         INT           OUTPUT,
+   @nTotalPSNPickedQty        INT           OUTPUT,
    @nErrNo                    INT           OUTPUT,
    @cErrMsg                   NVARCHAR(250) OUTPUT
 )
@@ -61,7 +61,7 @@ BEGIN
    SET @nErrNo = 0
    SET @cErrMsg = ''
    SET @nTotalPSNReqQty = 0
-   SET @nTotalPSNPickeQty = 0
+   SET @nTotalPSNPickedQty = 0
    SET @nTotalLocReqQty = 0
    SET @nTotalLocPickedQty = 0
 
@@ -193,7 +193,7 @@ BEGIN
 
          -- Total piece Picked Qty
          -- 1. Picked UCC Qty
-         SET @nTotalPSNPickeQty += @nQty
+         SET @nTotalPSNPickedQty += @nQty
          --2. Picked piece Qty
          BEGIN
             SET @nQty = 0
@@ -207,7 +207,7 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
-            SET @nTotalPSNPickeQty += @nQty
+            SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
    END
@@ -340,7 +340,7 @@ BEGIN
 
          -- Total piece Picked Qty
          -- 1. Picked UCC Qty
-         SET @nTotalPSNPickeQty += @nQty
+         SET @nTotalPSNPickedQty += @nQty
          --2. Picked piece Qty
          BEGIN
             SET @nQty = 0
@@ -354,7 +354,7 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
-            SET @nTotalPSNPickeQty += @nQty
+            SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
    END
@@ -494,7 +494,7 @@ BEGIN
 
          -- Total piece Picked Qty
          -- 1. Picked UCC Qty
-         SET @nTotalPSNPickeQty += @nQty
+         SET @nTotalPSNPickedQty += @nQty
          --2. Picked piece Qty
          BEGIN
             SET @nQty = 0
@@ -509,7 +509,7 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
-            SET @nTotalPSNPickeQty += @nQty
+            SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
    END
@@ -635,7 +635,7 @@ BEGIN
 
          -- Total piece Picked Qty
          -- 1. Picked UCC Qty
-         SET @nTotalPSNPickeQty += @nQty
+         SET @nTotalPSNPickedQty += @nQty
          --2. Picked piece Qty
          BEGIN
             SET @nQty = 0
@@ -648,7 +648,7 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
-            SET @nTotalPSNPickeQty += @nQty
+            SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
    END
