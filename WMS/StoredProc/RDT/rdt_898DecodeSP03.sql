@@ -300,16 +300,29 @@ BEGIN
             END
 
             -- Decode Traceability Code: Value after (240), update UCC.Userdefined01
-            IF CHARINDEX('(240)', @cBarcode) > 0
+            IF CHARINDEX('(240)', @cBarcode) > 0 AND ISNULL(@cUCCNo, '') <> ''
             BEGIN
-               SET @cUserDefine01 = SUBSTRING(@cBarcode, CHARINDEX('(240)', @cBarcode) + 5, LEN(@cBarcode))
-               UPDATE dbo.UCC WITH (ROWLOCK)
-               SET Userdefined01 = @cUserDefine01,
-                   EditDate      = GETDATE(),
-                   EditWho       = SUSER_SNAME()
-               WHERE UCCNo     = @cUCCNo
-               AND   StorerKey = @cStorerKey
+               SET @cUserDefine01 = LEFT(SUBSTRING(@cBarcode, CHARINDEX('(240)', @cBarcode) + 5, LEN(@cBarcode)), 15)
+
+               BEGIN TRY
+               insert into traceinfo (tracename, timein, step1, step2, col1, col2, col3)
+               values ('UCC Traceability Code', getdate(), @cUCCNo, @cStorerKey, @cUserDefine01, '', '')
+                  UPDATE dbo.UCC WITH (ROWLOCK)
+                  SET Userdefined01 = @cUserDefine01,
+                      EditDate      = GETDATE(),
+                      EditWho       = SUSER_SNAME()
+                  WHERE UCCNo     = @cUCCNo
+                  AND   StorerKey = @cStorerKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo  = 263854
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UCCUpdateFail
+                  GOTO Quit
+               END CATCH
             END
+
+            insert into traceinfo (tracename, timein, step1, step2, col1, col2, col3)
+            values ('UCC Decode', getdate(), @cUCCNo, @cUserDefine01, @cLottable02, @cLottable03, @cUserDefine01)
 
          END
          -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs
