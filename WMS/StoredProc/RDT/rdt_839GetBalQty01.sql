@@ -75,9 +75,8 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status <> '4'
                AND PD.QTY > 0
@@ -94,9 +93,8 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
                AND PD.Status <> '4'
@@ -110,9 +108,8 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -129,9 +126,8 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -149,7 +145,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status <> '4'
@@ -167,7 +162,6 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
@@ -182,7 +176,6 @@ BEGIN
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '2'
                AND PD.Status = @cPickConfirmStatus
@@ -200,7 +193,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
             INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
@@ -222,9 +214,8 @@ BEGIN
             SELECT @nQty= ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status <> '4'
                AND PD.QTY > 0
@@ -240,10 +231,9 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
                AND PD.Status <> '4'
@@ -256,10 +246,9 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -276,9 +265,8 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -296,7 +284,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status <> '4'
@@ -313,7 +300,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.Lot
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '2'
@@ -328,7 +314,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '2'
@@ -347,7 +332,6 @@ BEGIN
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
@@ -370,9 +354,8 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status <> '4'
                AND PD.QTY > 0
@@ -389,10 +372,9 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.Lot
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
                AND PD.Status <> '4'
@@ -406,10 +388,9 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -427,9 +408,8 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -448,7 +428,6 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status <> '4'
@@ -466,7 +445,6 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.Lot
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '2'
@@ -482,7 +460,6 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '2'
@@ -502,7 +479,6 @@ BEGIN
             FROM dbo.PickDetail PD WITH (NOLOCK)
             INNER JOIN dbo.LoadPlanDetail LPD WITH(NOLOCK) ON PD.OrderKey = LPD.OrderKey
             INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON (LPD.LoadKey = PH.LoadKey)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PH.PickHeaderKey = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
@@ -523,9 +499,8 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status <> '4'
                AND PD.QTY > 0
@@ -540,10 +515,9 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.Lot
             WHERE PD.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status < @cPickConfirmStatus
                AND PD.Status <> '4'
@@ -555,10 +529,9 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PD.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '2'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -574,9 +547,8 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
-               AND LOC.Loc = @cLOC
+               AND PD.LOC = @cLOC
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
                AND PD.QTY > 0
@@ -593,7 +565,6 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status <> '4'
@@ -609,7 +580,6 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON PD.DropID = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.Lot
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '2'
@@ -623,7 +593,6 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(UCC.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             INNER JOIN dbo.UCC WITH(NOLOCK) ON (PD.Notes IS NOT NULL AND PD.Notes = UCC.UCCNo AND PD.StorerKey = UCC.StorerKey AND PD.Lot = UCC.LOT)
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '2'
@@ -641,7 +610,6 @@ BEGIN
             SET @nQty = 0
             SELECT @nQty = ISNULL(SUM(PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.UOM = '6'
                AND PD.Status = @cPickConfirmStatus
