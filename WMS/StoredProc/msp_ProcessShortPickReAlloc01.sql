@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.6                                                  */
+/* GitHub Version: 1.7                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -32,6 +32,8 @@ GO
 /* 22-Jun-2026 WLChooi  1.5   FCR-12719 Cross-wave UCC short pick       */
 /*                            reallocation (WL05)                       */
 /* 06-Aug-2026 WLChooi  1.6   FCR-12719 CUR_PTASK order by RowID (WL06) */
+/* 12-Aug-2026 WLChooi  1.7   FCR-12719 Set Transmitflag to H if Wave   */
+/*                            UDF04 = '' & UDF09 = 'Y' (WL07)           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -126,6 +128,12 @@ BEGIN
          , @c_GetWavekey                NVARCHAR(10) = ''   --WL05
          , @CUR_WAVE                    CURSOR              --WL05
          , @n_AvailableSOH              INT = 0             --WL05
+         --WL07 S
+         , @c_UserDefine04              NVARCHAR(20) = ''
+         , @c_UserDefine09              NVARCHAR(10) = ''
+         , @c_trmlogkey                 NVARCHAR(10) = ''
+         , @c_TransmitFlag              NVARCHAR(5)  = '0'
+         --WL07 E
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -230,8 +238,10 @@ BEGIN
 
       --WL05 S
       CREATE TABLE #T_RelatedWaves (
-            RowID      INT IDENTITY(1, 1) PRIMARY KEY
-          , WaveKey    NVARCHAR(10)
+            RowID          INT IDENTITY(1, 1) PRIMARY KEY
+          , WaveKey        NVARCHAR(10)
+          , UserDefine09   NVARCHAR(10)   --WL07
+          , UserDefine04   NVARCHAR(20)   --WL07   
       )
       CREATE NONCLUSTERED INDEX IDX_TRW_WAVEKEY ON #T_RelatedWaves (WaveKey)
       --WL05 E
@@ -303,14 +313,16 @@ BEGIN
       --WL05 S
       IF @c_AllowCrossWaveTaskLinking = 'Y'
       BEGIN
-         INSERT INTO #T_RelatedWaves (WaveKey)
-         SELECT X.WaveKey
+         INSERT INTO #T_RelatedWaves (WaveKey, UserDefine04, UserDefine09)   --WL07
+         SELECT X.WaveKey, TRIM(X.UserDefine04), TRIM(X.UserDefine09)   --WL07
          FROM ( SELECT DISTINCT W.WaveKey
                               , ROW_NUMBER() OVER (
                                    ORDER BY IIF(W.WaveKey = @c_Wavekey, 0, 1)
                                           , IIF(W.UserDefine04 = 'ACTIVE', 1, 2)
                                           , W.Wavekey
                                 ) AS Seq
+                              , UserDefine04 = ISNULL(W.UserDefine04, '')   --WL07
+                              , UserDefine09 = ISNULL(W.UserDefine09, '')   --WL07
                 FROM PICKDETAIL PD WITH (NOLOCK)
                 JOIN WAVEDETAIL WD WITH (NOLOCK) ON PD.Orderkey = WD.Orderkey
                 JOIN WAVE W WITH (NOLOCK) ON WD.Wavekey = W.Wavekey
@@ -323,8 +335,12 @@ BEGIN
       END
       ELSE
       BEGIN
-         INSERT INTO #T_RelatedWaves (WaveKey)
-         SELECT @c_Wavekey
+         --WL07 S
+         INSERT INTO #T_RelatedWaves (WaveKey, UserDefine04, UserDefine09)
+         SELECT W.WaveKey, TRIM(ISNULL(W.UserDefine04, '')), TRIM(ISNULL(W.UserDefine09, ''))
+         FROM WAVE W (NOLOCK)
+         WHERE W.WaveKey = @c_Wavekey
+         --WL07 E
       END
       --WL05 E
    END
@@ -495,13 +511,13 @@ BEGIN
       AND   UCC.[Status] = '1'
 
       SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT R.WaveKey
+      SELECT R.WaveKey, R.UserDefine04, R.UserDefine09   --WL07
       FROM #T_RelatedWaves R
       ORDER BY R.RowID
 
       OPEN @CUR_WAVE
 
-      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey, @c_UserDefine04, @c_UserDefine09   --WL07
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
@@ -510,6 +526,13 @@ BEGIN
          SELECT @n_QtyLeftToFulFill = ISNULL(SUM(T.Qty), 0)
          FROM #T_ShortPick T
          WHERE T.Wavekey = @c_GetWavekey
+
+         --WL07 S
+         SET @c_TransmitFlag = '0'
+
+         IF @c_UserDefine09 = 'Y' AND @c_UserDefine04 = ''
+            SET @c_TransmitFlag = 'H'
+         --WL07 E
 
          -- If remaining SOH can fulfill this wave's short qty, proceed; else TL2 and drop wave
          IF @n_AvailableSOH >= @n_QtyLeftToFulFill
@@ -530,21 +553,34 @@ BEGIN
 
             WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
             BEGIN
+               --WL07 S
+               SELECT @b_success = 1
                BEGIN TRY
-                  EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOAlloUpd' -- nvarchar(30)
-                                            , @c_Key1 = @c_Orderkey -- nvarchar(10)
-                                            , @c_Key2 = @c_PickDetailKey -- nvarchar(30)
-                                            , @c_Key3 = @c_Storerkey -- nvarchar(20)
-                                            , @c_TransmitBatch = N'' -- nvarchar(30)
-                                            , @b_Success = @b_Success OUTPUT -- int
-                                            , @n_err = @n_Err OUTPUT -- int
-                                            , @c_errmsg = @c_Errmsg OUTPUT -- nvarchar(250)
+                  EXECUTE nspg_getkey
+                  'TransmitlogKey2'
+                  , 10
+                  , @c_trmlogkey OUTPUT
+                  , @b_success   OUTPUT
+                  , @n_err       OUTPUT
+                  , @c_errmsg    OUTPUT
+
+                  IF NOT EXISTS ( SELECT 1 
+                                 FROM TransmitLog2 (NOLOCK) 
+                                 WHERE TableName = @c_TableName 
+                                 AND Key1 = @c_Orderkey 
+                                 AND Key2 = @c_PickDetailKey 
+                                 AND Key3 = @c_Storerkey )
+                  BEGIN
+                     INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+                     VALUES (@c_trmlogkey, @c_TableName, @c_Orderkey, @c_PickDetailKey, @c_Storerkey, @c_TransmitFlag, '')
+                  END
                END TRY
                BEGIN CATCH
                   SET @n_Continue = 3
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   GOTO QUIT_SP
                END CATCH
+               --WL07 E
 
                BEGIN TRY
                   UPDATE P
@@ -566,7 +602,7 @@ BEGIN
             DELETE FROM #T_RelatedWaves WHERE WaveKey = @c_GetWavekey   --WL05
          END
 
-         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey, @c_UserDefine04, @c_UserDefine09   --WL07
       END
       CLOSE @CUR_WAVE
       DEALLOCATE @CUR_WAVE
@@ -979,7 +1015,7 @@ BEGIN
    BEGIN
       --WL05 S
       SET @CUR_WAVE = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT R.WaveKey
+      SELECT R.WaveKey, R.UserDefine04, R.UserDefine09   --WL07
       FROM #T_RelatedWaves R
       WHERE NOT EXISTS ( SELECT 1
                          FROM #PickDetail_WIP P
@@ -995,10 +1031,17 @@ BEGIN
 
       OPEN @CUR_WAVE
 
-      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+      FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey, @c_UserDefine04, @c_UserDefine09   --WL07
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
+         --WL07 S
+         SET @c_TransmitFlag = '0'
+
+         IF @c_UserDefine09 = 'Y' AND @c_UserDefine04 = ''
+            SET @c_TransmitFlag = 'H'
+         --WL07 E
+
          -- ReAllocStatus
          -- 0 - Not Allocated after shorted
          -- Trigger ITF
@@ -1013,21 +1056,34 @@ BEGIN
 
          WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
          BEGIN
+            --WL07 S
+            SELECT @b_success = 1
             BEGIN TRY
-               EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOAlloUpd' -- nvarchar(30)
-                                         , @c_Key1 = @c_Orderkey -- nvarchar(10)
-                                         , @c_Key2 = @c_PickDetailKey -- nvarchar(30)
-                                         , @c_Key3 = @c_Storerkey -- nvarchar(20)
-                                         , @c_TransmitBatch = N'' -- nvarchar(30)
-                                         , @b_Success = @b_Success OUTPUT -- int
-                                         , @n_err = @n_Err OUTPUT -- int
-                                         , @c_errmsg = @c_Errmsg OUTPUT -- nvarchar(250)
+		         EXECUTE nspg_getkey
+		         'TransmitlogKey2'
+		         , 10
+		         , @c_trmlogkey OUTPUT
+		         , @b_success   OUTPUT
+		         , @n_err       OUTPUT
+		         , @c_errmsg    OUTPUT
+
+               IF NOT EXISTS ( SELECT 1 
+                               FROM TransmitLog2 (NOLOCK) 
+                               WHERE TableName = @c_TableName 
+							          AND Key1 = @c_Orderkey 
+                               AND Key2 = @c_PickDetailKey 
+                               AND Key3 = @c_Storerkey )
+			      BEGIN
+                  INSERT INTO Transmitlog2 (transmitlogkey, tablename, key1, key2, key3, transmitflag, TransmitBatch)
+	               VALUES (@c_trmlogkey, @c_TableName, @c_Orderkey, @c_PickDetailKey, @c_Storerkey, @c_TransmitFlag, '')
+			      END
             END TRY
             BEGIN CATCH
                SET @n_Continue = 3
                SET @c_ErrMsg = ERROR_MESSAGE()
                GOTO QUIT_SP
             END CATCH
+            --WL07 E
 
             BEGIN TRY
                UPDATE P
@@ -1055,7 +1111,7 @@ BEGIN
          DELETE FROM #PICKDETAIL_WIP WHERE Wavekey = @c_GetWavekey
          DELETE FROM #T_RelatedWaves WHERE WaveKey = @c_GetWavekey
 
-         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey
+         FETCH NEXT FROM @CUR_WAVE INTO @c_GetWavekey, @c_UserDefine04, @c_UserDefine09   --WL07
       END
       CLOSE @CUR_WAVE
       DEALLOCATE @CUR_WAVE
