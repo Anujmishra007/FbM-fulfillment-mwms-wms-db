@@ -371,6 +371,7 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = @cPickConfirmStatus,
+                  Notes = DropID,
                   DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
@@ -465,6 +466,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                   Status = @cPickConfirmStatus,
+                  Notes = DropID,
                   DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME()

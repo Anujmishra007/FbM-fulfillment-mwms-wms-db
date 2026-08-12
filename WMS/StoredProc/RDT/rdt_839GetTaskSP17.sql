@@ -3443,45 +3443,45 @@ BEGIN
       END
    END
 
-   EXEC rdt.rdt_839GetBalQty
-      @nMobile         = @nMobile,
-      @nFunc           = @nFunc,
-      @cLangCode       = @cLangCode,
-      @nStep           = @nStep,
-      @nInputKey       = @nInputKey,
-      @cFacility       = @cFacility,
-      @cStorerKey      = @cStorerKey,
-      @cType           = @cUCCorPiecePick,
-      @cPickSlipNo     = @cPickSlipNo,
-      @cPickZone       = @cPickZone,
-      @cLot            = @cLOT,
-      @cLOC            = @cLOC,
-      @cSKU            = @cSKU,
-      @cLottableCode   = @cLottableCode,
-      @nLottableOnPage = @nLottableOnPage,
-      @cLottable01     = @cLottable01,
-      @cLottable02     = @cLottable02,
-      @cLottable03     = @cLottable03,
-      @dLottable04     = @dLottable04,
-      @dLottable05     = @dLottable05,
-      @cLottable06     = @cLottable06,
-      @cLottable07     = @cLottable07,
-      @cLottable08     = @cLottable08,
-      @cLottable09     = @cLottable09,
-      @cLottable10     = @cLottable10,
-      @cLottable11     = @cLottable11,
-      @cLottable12     = @cLottable12,
-      @dLottable13     = @dLottable13,
-      @dLottable14     = @dLottable14,
-      @dLottable15     = @dLottable15,
-      @nQTY            = @nQTY OUTPUT,
-      @nTtlBalQty      = @nTtlBalQty OUTPUT,
-      @nBalQty         = @nBalQty OUTPUT,
-      @nErrNo          = @nErrNo OUTPUT,
-      @cErrMsg         = @cErrMsg OUTPUT
+   -- EXEC rdt.rdt_839GetBalQty
+   --    @nMobile         = @nMobile,
+   --    @nFunc           = @nFunc,
+   --    @cLangCode       = @cLangCode,
+   --    @nStep           = @nStep,
+   --    @nInputKey       = @nInputKey,
+   --    @cFacility       = @cFacility,
+   --    @cStorerKey      = @cStorerKey,
+   --    @cType           = @cUCCorPiecePick,
+   --    @cPickSlipNo     = @cPickSlipNo,
+   --    @cPickZone       = @cPickZone,
+   --    @cLot            = @cLOT,
+   --    @cLOC            = @cLOC,
+   --    @cSKU            = @cSKU,
+   --    @cLottableCode   = @cLottableCode,
+   --    @nLottableOnPage = @nLottableOnPage,
+   --    @cLottable01     = @cLottable01,
+   --    @cLottable02     = @cLottable02,
+   --    @cLottable03     = @cLottable03,
+   --    @dLottable04     = @dLottable04,
+   --    @dLottable05     = @dLottable05,
+   --    @cLottable06     = @cLottable06,
+   --    @cLottable07     = @cLottable07,
+   --    @cLottable08     = @cLottable08,
+   --    @cLottable09     = @cLottable09,
+   --    @cLottable10     = @cLottable10,
+   --    @cLottable11     = @cLottable11,
+   --    @cLottable12     = @cLottable12,
+   --    @dLottable13     = @dLottable13,
+   --    @dLottable14     = @dLottable14,
+   --    @dLottable15     = @dLottable15,
+   --    @nQTY            = @nQTY OUTPUT,
+   --    @nTtlBalQty      = @nTtlBalQty OUTPUT,
+   --    @nBalQty         = @nBalQty OUTPUT,
+   --    @nErrNo          = @nErrNo OUTPUT,
+   --    @cErrMsg         = @cErrMsg OUTPUT
 
-   IF @nErrNo <> 0
-      RETURN
+   -- IF @nErrNo <> 0
+   --    RETURN
 
    -- Get DisableQTYField
    DECLARE @cDisableQTYFieldSP NVARCHAR( 20)
