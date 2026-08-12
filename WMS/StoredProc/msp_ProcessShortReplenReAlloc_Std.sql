@@ -63,7 +63,6 @@ BEGIN
          , @c_ShortPickSP              NVARCHAR(100) = 'msp_ProcessShortPickReAlloc02'
          , @c_PickTaskType             NVARCHAR(100) = ''
          , @c_PickTaskStatus           NVARCHAR(100) = ''
-         , @c_RPFLocSource             NVARCHAR(10)  = 'Final'
          , @c_DelPickdetail            NVARCHAR(1)   = 'N'
 
    SET @n_StartTCnt = @@TRANCOUNT
@@ -157,7 +156,6 @@ BEGIN
          SELECT @c_ReplenType = dbo.fnc_GetParamValueFromString('@c_ReplenType', @c_CLNotes, @c_ReplenType)
          SELECT @c_PickTaskType = dbo.fnc_GetParamValueFromString('@c_PickTaskType', @c_CLNotes, @c_PickTaskType)
          SELECT @c_PickTaskStatus = dbo.fnc_GetParamValueFromString('@c_PickTaskStatus', @c_CLNotes, @c_PickTaskStatus)
-         SELECT @c_RPFLocSource = dbo.fnc_GetParamValueFromString('@c_RPFLocSource', @c_CLNotes, @c_RPFLocSource)
          SELECT @c_DelPickdetail = dbo.fnc_GetParamValueFromString('@c_DelPickdetail', @c_CLNotes, @c_DelPickdetail)
          
          IF ISNULL(TRIM(@c_ReplenishStrategy), '') = ''
@@ -171,9 +169,6 @@ BEGIN
 
          IF ISNULL(TRIM(@c_PickTaskStatus), '') = ''
             SET @c_PickTaskStatus = '0, H'
-
-         IF ISNULL(TRIM(@c_RPFLocSource), '') = ''
-            SET @c_RPFLocSource = 'Final'
 
          IF ISNULL(TRIM(@c_DelPickdetail), '') = ''
             SET @c_DelPickdetail = 'N'
@@ -208,11 +203,20 @@ BEGIN
    -- Prepare temp data
    IF @n_Continue = 1 AND @n_DynReplen = 1
    BEGIN
-      SELECT @c_FinalLoc = CASE WHEN @c_RPFLocSource = 'To' THEN TD.ToLoc ELSE TD.FinalLOC END
-           , @c_FinalID  = CASE WHEN @c_RPFLocSource = 'To' THEN TD.ToID  ELSE TD.FinalID  END
+      SELECT @c_FinalLoc = ISNULL(TD.FinalLOC, '')
+           , @c_FinalID  = ISNULL(TD.FinalID, '')
       FROM TASKDETAIL TD (NOLOCK)
       WHERE TD.TaskDetailKey = @c_Taskdetailkey
       AND TD.TaskType = 'RPF'
+
+      IF ISNULL(@c_FinalLoc, '') = ''
+      BEGIN
+         SELECT @c_FinalLoc = ISNULL(TD.ToLoc, '')
+              , @c_FinalID  = ISNULL(TD.ToID, '')
+         FROM TASKDETAIL TD (NOLOCK)
+         WHERE TD.TaskDetailKey = @c_Taskdetailkey
+         AND TD.TaskType = 'RPF'
+      END
       
       INSERT INTO #TMP_TASK_PICK (Taskdetailkey)
       SELECT TD.Taskdetailkey
@@ -357,7 +361,7 @@ BEGIN
                   SET @n_Continue = 3
                   SET @c_ErrMsg = ERROR_MESSAGE()
                END CATCH
-            
+
                FETCH NEXT FROM @CUR_ALLOC INTO @c_GetWavekey
             END
             CLOSE @CUR_ALLOC
