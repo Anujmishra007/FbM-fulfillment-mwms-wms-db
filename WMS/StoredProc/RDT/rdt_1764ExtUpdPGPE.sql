@@ -65,6 +65,9 @@ BEGIN
    DECLARE @cErrMsg1          NVARCHAR(125)
    DECLARE @cErrMsg2          NVARCHAR(125)
    DECLARE @cErrMsg3          NVARCHAR(125)
+   DECLARE @cLogicalToLoc     NVARCHAR(10)
+   DECLARE @nPABookingKey     INT
+   DECLARE @nTaskQty          INT
    DECLARE
       @cAPP_DB_Name        NVARCHAR(20),
       @cDataStream         VARCHAR(10),
@@ -151,18 +154,20 @@ BEGIN
  
          -- Read TaskDetail
          SELECT
-            @cFromLOC    = FromLOC,
-            @cFromID     = FromID,
-            @cToLoc      = ToLoc,
-            @cToID       = ToID,
-            @cLOT        = LOT,
-            @cSKU        = SKU,
-            @cUOM        = UOM,
-            @cPickMethod = PickMethod,
-            @cCaseID     = CaseID,
-            @cWaveKey    = WaveKey,
-            @cFinalLoc   = FinalLoc,
-            @cReasonCode = ReasonKey
+            @cFromLOC      = FromLOC,
+            @cFromID       = FromID,
+            @cToLoc        = ToLoc,
+            @cToID         = ToID,
+            @cLogicalToLoc = LogicalToLoc,
+            @nTaskQty      = Qty,
+            @cLOT          = LOT,
+            @cSKU          = SKU,
+            @cUOM          = UOM,
+            @cPickMethod   = PickMethod,
+            @cCaseID       = CaseID,
+            @cWaveKey      = WaveKey,
+            @cFinalLoc     = FinalLoc,
+            @cReasonCode   = ReasonKey
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
  
@@ -318,7 +323,7 @@ BEGIN
          -- IF ISNULL(@cFinalLoc, '') <> ''
          --    SET @cPickFromLoc = @cFinalLoc
          -- ELSE
-            SET @cPickFromLoc = @cToLoc
+         SET @cPickFromLoc = ISNULL(NULLIF(@cLogicalToLoc, ''), @cToLoc)
  
          SELECT @cLoseID = LoseID
          FROM dbo.Loc WITH (NOLOCK)
@@ -353,8 +358,8 @@ BEGIN
          BEGIN TRY
             UPDATE dbo.LOTxLOCxID WITH (ROWLOCK)
             SET    QTYReplen = CASE
-                                  WHEN (QTYReplen - @nQTY_RPL) > 0
-                                  THEN (QTYReplen - @nQTY_RPL)
+                                  WHEN (QTYReplen - @nTaskQty) > 0
+                                  THEN (QTYReplen - @nTaskQty)
                                   ELSE 0
                                END
             WHERE  LOT = @cLOT
@@ -369,7 +374,48 @@ BEGIN
  
                   INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Col1, Col2, Col3)
          VALUES ('1764ExtUpdPGPE', GETDATE(), 'Step9', 'Committed',
-            @cTaskDetailKey, @cFromLOC, CAST(@nQTY_RPL AS NVARCHAR(10)))
+            @cTaskDetailKey, @cFromLOC, CAST(@nTaskQty AS NVARCHAR(10)))
+
+                  -- UNLOCK: deletes RFPutaway record and releases PendingMoveIN at pick face
+         SELECT TOP 1 @nPABookingKey = PABookingKey
+         FROM dbo.RFPutaway WITH (NOLOCK)
+         WHERE StorerKey    = @cStorerKey
+           AND FromLoc      = @cFromLOC
+           AND FromID       = @cFromID
+           AND SuggestedLOC = ISNULL(NULLIF(@cLogicalToLoc, ''), @cToLoc)
+           AND SKU          = @cSKU
+           AND Qty          = @nTaskQty
+         ORDER BY AddDate DESC
+
+         IF ISNULL(@nPABookingKey, 0) <> 0
+         BEGIN
+            BEGIN TRY
+               EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+                  , ''  -- @cFromLOC
+                  , ''  -- @cFromID
+                  , ''  -- @cSuggestedLOC
+                  , ''  -- @cStorerKey
+                  , @nErrNo  OUTPUT
+                  , @cErrMsg OUTPUT
+                  , @nPABookingKey = @nPABookingKey
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @nErrNo = 276359
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 276359
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
+            END CATCH
+         END
+
+         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Col1, Col2, Col3)
+         VALUES ('1764ExtUpdPGPE', GETDATE(), 'Step9', 'Unlock',
+            @cTaskDetailKey, CAST(@nPABookingKey AS NVARCHAR(10)),
+            ISNULL(NULLIF(@cLogicalToLoc, ''), @cToLoc))
 
          -- Short-close the RPF task: mark as completed with 0 qty moved.
          -- Without this, Fn1764 loops picker back to Step 2 of the same task.
@@ -421,14 +467,13 @@ BEGIN
          END
  
          IF ISNULL(@cCaseID, '') = '' AND ISNULL(@cUOM, '') <> '1'
-BEGIN
-   SELECT @cErrMsg1='', @cErrMsg2='', @cErrMsg3=''
-   SET @cErrMsg1 = '91007-UCCNoEmpty'
-   SET @cErrMsg2 = 'Trigger realloc fail'
-   EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
-   GOTO Quit
-END
-
+         BEGIN
+            SELECT @cErrMsg1='', @cErrMsg2='', @cErrMsg3=''
+            SET @cErrMsg1 = '91007-UCCNoEmpty'
+            SET @cErrMsg2 = 'Trigger realloc fail'
+            EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1, @cErrMsg2, @cErrMsg3
+            GOTO Quit
+         END
  
          SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
                               + ' @c_Wavekey        = ''' + ISNULL(@cWaveKey, '') + ''''
