@@ -2315,6 +2315,7 @@ BEGIN
             Status = '1', --1=Received
             ReceiptKey = @cReceiptKey,
             ReceiptLineNumber = @cReceiptLineNumber, 
+            Userdefined01 = CASE WHEN ISNULL(@cUCCUserdefined01,'') <> '' THEN @cUCCUserdefined01 ELSE Userdefined01 END,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()                   
          WHERE StorerKey = @cStorerKey
@@ -2332,7 +2333,6 @@ BEGIN
       END
       ELSE
       BEGIN
-
          -- Insert UCC
          INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey, Userdefined01)
          VALUES (@cStorerKey, @cUCCNo, '1', @cSKU, @nQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber, '', @cUCCUserdefined01)
@@ -2372,6 +2372,7 @@ BEGIN
             Status = '1', --1=Received
             ReceiptKey = @cReceiptKey,
             ReceiptLineNumber = @cReceiptLineNumber, 
+            Userdefined01 = CASE WHEN ISNULL(@cUCCUserdefined01,'') <> '' THEN @cUCCUserdefined01 ELSE Userdefined01 END,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()
          WHERE StorerKey = @cStorerKey

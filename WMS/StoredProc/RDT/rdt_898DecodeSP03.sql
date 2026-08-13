@@ -305,9 +305,7 @@ BEGIN
                SET @cUserDefine01 = LEFT(SUBSTRING(@cBarcode, CHARINDEX('(240)', @cBarcode) + 5, LEN(@cBarcode)), 15)
 
                BEGIN TRY
-               insert into traceinfo (tracename, timein, step1, step2, col1, col2, col3)
-               values ('UCC Traceability Code', getdate(), @cUCCNo, @cStorerKey, @cUserDefine01, '', '')
-                  UPDATE dbo.UCC WITH (ROWLOCK)
+               UPDATE dbo.UCC WITH (ROWLOCK)
                   SET Userdefined01 = @cUserDefine01,
                       EditDate      = GETDATE(),
                       EditWho       = SUSER_SNAME()
@@ -320,10 +318,6 @@ BEGIN
                   GOTO Quit
                END CATCH
             END
-
-            insert into traceinfo (tracename, timein, step1, step2, col1, col2, col3)
-            values ('UCC Decode', getdate(), @cUCCNo, @cUserDefine01, @cLottable02, @cLottable03, @cUserDefine01)
-
          END
          -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs
       END
