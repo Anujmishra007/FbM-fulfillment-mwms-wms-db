@@ -1,6 +1,6 @@
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
 
 /**************************************************************************/
