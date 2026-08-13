@@ -167,6 +167,10 @@ BEGIN
       @cRemarks               NVARCHAR( 30),
       @cWaveKey               NVARCHAR( 10),
       @cDisLottable01         NVARCHAR( 18),
+      @nTotalLocReqQty        INT,
+      @nTotalLocPickedQty     INT,
+      @nTotalPSNReqQty        INT,
+      @nTotalPSNPickedQty      INT,
 
       @cChkLottable01 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
       @dChkLottable04 DATETIME,        @dChkLottable05 DATETIME,        @cChkLottable06 NVARCHAR( 30),
@@ -1047,11 +1051,11 @@ BEGIN
                   SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                   SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                   SET @cOutField05 = '' -- SKU/UPC
-                  SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                  SET @cOutField06 = ''
                   SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                           WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                           ELSE '' END -- QTY
-                  SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                  SET @cOutField13 = ''
 
                   IF @cFieldAttr07='O'
                      SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
@@ -1110,6 +1114,29 @@ BEGIN
                      SET @cOutField10 = @cPackUOM
                      SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                   END
+
+                  EXEC rdt.rdt_839GetBalQty01
+                     @nMobile                = @nMobile,
+                     @nFunc                  = @nFunc,
+                     @cLangCode              = @cLangCode,
+                     @nStep                  = @nStep,
+                     @nInputKey              = @nInputKey,
+                     @cFacility              = @cFacility,
+                     @cStorerKey             = @cStorerKey,
+                     @cPickSlipNo            = @cPickSlipNo,
+                     @cLot                   = @cSuggLOT,
+                     @cLOC                   = @cSuggLOC,
+                     @cSKU                   = @cSuggSKU,
+                     @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                     @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                     @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                     @nErrNo                 = @nErrNo OUTPUT,
+                     @cErrMsg                = @cErrMsg OUTPUT
+
+                  SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
 
                   SET @nAfterStep = 99
                   SET @nAfterScn = 6774
@@ -1243,11 +1270,11 @@ BEGIN
                         SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                         SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                         SET @cOutField05 = '' -- SKU/UPC
-                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField06 = ''
                         SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                           WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                 ELSE '' END -- QTY
-                        SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                        SET @cOutField13 = ''
 
                         IF @cFieldAttr07='O'
                            SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
@@ -1308,10 +1335,31 @@ BEGIN
                      SET @cOutField10 = @cPackUOM
                      SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                   END
+                     EXEC rdt.rdt_839GetBalQty01
+                        @nMobile                = @nMobile,
+                        @nFunc                  = @nFunc,
+                        @cLangCode              = @cLangCode,
+                        @nStep                  = @nStep,
+                        @nInputKey              = @nInputKey,
+                        @cFacility              = @cFacility,
+                        @cStorerKey             = @cStorerKey,
+                        @cPickSlipNo            = @cPickSlipNo,
+                        @cLot                   = @cSuggLOT,
+                        @cLOC                   = @cSuggLOC,
+                        @cSKU                   = @cSuggSKU,
+                        @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                        @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                        @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                        @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                        @nErrNo                 = @nErrNo OUTPUT,
+                        @cErrMsg                = @cErrMsg OUTPUT
+
+                     SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                         SET @nAfterScn = 6774
                         SET @nAfterStep = 99
-                        
+
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                      END
                   END
@@ -1375,11 +1423,11 @@ BEGIN
                SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                SET @cOutField05 = '' -- SKU/UPC
-               SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+               SET @cOutField06 = ''
                SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                        WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                        ELSE '' END -- QTY
-               SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+               SET @cOutField13 = ''
 
                IF @cFieldAttr07='O'
                   SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
@@ -1438,6 +1486,28 @@ BEGIN
                   SET @cOutField10 = @cPackUOM
                   SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                END
+
+               EXEC rdt.rdt_839GetBalQty01
+                  @nMobile                = @nMobile,
+                  @nFunc                  = @nFunc,
+                  @cLangCode              = @cLangCode,
+                  @nStep                  = @nStep,
+                  @nInputKey              = @nInputKey,
+                  @cFacility              = @cFacility,
+                  @cStorerKey             = @cStorerKey,
+                  @cPickSlipNo            = @cPickSlipNo,
+                  @cLot                   = @cSuggLOT,
+                  @cLOC                   = @cSuggLOC,
+                  @cSKU                   = @cSuggSKU,
+                  @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                  @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                  @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                  @nErrNo                 = @nErrNo OUTPUT,
+                  @cErrMsg                = @cErrMsg OUTPUT
+
+               SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                SET @nAfterStep = 99
                SET @nAfterScn = 6774
@@ -2237,8 +2307,29 @@ BEGIN
                            SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
                         ELSE
                            SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @cDefaultQTY ELSE '' END
-                        --SET @cOutField13 =LTRIM(CAST((@nBalQty - CAST(@cOutField07 AS INT)) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) -- ZG01
-                        SET @cOutField13 = CASE WHEN @nBalQty= 0 THEN  LTRIM(CAST((@nBalQty ) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))   ELSE LTRIM(CAST((@nBalQty - @nQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))    END --(yeekung06)
+                        --SET @cOutField13 = CASE WHEN @nBalQty= 0 THEN  LTRIM(CAST((@nBalQty ) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))   ELSE LTRIM(CAST((@nBalQty - @nQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))    END --(yeekung06)
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
                         GOTO UPD_RDTMOBREC
                      END
                   END
@@ -2248,7 +2339,30 @@ BEGIN
                      BEGIN
                         --SET @cOutField07 = ''
                         SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6)) ELSE '' END -- QTY
-                        SET @cOutField13 =LTRIM(CAST((@nBalQty - CAST(@cOutField07 AS INT)) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) -- ZG01
+                        --SET @cOutField13 =LTRIM(CAST((@nBalQty - CAST(@cOutField07 AS INT)) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) -- ZG01
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+                        
                         EXEC rdt.rdtSetFocusField @nMobile, 7 -- MQTY
                         GOTO UPD_RDTMOBREC
                      END
@@ -2554,11 +2668,11 @@ BEGIN
                         SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                         SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                         SET @cOutField05 = '' -- SKU/UPC
-                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField06 = ''
                         SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                                 WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                 ELSE '' END -- QTY
-                        SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                        SET @cOutField13 = ''
 
                         IF @cFieldAttr07='O'
                            SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
@@ -2617,6 +2731,28 @@ BEGIN
                            SET @cOutField10 = @cPackUOM
                            SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                         END
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
                         
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                      END
@@ -2747,11 +2883,11 @@ BEGIN
                               SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                               SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                               SET @cOutField05 = '' -- SKU/UPC
-                              SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                              SET @cOutField06 = ''
                               SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                                 WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                       ELSE '' END -- QTY
-                              SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                              SET @cOutField13 = ''
 
                               IF @cFieldAttr07='O'
                                  SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
@@ -2812,6 +2948,28 @@ BEGIN
                                  SET @cOutField10 = @cPackUOM
                                  SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                               END
+
+                              EXEC rdt.rdt_839GetBalQty01
+                                 @nMobile                = @nMobile,
+                                 @nFunc                  = @nFunc,
+                                 @cLangCode              = @cLangCode,
+                                 @nStep                  = @nStep,
+                                 @nInputKey              = @nInputKey,
+                                 @cFacility              = @cFacility,
+                                 @cStorerKey             = @cStorerKey,
+                                 @cPickSlipNo            = @cPickSlipNo,
+                                 @cLot                   = @cSuggLOT,
+                                 @cLOC                   = @cSuggLOC,
+                                 @cSKU                   = @cSuggSKU,
+                                 @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                                 @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                                 @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                                 @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                                 @nErrNo                 = @nErrNo OUTPUT,
+                                 @cErrMsg                = @cErrMsg OUTPUT
+
+                              SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                              SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
                               
                               EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                            END
@@ -3252,12 +3410,35 @@ BEGIN
                         SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                         SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                         SET @cOutField05 = '' -- SKU/UPC
-                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField06 = ''
                         SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                                 WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                 ELSE '' END -- QTY
 
-                        SET @cOutField13 = LTRIM(CAST((@nBalQty - @nActQTY) AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6)) 
+                        SET @cOutField13 = ''
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
 
                         COMMIT TRAN rdt_839ExtScn06_6775 -- Only commit change made here
                         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
@@ -3376,11 +3557,11 @@ BEGIN
                   SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                   SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                   SET @cOutField05 = '' -- SKU/UPC
-                  SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                  SET @cOutField06 = ''
                   SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                           WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                           ELSE '' END -- QTY
-                  SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                  SET @cOutField13 = ''
 
                   IF @cFieldAttr07='O'
                      SET @cOutField07= CASE WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY ELSE @nActQTY END
@@ -3446,6 +3627,29 @@ BEGIN
                      SET C_String6 = '6'
                      WHERE Mobile = @nMobile
                   END
+
+                  EXEC rdt.rdt_839GetBalQty01
+                     @nMobile                = @nMobile,
+                     @nFunc                  = @nFunc,
+                     @cLangCode              = @cLangCode,
+                     @nStep                  = @nStep,
+                     @nInputKey              = @nInputKey,
+                     @cFacility              = @cFacility,
+                     @cStorerKey             = @cStorerKey,
+                     @cPickSlipNo            = @cPickSlipNo,
+                     @cLot                   = @cSuggLOT,
+                     @cLOC                   = @cSuggLOC,
+                     @cSKU                   = @cSuggSKU,
+                     @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                     @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                     @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                     @nErrNo                 = @nErrNo OUTPUT,
+                     @cErrMsg                = @cErrMsg OUTPUT
+
+                  SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
 
                   SET @nAfterStep = 99
                   SET @nAfterScn = 6774
@@ -3578,11 +3782,11 @@ BEGIN
                         SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                         SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                         SET @cOutField05 = '' -- SKU/UPC
-                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField06 = ''
                         SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                           WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                 ELSE '' END -- QTY
-                        SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                        SET @cOutField13 = ''
 
                         IF @cFieldAttr07='O'
                            SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
@@ -3643,6 +3847,29 @@ BEGIN
                            SET @cOutField10 = @cPackUOM
                            SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
                         END
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
 
                         SET @nAfterScn = 6774
                         SET @nAfterStep = 99
@@ -3709,11 +3936,11 @@ BEGIN
                SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                SET @cOutField05 = '' -- SKU/UPC
-               SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+               SET @cOutField06 = ''
                SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                  WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                        ELSE '' END -- QTY
-               SET @cOutField13 = LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+               SET @cOutField13 = ''
 
                IF @cFieldAttr07='O'
                   SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
@@ -3721,7 +3948,29 @@ BEGIN
                                        ELSE @nActQTY END -- QTY
                ELSE
                   SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
-               
+
+               EXEC rdt.rdt_839GetBalQty01
+                  @nMobile                = @nMobile,
+                  @nFunc                  = @nFunc,
+                  @cLangCode              = @cLangCode,
+                  @nStep                  = @nStep,
+                  @nInputKey              = @nInputKey,
+                  @cFacility              = @cFacility,
+                  @cStorerKey             = @cStorerKey,
+                  @cPickSlipNo            = @cPickSlipNo,
+                  @cLot                   = @cSuggLOT,
+                  @cLOC                   = @cSuggLOC,
+                  @cSKU                   = @cSuggSKU,
+                  @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                  @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                  @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                  @nErrNo                 = @nErrNo OUTPUT,
+                  @cErrMsg                = @cErrMsg OUTPUT
+
+               SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
                SET @cBarcode = ''
 
                -- Go to SKU/Qty screen
@@ -4135,11 +4384,11 @@ BEGIN
                   SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                   SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                   SET @cOutField05 = '' -- SKU/UPC
-                  SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                  SET @cOutField06 = ''
                   SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                           WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                           ELSE '' END -- QTY
-                  SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                  SET @cOutField13 = ''
 
                   -- Disable QTY field
                   SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
@@ -4205,6 +4454,28 @@ BEGIN
                   END
                   
                   EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+
+                  EXEC rdt.rdt_839GetBalQty01
+                     @nMobile                = @nMobile,
+                     @nFunc                  = @nFunc,
+                     @cLangCode              = @cLangCode,
+                     @nStep                  = @nStep,
+                     @nInputKey              = @nInputKey,
+                     @cFacility              = @cFacility,
+                     @cStorerKey             = @cStorerKey,
+                     @cPickSlipNo            = @cPickSlipNo,
+                     @cLot                   = @cSuggLOT,
+                     @cLOC                   = @cSuggLOC,
+                     @cSKU                   = @cSuggSKU,
+                     @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                     @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                     @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                     @nErrNo                 = @nErrNo OUTPUT,
+                     @cErrMsg                = @cErrMsg OUTPUT
+
+                  SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                   -- Go to SKU QTY screen
                   SET @nAfterScn = 6774
@@ -4346,11 +4617,11 @@ BEGIN
                         SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
                         SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
                         SET @cOutField05 = '' -- SKU/UPC
-                        SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
+                        SET @cOutField06 = ''
                         SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
                                                 WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
                                                 ELSE '' END -- QTY
-                        SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                        SET @cOutField13 = ''
 
                         -- Disable QTY field
                         SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY    (yeekung03)
@@ -4417,6 +4688,29 @@ BEGIN
                         END
 
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+
+                        EXEC rdt.rdt_839GetBalQty01
+                           @nMobile                = @nMobile,
+                           @nFunc                  = @nFunc,
+                           @cLangCode              = @cLangCode,
+                           @nStep                  = @nStep,
+                           @nInputKey              = @nInputKey,
+                           @cFacility              = @cFacility,
+                           @cStorerKey             = @cStorerKey,
+                           @cPickSlipNo            = @cPickSlipNo,
+                           @cLot                   = @cSuggLOT,
+                           @cLOC                   = @cSuggLOC,
+                           @cSKU                   = @cSuggSKU,
+                           @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                           @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                           @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                           @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                           @nErrNo                 = @nErrNo OUTPUT,
+                           @cErrMsg                = @cErrMsg OUTPUT
+
+                        SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                        SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
+
 
                         -- Go to SKU QTY screen
                         SET @nAfterScn = 6774
@@ -4511,9 +4805,9 @@ BEGIN
                SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
                SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
                SET @cOutField05 = '' -- SKU/UPC
-               SET @cOutField06 = RTRIM(CAST( @nSuggQTY AS NVARCHAR(6)))
+               SET @cOutField06 = ''
                SET @cOutField07 = CAST( @nActQTY AS NVARCHAR(6))
-               SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+               SET @cOutField13 = ''
 
                -- Disable QTY field
                SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
@@ -4524,6 +4818,28 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                ELSE
                   EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
+
+               EXEC rdt.rdt_839GetBalQty01
+                  @nMobile                = @nMobile,
+                  @nFunc                  = @nFunc,
+                  @cLangCode              = @cLangCode,
+                  @nStep                  = @nStep,
+                  @nInputKey              = @nInputKey,
+                  @cFacility              = @cFacility,
+                  @cStorerKey             = @cStorerKey,
+                  @cPickSlipNo            = @cPickSlipNo,
+                  @cLot                   = @cSuggLOT,
+                  @cLOC                   = @cSuggLOC,
+                  @cSKU                   = @cSuggSKU,
+                  @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                  @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                  @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                  @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                  @nErrNo                 = @nErrNo OUTPUT,
+                  @cErrMsg                = @cErrMsg OUTPUT
+
+               SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+               SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                -- Go to SKU QTY screen
                SET @nAfterScn = 6774
@@ -4655,9 +4971,9 @@ BEGIN
                      SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
                      SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
                      SET @cOutField05 = '' -- SKU/UPC
-                     SET @cOutField06 = RTRIM(CAST( @nSuggQTY AS NVARCHAR(6)))
+                     SET @cOutField06 = ''
                      SET @cOutField07 = CAST( @nActQTY AS NVARCHAR(6))
-                     SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                     SET @cOutField13 = ''
 
                      -- Disable QTY field
                      SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
@@ -4668,6 +4984,28 @@ BEGIN
                         EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                      ELSE
                         EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
+
+                     EXEC rdt.rdt_839GetBalQty01
+                        @nMobile                = @nMobile,
+                        @nFunc                  = @nFunc,
+                        @cLangCode              = @cLangCode,
+                        @nStep                  = @nStep,
+                        @nInputKey              = @nInputKey,
+                        @cFacility              = @cFacility,
+                        @cStorerKey             = @cStorerKey,
+                        @cPickSlipNo            = @cPickSlipNo,
+                        @cLot                   = @cSuggLOT,
+                        @cLOC                   = @cSuggLOC,
+                        @cSKU                   = @cSuggSKU,
+                        @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                        @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                        @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                        @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                        @nErrNo                 = @nErrNo OUTPUT,
+                        @cErrMsg                = @cErrMsg OUTPUT
+
+                     SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                     SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                      -- Go to SKU QTY screen
                      SET @nAfterScn = 6774
@@ -4767,9 +5105,9 @@ BEGIN
                   SET @cOutField03 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
                   SET @cOutField04 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
                   SET @cOutField05 = '' -- SKU/UPC
-                  SET @cOutField06 = RTRIM(CAST( @nSuggQTY AS NVARCHAR(6)))
+                  SET @cOutField06 = ''
                   SET @cOutField07 = CAST( @nActQTY AS NVARCHAR(6))
-                  SET @cOutField13 =LTRIM(CAST(@nBalQty - @nActQTY AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
+                  SET @cOutField13 = ''
 
                   -- Disable QTY field
                   SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- QTY
@@ -4780,6 +5118,28 @@ BEGIN
                      EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
                   ELSE
                      EXEC rdt.rdtSetFocusField @nMobile, 7 -- QTY
+
+                  EXEC rdt.rdt_839GetBalQty01
+                     @nMobile                = @nMobile,
+                     @nFunc                  = @nFunc,
+                     @cLangCode              = @cLangCode,
+                     @nStep                  = @nStep,
+                     @nInputKey              = @nInputKey,
+                     @cFacility              = @cFacility,
+                     @cStorerKey             = @cStorerKey,
+                     @cPickSlipNo            = @cPickSlipNo,
+                     @cLot                   = @cSuggLOT,
+                     @cLOC                   = @cSuggLOC,
+                     @cSKU                   = @cSuggSKU,
+                     @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+                     @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+                     @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+                     @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+                     @nErrNo                 = @nErrNo OUTPUT,
+                     @cErrMsg                = @cErrMsg OUTPUT
+
+                  SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+                  SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
                   -- Go to SKU QTY screen
                   SET @nAfterScn = 6774
@@ -4811,7 +5171,8 @@ BEGIN
 
       IF @nAfterStep = 3
       BEGIN
-         SELECT TOP 1 @cSuggUCC  = Descr
+         SELECT TOP 1 @cSuggUCC  = Descr,
+            @cSuggLOC = LOC
          FROM rdt.rdtPickLog WITH(NOLOCK)
          WHERE PickSlipNo = @cPickSlipNo
             AND (Mobile = @nMobile OR AddWho = @cUserName)
@@ -4839,7 +5200,9 @@ BEGIN
          ELSE
          -- Display Piece info, Lottable01, UOM, UOM Desc
          BEGIN
-            SELECT TOP 1 @cSuggLOT  = Descr
+            SELECT TOP 1 
+               @cSuggLOT  = Descr,
+               @cSuggLOC = LOC
             FROM rdt.rdtPickLog WITH(NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
                AND (Mobile = @nMobile OR AddWho = @cUserName)
@@ -4861,6 +5224,28 @@ BEGIN
             SET @cOutField10 = @cPackUOM
             SET @cOutField11 = 'UOM Qty: ' + CAST(@nSuggQty AS NVARCHAR(10))
          END
+
+         EXEC rdt.rdt_839GetBalQty01
+            @nMobile                = @nMobile,
+            @nFunc                  = @nFunc,
+            @cLangCode              = @cLangCode,
+            @nStep                  = @nStep,
+            @nInputKey              = @nInputKey,
+            @cFacility              = @cFacility,
+            @cStorerKey             = @cStorerKey,
+            @cPickSlipNo            = @cPickSlipNo,
+            @cLot                   = @cSuggLOT,
+            @cLOC                   = @cSuggLOC,
+            @cSKU                   = @cSuggSKU,
+            @nTotalLocReqQty        = @nTotalLocReqQty OUTPUT,
+            @nTotalLocPickedQty     = @nTotalLocPickedQty OUTPUT,
+            @nTotalPSNReqQty        = @nTotalPSNReqQty OUTPUT,
+            @nTotalPSNPickedQty      = @nTotalPSNPickedQty OUTPUT,
+            @nErrNo                 = @nErrNo OUTPUT,
+            @cErrMsg                = @cErrMsg OUTPUT
+
+         SET @cOutField06 = ISNULL(TRY_CAST(@nTotalLocPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalLocReqQty AS NVARCHAR(6)), '0')
+         SET @cOutField13 = ISNULL(TRY_CAST(@nTotalPSNPickedQty AS NVARCHAR(6)), '0') + '/' + ISNULL(TRY_CAST(@nTotalPSNReqQty AS NVARCHAR(6)), '0')
 
          SET @cBarcode = ''
          SET @cOutField05 = ''
