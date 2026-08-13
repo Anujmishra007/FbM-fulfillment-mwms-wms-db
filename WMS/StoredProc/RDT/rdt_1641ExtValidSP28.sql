@@ -14,6 +14,7 @@ GO
 /* 2026-06-24 1.0.0  NickT      FCR-13319 Created                       */
 /* 2026-07-22 1.0.1  Jackc      FCR-13319 Post Pick status is 3         */
 /* 2026-08-07 1.1.0  NickT      UWP-63642 Fix some issues.              */
+/* 2026-08-13 1.2.0  NickT      UWP-64065 Add LOC CheckDigit            */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP28 (
@@ -54,6 +55,7 @@ BEGIN
       @cLocationType                NVARCHAR(10) = '',
       @cWaveKey                     NVARCHAR(10) = '',
       @cStatus                      NVARCHAR(10) = '',
+      @cLOCCheckDigitSP             NVARCHAR(20) = '',
       @cPOSTPICK                    NVARCHAR(8) = 'POSTPICK',
       @cSTAGEOB                     NVARCHAR(8) = 'STAGEOB',
       @cECOM                        NVARCHAR(8) = 'ECOM',
@@ -64,7 +66,8 @@ BEGIN
 
    SELECT
       @cFacility     = Facility,
-      @cLoc          = V_String5
+      @cLoc          = V_String5,
+      @cLOCCheckDigitSP = V_String31
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -78,6 +81,19 @@ BEGIN
                @cLoc     = I_Field02
             FROM rdt.RDTMOBREC WITH(NOLOCK)
             WHERE Mobile = @nMobile
+
+            IF @cLOCCheckDigitSP = '1'
+            BEGIN
+               EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                  @cLoc        OUTPUT,
+                  @nErrNo      OUTPUT,
+                  @cErrMsg     OUTPUT
+               
+               IF @nErrNo <> 0
+               BEGIN
+                  GOTO Quit
+               END
+            END
 
             SELECT @cLocationType = LocationType
             FROM dbo.LOC WITH(NOLOCK)
