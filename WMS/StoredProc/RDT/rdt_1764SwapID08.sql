@@ -93,7 +93,7 @@ BEGIN
 
    SET @nRowCount = @@ROWCOUNT
 
-   IF @nRowCount = 0
+   IF @nRowCount <> 1
    BEGIN
       SET @nErrNo = 277853
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidID
@@ -143,6 +143,7 @@ BEGIN
    FROM dbo.LOTxLOCxID WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND LOC = @cTaskLOC
+      AND LOT = @cTaskLOT
       AND ID = @cTaskID
 
    SET @nTaskQTYReplen = ISNULL(@nTaskQTYReplen, 0)
@@ -191,6 +192,7 @@ BEGIN
           TrafficCop = NULL
       WHERE StorerKey = @cStorerKey
          AND LOC = @cTaskLOC
+         AND LOT = @cNewLOT
          AND ID  = @cNewID
    END TRY
    BEGIN CATCH
@@ -208,6 +210,7 @@ BEGIN
           TrafficCop = NULL
       WHERE StorerKey = @cStorerKey
          AND LOC = @cTaskLOC
+         AND LOT = @cTaskLOT
          AND ID  = @cTaskID
    END TRY
    BEGIN CATCH

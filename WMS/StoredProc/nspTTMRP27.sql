@@ -475,13 +475,13 @@ BEGIN
            AND TD.UserKey         = ''
            AND TD.UserKeyOverRide IN (@c_UserID, '')
            AND TD.TaskDetailKey  <> @c_TaskDetailKey
-           AND AD.AreaKey         = CASE WHEN @c_AreaKey01 <> '' THEN @c_AreaKey01 ELSE AD.AreaKey END
+           AND (@c_AreaKey01 = '' OR @c_AreaKey01 = 'ALL' OR AD.AreaKey = @c_AreaKey01)
            AND EXISTS (
                SELECT 1
                FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
                WHERE TMU.PermissionType = TD.TaskType
                  AND TMU.UserKey        = @c_UserID
-                 AND TMU.AreaKey        = @c_AreaKey01
+                 AND (@c_AreaKey01 = '' OR @c_AreaKey01 = 'ALL' OR TMU.AreaKey = @c_AreaKey01)
                  AND TMU.Permission     = '1'
            )
 
@@ -499,6 +499,8 @@ BEGIN
                ,EditWho    = @c_UserID
                ,TrafficCop = NULL
             WHERE TaskDetailKey = @cGKTaskDetailKey
+              AND Status  = '0'
+              AND UserKey = ''
          END TRY
          BEGIN CATCH
             SET @n_continue = 3
