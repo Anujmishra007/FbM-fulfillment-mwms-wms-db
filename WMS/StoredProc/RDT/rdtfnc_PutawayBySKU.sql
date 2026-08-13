@@ -3365,6 +3365,9 @@ BEGIN
          SET @cOutField05 = @cQTY_PMoveIn
          SET @cOutfield15 = '' -- ExtInfo
 
+         -- Reduce total QTY
+         SET @nQTY = @nQTY - @nScanSNO
+
          -- Go to prev screen
          SET @nScn = 2883
          SET @nStep = @nStep - 5
