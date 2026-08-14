@@ -11,9 +11,9 @@ GO
 /*                                                                      */  
 /* Date         Author   Ver.  Purposes                                 */  
 /* 2024-05-07   NLT013   1.0   UWP-19082 UWP-18889 Create Initial Ver  */  
-/* 2026-06-15   FRO014   2.0   RITM9021237/UWP-62595 Remove SKU filter  */  
+/* 2026-06-15   FRO014   1.1   RITM9021237/UWP-62595 Remove SKU filter  */  
 /*                             RP1 task does not include SKU value      */  
-/* 2026-10-08   Sreeja   2.1   FCR-14583 Auto short reallocation        */  
+/* 2026-10-08   Sreeja   1.2   FCR-14583 Auto short reallocation        */  
 /************************************************************************/  
    
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_1764ExtUpdPGPE]  
