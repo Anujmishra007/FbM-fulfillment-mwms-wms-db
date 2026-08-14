@@ -792,7 +792,7 @@ BEGIN
                AND   (PICKDETAIL.Sku = @c_Sku OR ISNULL(@c_Sku, '') = '')
                AND   (PICKDETAIL.Lot = @c_Lot OR ISNULL(@c_Lot, '') = '')
                AND   PICKDETAIL.ToLoc = @c_FromLoc
-               AND   PICKDETAIL.ID = @c_FromID   --WL14
+               --AND   PICKDETAIL.ID = @c_FromID   --WL14
                AND   PICKDETAIL.WIP_Refno = @c_SourceType
                AND   WAVEDETAIL.WaveKey = @c_Wavekey
                AND   PICKDETAIL.UOM = @c_UOM
