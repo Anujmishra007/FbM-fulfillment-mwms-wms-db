@@ -131,7 +131,7 @@ BEGIN
             @nQTY_RPL   = V_Integer1,  
             @cFacility  = Facility,  
             @nFromStep  = V_FromStep  
-         FROM rdt.rdtMobRec WITH (NOLOCK)  
+         FROM rdt.RDTMOBREC WITH (NOLOCK)  
          WHERE Mobile = @nMobile  
    
          -- Read TaskDetail  
@@ -409,7 +409,10 @@ BEGIN
    GOTO Quit  
    
 RollBackTran:  
-   ROLLBACK TRAN rdt_1764ExtUpdPGPE  
+   IF XACT_STATE() = -1         -- Uncommittable — must full-rollback
+      ROLLBACK TRAN
+   ELSE IF XACT_STATE() = 1     -- Active and committable — rollback to savepoint only
+      ROLLBACK TRAN rdt_1764ExtUpdPGPE 
   
 Quit:  
    WHILE @@TRANCOUNT > @nTranCount  
