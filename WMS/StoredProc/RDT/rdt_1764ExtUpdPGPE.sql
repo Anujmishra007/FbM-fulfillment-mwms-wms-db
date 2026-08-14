@@ -357,10 +357,10 @@ BEGIN
          END  
    
          SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)  
-                              + ' @c_Wavekey        = ''' + ISNULL(@cWaveKey, '') + ''''  
-                              + ', @c_SKU           = ''' + @cSKU + ''''  
-                              + ', @c_UCCNo         = ''' + ISNULL(@cCaseID, '') + ''''  
-                              + ', @c_TaskDetailKey = ''' + @cTaskDetailKey + ''''  
+                     + ' @c_Wavekey        = ''' + REPLACE(ISNULL(@cWaveKey, ''),    '''', '''''') + ''''  
+                     + ', @c_SKU           = ''' + REPLACE(@cSKU,                    '''', '''''') + ''''  
+                     + ', @c_UCCNo         = ''' + REPLACE(ISNULL(@cCaseID, ''),     '''', '''''') + ''''  
+                     + ', @c_TaskDetailKey = ''' + REPLACE(@cTaskDetailKey,           '''', '''''') + ''''
 
          BEGIN TRY
             EXEC dbo.isp_QCmd_SubmitTaskToQCommander  
