@@ -360,6 +360,9 @@ BEGIN
                      @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
                      @nErrNo      OUTPUT, @cErrMsg     OUTPUT
 
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
                   -- Update the user defined field in RDTMOBREC table if @cUserDefine01 is not null or empty
                   -- C_String1 is used for traceability code; use C_String to avoid V_String conflicts
                   IF ISNULL(@cUserDefine01, '') <> ''
@@ -369,14 +372,10 @@ BEGIN
                      END TRY
                      BEGIN CATCH
                         SET @nErrNo = 250754
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'). --250754^Failed to update UserDefine01 in RDTMOBREC
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --250754^Failed to update UserDefine01 in RDTMOBREC
                         GOTO Quit
                      END CATCH
                   END
-
-                  IF @nErrNo <> 0
-                     GOTO Quit
-
                END
             END
             
