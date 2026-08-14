@@ -76,7 +76,7 @@ DECLARE @nSKUNotInASN   INT = 0    -- (james04)
 DECLARE @cSkipCheckingSKUNotInASN   NVARCHAR( 1)   -- (james04)
 DECLARE @cUCCUserdefined01 NVARCHAR(15) = ''
 
-SELECT @cUCCUserdefined01 = ISNULL(V_String4, '') 
+SELECT @cUCCUserdefined01 = ISNULL(C_String1, '') 
 FROM rdt.RDTMOBREC WITH (NOLOCK) 
 WHERE Mobile = @nMobile
 

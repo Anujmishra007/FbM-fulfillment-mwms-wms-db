@@ -361,11 +361,22 @@ BEGIN
                      @nErrNo      OUTPUT, @cErrMsg     OUTPUT
 
                   -- Update the user defined field in RDTMOBREC table if @cUserDefine01 is not null or empty
+                  -- C_String1 is used for traceability code; use C_String to avoid V_String conflicts
                   IF ISNULL(@cUserDefine01, '') <> ''
-                     UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET V_String4 = @cUserDefine01 WHERE Mobile = @nMobile
+                  BEGIN
+                     BEGIN TRY
+                        UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET C_String1 = @cUserDefine01 WHERE Mobile = @nMobile
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 250754
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'). --250754^Failed to update UserDefine01 in RDTMOBREC
+                        GOTO Quit
+                     END CATCH
+                  END
 
                   IF @nErrNo <> 0
                      GOTO Quit
+
                END
             END
             
