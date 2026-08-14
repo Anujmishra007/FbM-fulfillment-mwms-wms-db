@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 2.3                                                          */    
+/* Version: 2.4                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -39,6 +39,8 @@ GO
 /*                            caseid, Remove WL08 (WL12)                 */
 /* 22-Jul-2026 WLChooi  2.3   FCR-14782 Do not hold CPK for UOM2 CONVEYOR*/
 /*                            RPF/ASTTPA. Keep hold for UOM6 (WL13)      */
+/* 14-Aug-2026 WLChooi  2.4   UWP-64096 Rem table linkage & add traceinfo*/
+/*                            to identify taskdetailkey mis-stamp (WL14) */
 /*************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspRLWAV10_CPK]  
    @c_Wavekey            NVARCHAR(10)   
@@ -133,6 +135,12 @@ BEGIN
        , @c_NewPickdetailKey     NVARCHAR(18)   = ''
        , @CUR_PICK               CURSOR
     --WL12 E
+
+    --WL14 S
+    DECLARE @dt_TraceStartDate   DATETIME
+          , @dt_TraceEndDate     DATETIME
+          , @c_StampAction       NVARCHAR(20)
+    --WL14 E
 
     DECLARE @TMP_CL              TABLE                                                                                
       ( [RowID]                  INT               IDENTITY(1,1) PRIMARY KEY                   
@@ -772,17 +780,19 @@ BEGIN
                     , PICKDETAIL.Qty
                FROM #PickDetail_WIP PICKDETAIL (NOLOCK)
                JOIN ORDERS (NOLOCK) ON PICKDETAIL.OrderKey = ORDERS.OrderKey
-               JOIN LOC (NOLOCK) ON PICKDETAIL.ToLoc = LOC.Loc
-               JOIN SKUxLOC (NOLOCK) ON  PICKDETAIL.Storerkey = SKUxLOC.StorerKey
-                                     AND PICKDETAIL.Sku = SKUxLOC.Sku
-                                     AND PICKDETAIL.Loc = SKUxLOC.Loc
+               --WL14 S
+               --JOIN LOC (NOLOCK) ON PICKDETAIL.ToLoc = LOC.Loc
+               --JOIN SKUxLOC (NOLOCK) ON  PICKDETAIL.Storerkey = SKUxLOC.StorerKey
+               --                      AND PICKDETAIL.Sku = SKUxLOC.Sku
+               --                      AND PICKDETAIL.Loc = SKUxLOC.Loc
+               --WL14 E
                JOIN WAVEDETAIL (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey
                WHERE (PICKDETAIL.TaskDetailKey IS NULL OR PICKDETAIL.TaskDetailKey = '')
                AND   PICKDETAIL.Storerkey = @c_Storerkey
                AND   (PICKDETAIL.Sku = @c_Sku OR ISNULL(@c_Sku, '') = '')
                AND   (PICKDETAIL.Lot = @c_Lot OR ISNULL(@c_Lot, '') = '')
                AND   PICKDETAIL.ToLoc = @c_FromLoc
-               AND   PICKDETAIL.ID = IIF(LOC.LoseId = '1', '', @c_FromID)
+               AND   PICKDETAIL.ID = @c_FromID   --WL14
                AND   PICKDETAIL.WIP_Refno = @c_SourceType
                AND   WAVEDETAIL.WaveKey = @c_Wavekey
                AND   PICKDETAIL.UOM = @c_UOM
@@ -797,8 +807,14 @@ BEGIN
                
                WHILE @@FETCH_STATUS = 0 AND @n_TaskQty > 0 AND @n_Continue IN (1, 2)
                BEGIN
+                  --WL14 S
+                  SET @dt_TraceStartDate = GETDATE()
+                  SET @c_StampAction = ''
+                  --WL14 E
+
                   IF @n_PickQty <= @n_TaskQty
                   BEGIN
+                     SET @c_StampAction = 'UPDATE'   --WL14
                      UPDATE #PickDetail_WIP
                      SET TaskDetailKey = @c_TaskdetailKey
                        , EditDate = GETDATE()
@@ -809,7 +825,8 @@ BEGIN
                      SELECT @n_TaskQty = @n_TaskQty - @n_PickQty
                   END
                   ELSE
-                  BEGIN  -- pickqty > taskqty   
+                  BEGIN  -- pickqty > taskqty  
+                     SET @c_StampAction = 'SPLIT'   --WL14 
                      SELECT @n_SplitQty = @n_PickQty - @n_TaskQty
                      
                      EXECUTE nspg_GetKey 'PICKDETAILKEY'
@@ -883,6 +900,28 @@ BEGIN
                         SELECT @n_taskQty = 0
                      END
                   END
+
+                  -- Insert TraceInfo WL14 S
+                  SET @dt_TraceEndDate = GETDATE()
+                  EXEC dbo.isp_InsertTraceInfo @c_TraceCode = N'mspRLWAV10_CPK' -- nvarchar(20)
+                                             , @c_TraceName = N'mspRLWAV10_CPK' -- nvarchar(80)
+                                             , @c_starttime = @dt_TraceStartDate -- datetime
+                                             , @c_endtime = @dt_TraceEndDate -- datetime
+                                             , @c_step1 = @c_StampAction -- nvarchar(20)
+                                             , @c_step2 = @c_TaskdetailKey -- nvarchar(20)
+                                             , @c_step3 = @c_CurrPickdetailkey -- nvarchar(20)
+                                             , @c_step4 = @n_PickQty -- nvarchar(20)
+                                             , @c_step5 = @n_TaskQty -- nvarchar(20)
+                                             , @c_col1 = @c_SKU -- nvarchar(20)
+                                             , @c_col2 = @c_Lot -- nvarchar(20)
+                                             , @c_col3 = @c_FromLoc -- nvarchar(20)
+                                             , @c_col4 = @c_FromID -- nvarchar(20)
+                                             , @c_col5 = @c_CaseID -- nvarchar(20)
+                                             , @b_Success = @b_Success OUTPUT -- int
+                                             , @n_Err = @n_Err OUTPUT -- int
+                                             , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(250)
+                  -- Insert TraceInfo WL14 E
+                  
                   FETCH NEXT FROM @CUR_PICK INTO @c_CurrPickdetailkey, @n_PickQty
                END
                CLOSE @CUR_PICK
