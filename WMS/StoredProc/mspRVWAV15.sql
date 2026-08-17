@@ -151,12 +151,6 @@ BEGIN
    WHILE @@TRANCOUNT < @n_starttcnt
       BEGIN TRAN
 
-   IF CURSOR_STATUS('LOCAL', 'CUR_PACK') IN (0 , 1)
-   BEGIN
-      CLOSE CUR_PACK
-      DEALLOCATE CUR_PACK   
-   END
-   
    IF @n_Continue = 3
    BEGIN
       SELECT @b_Success = 0
