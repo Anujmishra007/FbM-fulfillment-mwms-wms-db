@@ -137,7 +137,7 @@ BEGIN
                  AND PD.Status    <> '9'
                  AND NOT EXISTS (
                     SELECT 1 FROM dbo.PackHeader PH WITH(NOLOCK)
-                    WHERE PH.Pickheaderkey = @cPickSlipNo
+                    WHERE PH.PickSlipNo = @cPickSlipNo
                       AND PD.Orderkey      = PH.Orderkey
                  )
             )
