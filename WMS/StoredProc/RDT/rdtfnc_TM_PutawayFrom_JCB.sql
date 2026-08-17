@@ -112,6 +112,8 @@ DECLARE
    @cNewTaskDetailKey   NVARCHAR( 10),
    @cCheckDigitLOC      NVARCHAR( 20),
    @cLocCategory              NVARCHAR( 10),
+   @cLocationGroup            NVARCHAR( 30),
+   @cPutawayZone              NVARCHAR( 10),
    @cMsg01                    NVARCHAR(20),
    @cMsg02                    NVARCHAR(20),
    @cMsg03                    NVARCHAR(20),
@@ -1145,7 +1147,9 @@ BEGIN
          @cTaskDetailMsg01 = TD.Message01,  -- PutawayZone
          @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
          @cTaskDetailMsg03 = TD.Message03,  -- LocationCategory
-         @cLocCategory = LOC.LocationCategory
+         @cLocationGroup = LOC.LocationGroup,
+         @cLocCategory = LOC.LocationCategory,
+         @cPutawayZone = LOC.PutawayZone
       FROM dbo.TaskDetail TD WITH(NOLOCK)
       INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
       INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = TD.StorerKey AND LLI.ID = TD.FromID
@@ -1195,9 +1199,9 @@ BEGIN
                   AND LLI.Sku = @cSKU
                   AND LOC.Loc <> @cToLoc
                   AND LOC.Status = 'OK'
-                  AND LOC.PutawayZone = @cTaskDetailMsg01
-                  AND LOC.LocationGroup = @cTaskDetailMsg02
-                  AND LOC.LocationCategory = @cTaskDetailMsg03
+                  AND LOC.PutawayZone = @cPutawayZone
+                  AND LOC.LocationGroup = @cLocationGroup
+                  AND LOC.LocationCategory = @cLocCategory
                   AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                   AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
                   AND NOT EXISTS(SELECT 1 
@@ -1460,6 +1464,8 @@ BEGIN
          @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
          @cTaskDetailMsg03 = TD.Message03,  -- LocationCategory
          @cLocCategory = LOC.LocationCategory,
+         @cLocationGroup = LOC.LocationGroup,
+         @cPutawayZone = LOC.PutawayZone,
          @cSuggFinalLoc = TD.FinalLoc
       FROM dbo.TaskDetail TD WITH(NOLOCK)
       INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
@@ -1545,9 +1551,9 @@ BEGIN
                         AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.Qty IS NULL)
                         AND LOC.Loc = @cToLoc
                         AND LOC.Status = 'OK'
-                        AND LOC.PutawayZone = @cTaskDetailMsg01
-                        AND LOC.LocationGroup = @cTaskDetailMsg02
-                        AND LOC.LocationCategory = @cTaskDetailMsg03
+                        AND LOC.PutawayZone = @cPutawayZone
+                        AND LOC.LocationGroup = @cLocationGroup
+                        AND LOC.LocationCategory = @cLocCategory
                         AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
                         AND NOT EXISTS(SELECT 1
                                     FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
@@ -1646,7 +1652,9 @@ BEGIN
          END
       END
 
-      SELECT @cLocCategory = LocationCategory
+      SELECT @cLocCategory = LocationCategory,
+         @cLocationGroup = LocationGroup,
+         @cPutawayZone = PutawayZone
       FROM dbo.Loc WITH(NOLOCK)
       WHERE Facility = @cFacility
          AND Loc = @cToLoc
@@ -2333,6 +2341,8 @@ BEGIN
                      -- Find a new ToLoc 
                      SELECT
                         @cLocCategory = LOC.LocationCategory,
+                        @cPutawayZone = LOC.PutawayZone,
+                        @cLocationGroup = LOC.LocationGroup,
                         @cLocAisle = LOC.LocAisle,
                         @cTaskDetailMsg01 = TD.Message01,  -- PutawayZone
                         @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
@@ -2375,9 +2385,9 @@ BEGIN
                                  AND LLI.Sku = @cSKU
                                  AND LLI.Qty - LLI.QtyPicked > 0
                                  AND LOC.Status = 'OK'
-                                 AND LOC.PutawayZone = @cTaskDetailMsg01
-                                 AND LOC.LocationGroup = @cTaskDetailMsg02
-                                 AND LOC.LocationCategory = @cTaskDetailMsg03
+                                 AND LOC.PutawayZone = @cPutawayZone
+                                 AND LOC.LocationGroup = @cLocationGroup
+                                 AND LOC.LocationCategory = @cLocCategory
                                  AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                                  AND LOC.CommingleSku = '1'
                                  AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
@@ -2751,28 +2761,56 @@ BEGIN
                   BEGIN
                      DELETE FROM @tCandidateLoc
 
-                     INSERT INTO @tCandidateLoc (Loc)
-                     SELECT TOP 5 LOC.Loc
-                     FROM dbo.LOC WITH(NOLOCK)
-                     INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                        ON LLI.Loc = LOC.Loc
-                     WHERE Facility = @cFacility
-                        AND LLI.StorerKey = @cStorerKey
-                        AND LLI.Sku = @cSKU
-                        AND LOC.Loc <> @cSuggToLoc
-                        AND LOC.Status = 'OK'
-                        AND LOC.PutawayZone = @cTaskDetailMsg01
-                        AND LOC.LocationGroup = @cTaskDetailMsg02
-                        AND LOC.LocationCategory = @cTaskDetailMsg03
-                        AND LOC.LocAisle = @cLocAisle
-                        AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
-                        AND NOT EXISTS(SELECT 1 
-                                    FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                                    WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                                       AND PAE.PutawayZone = LOC.PutawayZone
-                                 )
-                     GROUP BY LOC.Loc
-                     ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     IF @cChkLocMaxPallet = '1'
+                     BEGIN
+                        INSERT INTO @tCandidateLoc (Loc)
+                        SELECT TOP 5 LOC.Loc
+                        FROM dbo.LOC WITH(NOLOCK)
+                        INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                           ON LLI.Loc = LOC.Loc
+                        WHERE Facility = @cFacility
+                           AND LLI.StorerKey = @cStorerKey
+                           AND LLI.Sku = @cSKU
+                           AND LOC.Loc <> @cSuggToLoc
+                           AND LOC.Status = 'OK'
+                           AND LOC.PutawayZone = @cPutawayZone
+                           AND LOC.LocationGroup = @cLocationGroup
+                           AND LOC.LocationCategory = @cLocCategory
+                           AND LOC.LocAisle = @cLocAisle
+                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                           AND NOT EXISTS(SELECT 1 
+                                       FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                       WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                          AND PAE.PutawayZone = LOC.PutawayZone
+                                    )
+                        GROUP BY LOC.Loc
+                        ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     END
+                     ELSE
+                     BEGIN
+                        INSERT INTO @tCandidateLoc (Loc)
+                        SELECT TOP 5 LOC.Loc
+                        FROM dbo.LOC WITH(NOLOCK)
+                        INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                           ON LLI.Loc = LOC.Loc
+                        WHERE Facility = @cFacility
+                           AND LLI.StorerKey = @cStorerKey
+                           AND LLI.Sku = @cSKU
+                           AND LOC.Loc <> @cSuggToLoc
+                           AND LOC.Status = 'OK'
+                           AND LOC.PutawayZone = @cTaskDetailMsg01
+                           AND LOC.LocationGroup = @cTaskDetailMsg02
+                           AND LOC.LocationCategory = @cTaskDetailMsg03
+                           AND LOC.LocAisle = @cLocAisle
+                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                           AND NOT EXISTS(SELECT 1 
+                                       FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                       WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                          AND PAE.PutawayZone = LOC.PutawayZone
+                                    )
+                        GROUP BY LOC.Loc
+                        ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     END
 
                      DECLARE 
                         @cSuggestToLocTemp       NVARCHAR(10),
