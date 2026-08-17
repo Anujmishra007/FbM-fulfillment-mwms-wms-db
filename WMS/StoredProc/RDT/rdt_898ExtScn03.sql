@@ -5,15 +5,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/  
-/* Store procedure: rdt_898ExtScn03                                           */  
-/*                                                                            */  
-/*                                                                            */  
-/* Date        Rev     Author   Purposes                                      */  
-/* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
-/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
-/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99            */
-/******************************************************************************/  
+/*******************************************************************************************/  
+/* Store procedure: rdt_898ExtScn03                                                        */  
+/*                                                                                         */  
+/*                                                                                         */  
+/* Date        Rev     Author   Purposes                                                   */  
+/* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                                           */  
+/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields                 */  
+/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99                         */
+/* 2026-08-12  1.3     Sreeja   FCR-14542 update UserDefine01 with the Traceability code   */
+/*******************************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
    @nMobile      INT,           
@@ -361,6 +362,20 @@ BEGIN
 
                   IF @nErrNo <> 0
                      GOTO Quit
+
+                  -- Update the user defined field in RDTMOBREC table if @cUserDefine01 is not null or empty
+                  -- C_String1 is used for traceability code; use C_String to avoid V_String conflicts
+                  IF ISNULL(@cUserDefine01, '') <> ''
+                  BEGIN
+                     BEGIN TRY
+                        UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET C_String1 = @cUserDefine01 WHERE Mobile = @nMobile
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 250754
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --250754^Failed to update UserDefine01 in RDTMOBREC
+                        GOTO Quit
+                     END CATCH
+                  END
                END
             END
             
