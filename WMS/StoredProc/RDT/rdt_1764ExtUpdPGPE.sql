@@ -234,8 +234,8 @@ BEGIN
             END CATCH  
          END  
    
-         SET @cPickFromLoc = ISNULL(NULLIF(@cLogicalToLoc, ''), @cToLoc)  
-   
+         SET @cPickFromLoc = ISNULL(NULLIF(@cLogicalToLoc, ''), @cFinalLoc)  
+
          SELECT @cLoseID = LoseID  
          FROM dbo.Loc WITH (NOLOCK)  
          WHERE Loc = @cPickFromLoc  
@@ -263,7 +263,6 @@ BEGIN
             WHERE  LOT = @cLOT  
               AND StorerKey = @cStorerKey  
               AND  LOC = @cFromLOC  
-              AND  ID  = @cFromID  
          END TRY  
          BEGIN CATCH  
             SET @nErrNo = 276354  
@@ -277,8 +276,8 @@ BEGIN
          WHERE StorerKey    = @cStorerKey  
            AND FromLoc      = @cFromLOC  
            AND FromID       = @cFromID  
-           AND SuggestedLOC = ISNULL(NULLIF(@cLogicalToLoc, ''), @cToLoc)  
-           AND SKU          = @cSKU  
+           AND SuggestedLOC = @cFinalLoc  
+           AND (ISNULL(@cSKU, '') = '' OR SKU = @cSKU) 
            AND Qty          = @nTaskQty  
          ORDER BY AddDate DESC  
   
@@ -306,7 +305,7 @@ BEGIN
                GOTO RollBackTran   
             END CATCH  
          END  
-  
+
          -- Short-close the RPF task: mark as completed with 0 qty moved.  
          -- Without this, Fn1764 loops picker back to Step 2 of the same task.  
          BEGIN TRY  
