@@ -617,6 +617,25 @@ BEGIN
       END
    END
 
+   IF @n_Continue = 1 
+   BEGIN
+      UPDATE WAVE WITH (ROWLOCK)
+         SET TMReleaseFlag = 'Y'
+          ,  TrafficCop = NULL
+          ,  EditWho  = SUSER_SNAME()
+          ,  EditDate = GETDATE()
+      WHERE WaveKey = @c_Wavekey
+
+      SELECT @n_Err = @@ERROR
+
+      IF @n_Err <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_ErrMsg = 'NSQL83040: Update WAVE Failed. (mspRLWAV15)'
+         GOTO QUIT_SP
+      END
+   END
+
 QUIT_SP:
    --Delete pickdetail_WIP work in progress staging table
    IF @n_Continue IN (1,2)
