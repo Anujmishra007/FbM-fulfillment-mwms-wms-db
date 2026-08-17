@@ -14,6 +14,7 @@ GO
 /*                                                                          */
 /* Date         Author    Ver.   Purposes                                   */
 /* 2026-03-11   AGA399    1.0.0  Created                                    */
+/* 2026-08-17   Dennis    1.1.0  UWP-64142 Exclude 1837 ASTMV from check    */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1816ExtUpdCSCUK]
@@ -66,7 +67,7 @@ BEGIN
                SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
                WHERE WaveKey       = @cWaveKey
                AND   StorerKey     = @cStorerKey
-               AND   TaskType      IN ('RPF', 'ASTTPA', 'ASTMV')
+               AND   TaskType      IN ('RPF', 'ASTTPA')
                AND   Status        = '0'
                AND   TaskDetailKey != @cTaskdetailKey
                AND   SourceType    <> 'rdt_1837ExtScn02'
