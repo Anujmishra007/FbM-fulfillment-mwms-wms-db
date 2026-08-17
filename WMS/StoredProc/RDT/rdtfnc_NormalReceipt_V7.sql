@@ -68,6 +68,7 @@ GO
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                        */
 /* 2026-06-17 5.9  Sreeja   FCR-13976 Add call of ExtUpd in Step_5 and           */
 /*                          ExtScnSP call in Step_3                              */
+/* 2026-08-10 6.0  Dennis   FCR-14211 Goto Step_6_Fail on error; clear @nQTY    */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -3527,7 +3528,7 @@ BEGIN
       END
 
       IF @nErrNo <> 0
-         GOTO Quit
+         GOTO Step_6_Fail
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
@@ -3798,6 +3799,7 @@ BEGIN
    GOTO Quit
 
    Step_6_Fail:
+      SET @nQTY = 0
 
 END
 GOTO Quit
@@ -5688,6 +5690,8 @@ BEGIN
             ('@cReceiptKey', @cReceiptKey),
             ('@cPalletType', @cPalletType)
 
+         SET @cUDF01 = ''
+
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
          @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -5720,9 +5724,12 @@ BEGIN
          @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
          @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
          @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+
+         IF @cUDF01 = 'NO UPD RDTMOBREC'
+            RETURN
+
          IF @nErrNo <> 0
             GOTO Quit
-
       END
    END
 END

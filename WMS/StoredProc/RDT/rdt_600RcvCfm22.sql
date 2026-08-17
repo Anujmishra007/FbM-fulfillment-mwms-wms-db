@@ -14,6 +14,9 @@ GO
 /* 2025-05-20 1.0  CYU027   FCR-4213 Created                               */
 /* 2026-06-29 1.1  Sreeja   FCR-14112 Default QTY for PC&TB tires          */
 /* 2026-07-28 1.2  Cuize    FCR-14406 Configurable cutoff, PC class only   */
+/* 2026-08-12 1.3  Dennis   FCR-14211 Apply same DOT logic to TB class     */
+/* 2026-08-12 1.4  Dennis   FCR-14211 DOT logic applies to all SKU classes */
+/* 2026-08-14 1.5  Dennis   FCR-14211 Revert: only PC class applies OLD/FRESH */
 /***************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600RcvCfm22](
@@ -102,14 +105,6 @@ BEGIN
    FROM dbo.Facility WITH (NOLOCK)
    WHERE Facility = @cFacility
 
-   -- FCR-14406: DOT logic only applies to SKU.Class = 'PC'
-   -- Other classes default to FRESH
-   IF ISNULL(@cSKUType, '') <> 'PC'
-   BEGIN
-      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
-      GOTO Receive
-   END
-
    -- Determine correct MIN DOT BEFORE date conversion
    -- First tire on pallet: MIN DOT defaults to PCS DOT
    IF ISNULL(@cLottable02, '') = '' AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
@@ -184,6 +179,13 @@ BEGIN
    SET @CurrentDate = GETDATE()
 
    IF @TargetDate > @CurrentDate OR YEAR(@TargetDate) > 2000 + @Year
+   BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
+      GOTO Receive
+   END
+
+   -- FCR-14211: Only PC class applies OLD/FRESH cutoff logic; all other classes default to FRESH
+   IF @cSKUType <> 'PC'
    BEGIN
       SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
@@ -313,6 +315,63 @@ BEGIN
       @cConditionCode = @cConditionCode,
       @cSubreasonCode = '',
       @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
+
+      IF @nErrNo = 0 AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+      BEGIN
+         -- Update prior confirmed lines on this pallet when current PCS DOT is older than their MIN DOT
+         -- @cLottable03 and @dLottable04 already computed above from the final MIN DOT for this receipt
+         BEGIN TRY
+            UPDATE dbo.ReceiptDetail WITH (ROWLOCK)
+            SET Lottable02 = @cLottable07,
+                Lottable03 = @cLottable03,
+                Lottable04 = @dLottable04
+            WHERE ReceiptKey = @cReceiptKey
+               AND StorerKey = @cStorerKey
+               AND ToID      = @cToID
+               AND SKU       = @cSKUCode
+               AND QtyReceived > 0
+               AND LEN(ISNULL(Lottable02, '')) = 4
+               AND Lottable02 LIKE '[0-9][0-9][0-9][0-9]'
+               AND (
+                     TRY_CAST(RIGHT(@cLottable07, 2) AS INT) < TRY_CAST(RIGHT(Lottable02, 2) AS INT)
+                     OR (
+                         TRY_CAST(RIGHT(@cLottable07, 2) AS INT) = TRY_CAST(RIGHT(Lottable02, 2) AS INT)
+                         AND TRY_CAST(LEFT(@cLottable07, 2) AS INT) < TRY_CAST(LEFT(Lottable02, 2) AS INT)
+                     )
+                   )
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 270601
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+            GOTO Quit
+         END CATCH
+
+         BEGIN TRY
+            UPDATE la WITH (ROWLOCK)
+            SET la.Lottable02 = @cLottable07,
+                la.Lottable03 = @cLottable03,
+                la.Lottable04 = @dLottable04
+            FROM dbo.LOTATTRIBUTE la
+            INNER JOIN dbo.LOTxLOCxID lxi WITH (NOLOCK) ON la.Lot = lxi.Lot
+            WHERE lxi.StorerKey = @cStorerKey
+              AND lxi.Sku       = @cSKUCode
+              AND lxi.Id        = @cToID
+              AND LEN(ISNULL(la.Lottable02, '')) = 4
+              AND la.Lottable02 LIKE '[0-9][0-9][0-9][0-9]'
+              AND (
+                    TRY_CAST(RIGHT(@cLottable07, 2) AS INT) < TRY_CAST(RIGHT(la.Lottable02, 2) AS INT)
+                    OR (
+                        TRY_CAST(RIGHT(@cLottable07, 2) AS INT) = TRY_CAST(RIGHT(la.Lottable02, 2) AS INT)
+                        AND TRY_CAST(LEFT(@cLottable07, 2) AS INT) < TRY_CAST(LEFT(la.Lottable02, 2) AS INT)
+                    )
+                  )
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 270602
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+            GOTO Quit
+         END CATCH
+      END
 
    Quit:
 END
