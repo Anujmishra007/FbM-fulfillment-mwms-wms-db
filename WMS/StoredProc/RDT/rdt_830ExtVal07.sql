@@ -91,7 +91,6 @@ BEGIN
                AND LI.ID        = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
               AND PD.Storerkey  = @cStorerKey
-              AND PD.SKU        = @cSKU
               AND PD.Loc        = @cSuggLOC
               AND PD.Status     <> '9'
 
