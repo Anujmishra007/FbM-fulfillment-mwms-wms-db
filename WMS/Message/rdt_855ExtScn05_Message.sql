@@ -41,5 +41,14 @@ EXECUTE rdt.rdtAddMsg 268668, 10, '268668SKU Completed', 'us_english', 855, 0, '
 EXECUTE rdt.rdtAddMsg 268669, 10, '268669GenRefIDFail', 'us_english', 855, 0, '268669Generate ReferenceID Failed'
 EXECUTE rdt.rdtAddMsg 268670, 10, '268670UpdOrdInfoFl', 'us_english', 855, 0, '268670Update OrderInfo Failed'
 
+--Unique ErrNo for debug (FCR-13167)
+EXECUTE rdt.rdtAddMsg 268671, 10, '268671SKU NotInCtn',   'us_english', 855, 0, '268671SKU not in carton'
+EXECUTE rdt.rdtAddMsg 268672, 10, '268672PackComplete',   'us_english', 855, 0, '268672Packing Complete'
+EXECUTE rdt.rdtAddMsg 268673, 10, '268673PackComplete',   'us_english', 855, 0, '268673Packing Complete'
+EXECUTE rdt.rdtAddMsg 268674, 10, '268674PackComplete',   'us_english', 855, 0, '268674Packing Complete'
+EXECUTE rdt.rdtAddMsg 268675, 10, '268675PackComplete',   'us_english', 855, 0, '268675Packing Complete'
+EXECUTE rdt.rdtAddMsg 268676, 10, '268676OnlyOpt1Alwd',   'us_english', 855, 0, '268676Only option 1 allowed'
+EXECUTE rdt.rdtAddMsg 268677, 10, '268677OnlyOpt1Alwd',   'us_english', 855, 0, '268677Only option 1 allowed'
+
 --Verify messages
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 268651 AND 268700

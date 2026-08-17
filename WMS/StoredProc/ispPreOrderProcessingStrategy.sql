@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispPreOrderProcessingStrategy]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[ispPreOrderProcessingStrategy]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -10,24 +5,23 @@ GO
 /************************************************************************/
 /* Stored Procedure: ispPreOrderProcessingStrategy                      */
 /* Creation Date: 17-APR-2018                                           */
-/* Copyright: LFL                                                       */
+/* Copyright: Maersk Logistics                                          */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:  WMS-4345 Change PreAllocationSP support                    */
 /*                  allocation strategykey pickcode setup (SOS#306662)  */
 /*                                                                      */
-/* Called By:                                                           */
+/* Called By: ispPreAllocationWrapper                                   */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 1.0                                                         */
+/* Version: 1.1                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Rev   Purposes                                  */
+/* Date        Author   Rev   Purposes                                  */
+/* 2026-08-11  Wan01    1.1   FCR-14816 - US JCB allocation strategy    */
 /************************************************************************/
-CREATE PROC [dbo].[ispPreOrderProcessingStrategy]  
+CREATE OR ALTER PROC [dbo].[ispPreOrderProcessingStrategy]  
      @c_OrderKey    NVARCHAR(10) = ''
    , @c_LoadKey     NVARCHAR(10) = ''
    , @C_Wavekey     NVARCHAR(10) = '' 
@@ -46,7 +40,7 @@ BEGIN
             @n_StartTCnt                  INT, -- Holds the current transaction count   
             @c_sCurrentLineNumber         NVARCHAR(5),
             @c_UOM                        NVARCHAR(10),
-            @c_PickCode                   NVARCHAR(10),
+            @c_PickCode                   NVARCHAR(30),                             --(Wan01)
             @c_LocationTypeOverride       NVARCHAR(10),
             @c_LocationTypeOverRideStripe NVARCHAR(10)
 

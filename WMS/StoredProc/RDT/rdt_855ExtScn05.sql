@@ -16,7 +16,6 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2026-06-01  1.0  Cuize    FCR-13167 Created from rdt_855ExtScn01     */
-/* 2026-07-07  1.1  Cuize    FCR-13139 PPA Packing flow enhancements    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn05] (
@@ -309,638 +308,635 @@ BEGIN
       BEGIN
          IF @nScn = 814  --FIRST SCREEN
          BEGIN
-            IF @nAction = 0
+            IF @nInputKey = 1
             BEGIN
-               IF @nInputKey = 1
-               BEGIN
-                  IF @nFunc = 855 SET @cDropID = ISNULL( @cInField05, '') -- DropID
+               IF @nFunc = 855 SET @cDropID = ISNULL( @cInField05, '') -- DropID
 
-                  IF @nFunc = 855 AND @cDropID = ''
-                  BEGIN
-                     SET @nErrNo = 217352
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- DROP/CASE ID req
-                     GOTO Step_1_99_Fail
+               IF @nFunc = 855 AND @cDropID = ''
+               BEGIN
+                  SET @nErrNo = 217352
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- DROP/CASE ID req
+                  GOTO Step_1_99_Fail
+               END
+
+               -- FCR-6657: Check WorkOrderDetail qty discrepancy before packing
+               IF EXISTS(
+                  SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                  INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
+                  ON WOD.StorerKey = PKD.StorerKey
+                     AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                     AND WOD.WkOrdUdef1 = PKD.SKU
+                  WHERE PKD.StorerKey = @cStorerKey
+                    AND (PKD.CaseID = @cDropID OR PKD.DropID = @cDropID)
+                    AND WOD.type = 'S02'
+                    AND TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT) > 0)
+               BEGIN
+                  DECLARE @wSKU NVARCHAR(20)
+                  DECLARE @wQty INT = 0
+
+                  DECLARE @tPKD TABLE
+                  (
+                     StorerKey         NVARCHAR(15),
+                     OrderKey          NVARCHAR(10),
+                     SKU               NVARCHAR(20),
+                     Qty               INT
+                  )
+
+                  IF EXISTS (SELECT 1
+                        FROM dbo.ORDERS ord WITH (NOLOCK)
+                        INNER JOIN dbo.PickDetail pd WITH (NOLOCK) ON ord.OrderKey = pd.OrderKey
+                        INNER JOIN dbo.Wave w WITH (NOLOCK) ON ord.UserDefine09 = w.WaveKey
+                        WHERE ord.StorerKey = @cStorerKey
+                           AND pd.StorerKey = @cStorerKey
+                           AND (pd.CaseID = @cDropID OR pd.DropId = @cDropID)
+                           AND w.UserDefine09 = 'Y')
+                  BEGIN -- Automation
+                     SELECT TOP 1
+                        @wSKU = W.SKU,
+                        @wQty = W.WorkOrderQty
+                     FROM
+                        (
+                           SELECT
+                              pd.SKU,
+                              SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
+                              SUM(pd.Qty) AS PickQty
+                           FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                           INNER JOIN dbo.PackHeader ph WITH(NOLOCK)
+                              ON (WOD.StorerKey = ph.StorerKey AND WOD.ExternWorkOrderKey = ph.OrderKey)
+                           INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
+                              ON (ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo AND WOD.WkOrdUdef1 = pd.SKU)
+                           WHERE pd.StorerKey = @cStorerKey
+                              AND (pd.LabelNo = @cDropID OR pd.DropID = @cDropID)
+                              AND WOD.type = 'S02'
+                           GROUP BY pd.SKU
+                           HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
+                        ) AS W
+                     WHERE W.WorkOrderQty <> W.PickQty
+                  END
+                  ELSE
+                  BEGIN -- Manual
+                     DELETE FROM @tPKD
+
+                     INSERT INTO @tPKD (StorerKey, OrderKey, SKU, Qty)
+                     SELECT StorerKey, OrderKey, SKU, SUM(Qty)
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND (CaseID = @cDropID OR DropID = @cDropID)
+                     GROUP BY StorerKey, OrderKey, SKU
+
+                     SELECT TOP 1
+                        @wSKU = W.SKU,
+                        @wQty = W.WorkOrderQty
+                     FROM
+                        (
+                           SELECT
+                              PKD.SKU,
+                              SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
+                              SUM(PKD.Qty) AS PickQty
+                           FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                           INNER JOIN @tPKD PKD
+                              ON WOD.StorerKey = PKD.StorerKey
+                              AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                              AND WOD.WkOrdUdef1 = PKD.SKU
+                           WHERE WOD.type = 'S02'
+                           GROUP BY PKD.SKU
+                           HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
+                        ) AS W
+                     WHERE W.WorkOrderQty <> W.PickQty
                   END
 
-                  -- FCR-6657: Check WorkOrderDetail qty discrepancy before packing
-                  IF EXISTS(
-                     SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
-                     INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
-                     ON WOD.StorerKey = PKD.StorerKey
-                        AND WOD.ExternWorkOrderKey = PKD.OrderKey
-                        AND WOD.WkOrdUdef1 = PKD.SKU
-                     WHERE PKD.StorerKey = @cStorerKey
-                       AND (PKD.CaseID = @cDropID OR PKD.DropID = @cDropID)
-                       AND WOD.type = 'S02'
-                       AND TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT) > 0)
+                  IF (ISNULL(@wSKU, '') <> '')
                   BEGIN
-                     DECLARE @wSKU NVARCHAR(20)
-                     DECLARE @wQty INT = 0
+                     -- Message Queue
+                     DECLARE
+                        @cMsg01 NVARCHAR(20) = '',
+                        @cMsg02 NVARCHAR(20) = '',
+                        @cMsg03 NVARCHAR(20) = '',
+                        @cMsg04 NVARCHAR(20) = '',
+                        @cMsg05 NVARCHAR(20) = '',
+                        @cMsg06 NVARCHAR(20) = '',
+                        @cMsg07 NVARCHAR(20) = '',
+                        @cMsg08 NVARCHAR(20) = '',
+                        @cMsg09 NVARCHAR(20) = ''
 
-                     DECLARE @tPKD TABLE
-                     (
-                        StorerKey         NVARCHAR(15),
-                        OrderKey          NVARCHAR(10),
-                        SKU               NVARCHAR(20),
-                        Qty               INT
-                     )
+                     SET @cMsg01 = 'Error.See Supervisor'
+                     SET @cMsg02 = 'Qty does not match.'
+                     SET @cMsg03 = 'Expected:' + CAST(@wQty AS NVARCHAR(10))
+                     SET @cMsg04 = 'On ' + @wSKU
+                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                          @nErrNo = @nErrNo,
+                          @cErrMsg = @cErrMsg,
+                          @cLine01 = @cMsg01,
+                          @cLine02 = @cMsg02,
+                          @cLine03 = @cMsg03,
+                          @cLine04 = @cMsg04,
+                          @cLine05 = @cMsg05,
+                          @cLine06 = @cMsg06,
+                          @cLine07 = @cMsg07,
+                          @cLine08 = @cMsg08,
+                          @cLine09 = @cMsg09,
+                          @nDisplayMsg = 0
 
-                     IF EXISTS (SELECT 1
-                           FROM dbo.ORDERS ord WITH (NOLOCK)
-                           INNER JOIN dbo.PickDetail pd WITH (NOLOCK) ON ord.OrderKey = pd.OrderKey
-                           INNER JOIN dbo.Wave w WITH (NOLOCK) ON ord.UserDefine09 = w.WaveKey
-                           WHERE ord.StorerKey = @cStorerKey
-                              AND pd.StorerKey = @cStorerKey
-                              AND (pd.CaseID = @cDropID OR pd.DropId = @cDropID)
-                              AND w.UserDefine09 = 'Y')
-                     BEGIN -- Automation
-                        SELECT TOP 1
-                           @wSKU = W.SKU,
-                           @wQty = W.WorkOrderQty
-                        FROM
-                           (
-                              SELECT
-                                 pd.SKU,
-                                 SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
-                                 SUM(pd.Qty) AS PickQty
-                              FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
-                              INNER JOIN dbo.PackHeader ph WITH(NOLOCK)
-                                 ON (WOD.StorerKey = ph.StorerKey AND WOD.ExternWorkOrderKey = ph.OrderKey)
-                              INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
-                                 ON (ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo AND WOD.WkOrdUdef1 = pd.SKU)
-                              WHERE pd.StorerKey = @cStorerKey
-                                 AND (pd.LabelNo = @cDropID OR pd.DropID = @cDropID)
-                                 AND WOD.type = 'S02'
-                              GROUP BY pd.SKU
-                              HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
-                           ) AS W
-                        WHERE W.WorkOrderQty <> W.PickQty
-                     END
-                     ELSE
-                     BEGIN -- Manual
-                        DELETE FROM @tPKD
+                     -- Go to discrepancy options screen (6915)
+                     SET @cOutField01 = @cDropID -- CARTON ID
+                     SET @cOutField02 = '' -- Option input
+                     SET @cFrom814Flag = 'Y' -- FCR-6657: Mark as from 814, only option 1 allowed
 
-                        INSERT INTO @tPKD (StorerKey, OrderKey, SKU, Qty)
-                        SELECT StorerKey, OrderKey, SKU, SUM(Qty)
-                        FROM dbo.PickDetail WITH(NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                           AND (CaseID = @cDropID OR DropID = @cDropID)
-                        GROUP BY StorerKey, OrderKey, SKU
+                     SELECT
+                        @cFieldAttr01  =  '',
+                        @cFieldAttr02  =  '',
+                        @cFieldAttr03  =  '',
+                        @cFieldAttr04  =  '',
+                        @cFieldAttr05  =  '',
+                        @cFieldAttr06  =  '',
+                        @cFieldAttr07  =  '',
+                        @cFieldAttr08  =  '',
+                        @cFieldAttr09  =  '',
+                        @cFieldAttr10  =  ''
 
-                        SELECT TOP 1
-                           @wSKU = W.SKU,
-                           @wQty = W.WorkOrderQty
-                        FROM
-                           (
-                              SELECT
-                                 PKD.SKU,
-                                 SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
-                                 SUM(PKD.Qty) AS PickQty
-                              FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
-                              INNER JOIN @tPKD PKD
-                                 ON WOD.StorerKey = PKD.StorerKey
-                                 AND WOD.ExternWorkOrderKey = PKD.OrderKey
-                                 AND WOD.WkOrdUdef1 = PKD.SKU
-                              WHERE WOD.type = 'S02'
-                              GROUP BY PKD.SKU
-                              HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
-                           ) AS W
-                        WHERE W.WorkOrderQty <> W.PickQty
-                     END
+                     SET @nAfterScn = 6915
+                     SET @nAfterStep = 99
+                     GOTO Quit
+                  END
+               END -- FCR-6657 discrepancy check
 
-                     IF (ISNULL(@wSKU, '') <> '')
+               SET @cSingleUnitOrdFlag = 'N' --V1.4.0
+
+               SET @cDropIDFlag=''
+               -- if scanned CartonID is dropid(toteid), replace it with caseid
+               IF EXISTS (
+                  SELECT 1 FROM dbo.PickDetail WITH(NOLOCK)
+                  WHERE DropId = @cDropID
+                     AND StorerKey = @cStorerKey
+                     AND ShipFlag <> 'Y')
+               BEGIN
+                  IF LEN(@cDropID) = 10
+                     SET @cDropIDFlag = 'Y'
+
+                  --V1.4.0 start
+                  --V1.5.0 Replace the old flag set logic
+                  --V1.5.1 Only check PickDetail
+                  IF NOT EXISTS (
+                     SELECT 1
+                     FROM dbo.PickDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                           AND DropID = @cDropID
+                           AND ShipFlag <> 'Y'
+                     GROUP BY OrderKey
+                     HAVING COUNT(DISTINCT OrderLineNumber) <> 1
+                        OR COUNT(DISTINCT SKU) <> 1
+                        OR SUM(Qty) <> 1
+                  )
+                  AND NOT EXISTS (
+                     SELECT 1
+                     FROM dbo.PickDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                           AND DropID = @cDropID
+                           AND ShipFlag <> 'Y'
+                     GROUP BY CaseID
+                     HAVING COUNT(PickDetailKey) <> 1
+                  )
+                  BEGIN
+
+                     IF NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.PickDetail PKD WITH (NOLOCK)
+                        WHERE PKD.StorerKey = @cStorerKey
+                              AND DropID = @cDropID
+                              AND ShipFlag <> 'Y'
+                              AND UOM = '2'
+                     ) -- V1.5.2 end
                      BEGIN
-                        -- Message Queue
-                        DECLARE
-                           @cMsg01 NVARCHAR(20) = '',
-                           @cMsg02 NVARCHAR(20) = '',
-                           @cMsg03 NVARCHAR(20) = '',
-                           @cMsg04 NVARCHAR(20) = '',
-                           @cMsg05 NVARCHAR(20) = '',
-                           @cMsg06 NVARCHAR(20) = '',
-                           @cMsg07 NVARCHAR(20) = '',
-                           @cMsg08 NVARCHAR(20) = '',
-                           @cMsg09 NVARCHAR(20) = ''
+                        SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
+                        IF @cSingleUnitOrdConfig = '0'
+                           SET @cSingleUnitOrdConfig = ''
 
-                        SET @cMsg01 = 'Error.See Supervisor'
-                        SET @cMsg02 = 'Qty does not match.'
-                        SET @cMsg03 = 'Expected:' + CAST(@wQty AS NVARCHAR(10))
-                        SET @cMsg04 = 'On ' + @wSKU
-                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                             @nErrNo = @nErrNo,
-                             @cErrMsg = @cErrMsg,
-                             @cLine01 = @cMsg01,
-                             @cLine02 = @cMsg02,
-                             @cLine03 = @cMsg03,
-                             @cLine04 = @cMsg04,
-                             @cLine05 = @cMsg05,
-                             @cLine06 = @cMsg06,
-                             @cLine07 = @cMsg07,
-                             @cLine08 = @cMsg08,
-                             @cLine09 = @cMsg09,
-                             @nDisplayMsg = 0
-
-                        -- Go to discrepancy options screen (6915)
-                        SET @cOutField01 = @cDropID -- CARTON ID
-                        SET @cOutField02 = '' -- Option input
-                        SET @cFrom814Flag = 'Y' -- FCR-6657: Mark as from 814, only option 1 allowed
-
-                        SELECT
-                           @cFieldAttr01  =  '',
-                           @cFieldAttr02  =  '',
-                           @cFieldAttr03  =  '',
-                           @cFieldAttr04  =  '',
-                           @cFieldAttr05  =  '',
-                           @cFieldAttr06  =  '',
-                           @cFieldAttr07  =  '',
-                           @cFieldAttr08  =  '',
-                           @cFieldAttr09  =  '',
-                           @cFieldAttr10  =  ''
-
-                        SET @nAfterScn = 6915
-                        SET @nAfterStep = 99
-                        GOTO Quit
+                        IF @cSingleUnitOrdConfig = '1'
+                        BEGIN
+                           SET @cSingleUnitOrdFlag = 'Y'
+                           -- Only set ToteID if not already set (avoid overwrite on subsequent scans)
+                           IF ISNULL(@cToteID, '') = ''
+                              SET @cToteID = @cDropID
+                        END
                      END
-                  END -- FCR-6657 discrepancy check
+                  END
 
-                  SET @cSingleUnitOrdFlag = 'N' --V1.4.0
+                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET
+                     C_STRING1 = @cDropIDFlag,
+                     C_STRING2 = @cSingleUnitOrdFlag --v1.4.0
+                  WHERE Mobile = @nMobile
 
-                  SET @cDropIDFlag=''
-                  -- if scanned CartonID is dropid(toteid), replace it with caseid
-                  IF EXISTS (
-                     SELECT 1 FROM dbo.PickDetail WITH(NOLOCK)
-                     WHERE DropId = @cDropID
+                  -- Migrated from step1 in PPA func, only 855 logic incouded
+                  IF @cExtendedValidateSP <> ''
+                  BEGIN
+                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+                     BEGIN
+                        INSERT INTO @tExtValidate (Variable, Value) VALUES
+                           ('@cSKU',         @cSKU),
+                           ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+                           ('@nQTY_PPA',     CAST( @nQTY_PPA AS NVARCHAR( 10))),
+                           ('@nQTY_CHK',     CAST( @nQTY_CHK AS NVARCHAR( 10))),
+                           ('@nRowRef',      CAST( @nRowRef AS NVARCHAR( 10))),
+                           ('@nInputKey',    CAST( @nInputKey AS NVARCHAR( 1))),
+                           ('@cUserName',    @cUserName)
+
+                        SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +
+                           ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo, ' +
+                           ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey, @tExtValidate '
+                        SET @cSQLParam =
+                           '@nMobile        INT, ' +
+                           '@nFunc          INT, ' +
+                           '@cLangCode      NVARCHAR( 3),  ' +
+                           '@nStep          INT,           ' +
+                           '@cStorer        NVARCHAR( 15), ' +
+                           '@cFacility      NVARCHAR( 5),  ' +
+                           '@cRefNo         NVARCHAR( 20), ' +
+                           '@cOrderKey      NVARCHAR( 10), ' +
+                           '@cDropID        NVARCHAR( 20), ' +
+                           '@cLoadKey       NVARCHAR( 10), ' +
+                           '@cPickSlipNo    NVARCHAR( 10), ' +
+                           '@nErrNo         INT           OUTPUT, ' +
+                           '@cErrMsg        NVARCHAR( 20) OUTPUT, ' +
+                           '@cID            NVARCHAR( 18), ' +
+                           '@cTaskDetailKey NVARCHAR( 10), ' +
+                           '@tExtValidate   VARIABLETABLE READONLY'
+
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo,
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey, @tExtValidate
+
+                        IF @nErrNo <> 0
+                        BEGIN
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                           GOTO Step_1_99_Fail
+                        END
+                     END
+                  END
+
+
+                  --If not single unit order, then 1 toteID (dropID) link to 1 CaseID (LabelNo)
+                  --But if Single unit order, one toteID contains mulitple CaseID
+                  IF @cSingleUnitOrdFlag <> 'Y'
+                     SELECT @cDropID = CaseID
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE DropID = @cDropID
+                        AND StorerKey = @cStorerKey
+                        AND ShipFlag <> 'Y'
+
+                  --SAVE DROPID INTO TOTEID
+                  IF @cSingleUnitOrdFlag = 'Y'
+                  BEGIN
+
+                     --Single Unit order: 1 order, 1 PSNO, 1 sku, 1 qty
+                     --One tote ID includes multiple single unit orders
+                     SELECT TOP 1
+                        @cOrderKey = PH.OrderKey,
+                        @cPickSlipNo = PD.PickSlipNo,
+                        @cLabelNo = PD.LabelNo
+                     FROM PackInfo PI WITH (NOLOCK)
+                        INNER JOIN PackDetail PD WITH (NOLOCK)
+                        ON PI.PickSlipNo = PD.PickSlipNo
+                     AND PI.CartonNo = PD.CartonNo
+                        INNER JOIN PickHeader PH WITH (NOLOCK)
+                        ON PD.PickSlipNo = PH.PickHeaderKey
+                     AND PD.StorerKey = PH.StorerKey
+                     WHERE
+                        PD.StorerKey = @cStorerKey
+                       AND PD.DropID = @cToteID --ToteID
+                       AND PD.SKU = @cSKU
+                       AND ISNULL(PI.CartonStatus,'') <> 'PACKED'
+
+                     SET @cDropID = @cLabelNo
+
+                  END
+               END --ToteID scanned
+               --V1.4.0 end
+
+               -- FCR-13139: C_STRING1, C_STRING2 will be saved to RDTMOBREC at Quit
+
+               --v1.4.0 start
+               --Original logc single unit order flag <> 'Y'
+               IF @cSingleUnitOrdFlag <> 'Y'
+               BEGIN
+                  -- DropID Validation
+                  -- DropID is CaseID, or changed to CaseID, so only validate CaseID
+                  IF NOT EXISTS( SELECT 1
+                     FROM dbo.PickDetail WITH (NOLOCK)
+                     WHERE CaseID = @cDropID
                         AND StorerKey = @cStorerKey
                         AND ShipFlag <> 'Y')
                   BEGIN
-                     IF LEN(@cDropID) = 10
-                        SET @cDropIDFlag = 'Y'
+                     SET @nErrNo = 217353
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv CaseID
+                     GOTO Step_1_99_Fail
+                  END
 
-                     --V1.4.0 start
-                     --V1.5.0 Replace the old flag set logic
-                     --V1.5.1 Only check PickDetail
-                     IF NOT EXISTS (
-                        SELECT 1
-                        FROM dbo.PickDetail WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                              AND DropID = @cDropID
-                              AND ShipFlag <> 'Y'
-                        GROUP BY OrderKey
-                        HAVING COUNT(DISTINCT OrderLineNumber) <> 1
-                           OR COUNT(DISTINCT SKU) <> 1
-                           OR SUM(Qty) <> 1
-                     )
-                     AND NOT EXISTS (
-                        SELECT 1
-                        FROM dbo.PickDetail WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                              AND DropID = @cDropID
-                              AND ShipFlag <> 'Y'
-                        GROUP BY CaseID
-                        HAVING COUNT(PickDetailKey) <> 1
-                     )
-                     BEGIN
-
-                        IF NOT EXISTS (
-                           SELECT 1
-                           FROM dbo.PickDetail PKD WITH (NOLOCK)
-                           WHERE PKD.StorerKey = @cStorerKey
-                                 AND DropID = @cDropID
-                                 AND ShipFlag <> 'Y'
-                                 AND UOM = '2'
-                        ) -- V1.5.2 end
-                        BEGIN
-                           SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
-                           IF @cSingleUnitOrdConfig = '0'
-                              SET @cSingleUnitOrdConfig = ''
-
-                           IF @cSingleUnitOrdConfig = '1'
-                           BEGIN
-                              SET @cSingleUnitOrdFlag = 'Y'
-                              -- Only set ToteID if not already set (avoid overwrite on subsequent scans)
-                              IF ISNULL(@cToteID, '') = ''
-                                 SET @cToteID = @cDropID
-                           END
-                        END
-                     END
-
-                     UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET
-                        C_STRING1 = @cDropIDFlag,
-                        C_STRING2 = @cSingleUnitOrdFlag --v1.4.0
-                     WHERE Mobile = @nMobile
-
-                     -- Migrated from step1 in PPA func, only 855 logic incouded
-                     IF @cExtendedValidateSP <> ''
-                     BEGIN
-                        IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
-                        BEGIN
-                           INSERT INTO @tExtValidate (Variable, Value) VALUES
-                              ('@cSKU',         @cSKU),
-                              ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
-                              ('@nQTY_PPA',     CAST( @nQTY_PPA AS NVARCHAR( 10))),
-                              ('@nQTY_CHK',     CAST( @nQTY_CHK AS NVARCHAR( 10))),
-                              ('@nRowRef',      CAST( @nRowRef AS NVARCHAR( 10))),
-                              ('@nInputKey',    CAST( @nInputKey AS NVARCHAR( 1))),
-                              ('@cUserName',    @cUserName)
-
-                           SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedValidateSP) +
-                              ' @nMobile, @nFunc, @cLangCode, @nStep, @cStorer, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo, ' +
-                              ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey, @tExtValidate '
-                           SET @cSQLParam =
-                              '@nMobile        INT, ' +
-                              '@nFunc          INT, ' +
-                              '@cLangCode      NVARCHAR( 3),  ' +
-                              '@nStep          INT,           ' +
-                              '@cStorer        NVARCHAR( 15), ' +
-                              '@cFacility      NVARCHAR( 5),  ' +
-                              '@cRefNo         NVARCHAR( 20), ' +
-                              '@cOrderKey      NVARCHAR( 10), ' +
-                              '@cDropID        NVARCHAR( 20), ' +
-                              '@cLoadKey       NVARCHAR( 10), ' +
-                              '@cPickSlipNo    NVARCHAR( 10), ' +
-                              '@nErrNo         INT           OUTPUT, ' +
-                              '@cErrMsg        NVARCHAR( 20) OUTPUT, ' +
-                              '@cID            NVARCHAR( 18), ' +
-                              '@cTaskDetailKey NVARCHAR( 10), ' +
-                              '@tExtValidate   VARIABLETABLE READONLY'
-
-                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @nMobile, @nFunc, @cLangCode, @nStep, @cStorerKey, @cFacility, @cRefNo, @cOrderKey, @cDropID, @cLoadKey, @cPickSlipNo,
-                              @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey, @tExtValidate
-
-                           IF @nErrNo <> 0
-                           BEGIN
-                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                              GOTO Step_1_99_Fail
-                           END
-                        END
-                     END
-
-
-                     --If not single unit order, then 1 toteID (dropID) link to 1 CaseID (LabelNo)
-                     --But if Single unit order, one toteID contains mulitple CaseID
-                     IF @cSingleUnitOrdFlag <> 'Y'
-                        SELECT @cDropID = CaseID
-                        FROM dbo.PickDetail WITH(NOLOCK)
-                        WHERE DropID = @cDropID
-                           AND StorerKey = @cStorerKey
-                           AND ShipFlag <> 'Y'
-
-                     --SAVE DROPID INTO TOTEID
-                     IF @cSingleUnitOrdFlag = 'Y'
-                     BEGIN
-
-                        --Single Unit order: 1 order, 1 PSNO, 1 sku, 1 qty
-                        --One tote ID includes multiple single unit orders
-                        SELECT TOP 1
-                           @cOrderKey = PH.OrderKey,
-                           @cPickSlipNo = PD.PickSlipNo,
-                           @cLabelNo = PD.LabelNo
-                        FROM PackInfo PI WITH (NOLOCK)
-                           INNER JOIN PackDetail PD WITH (NOLOCK)
-                           ON PI.PickSlipNo = PD.PickSlipNo
-                        AND PI.CartonNo = PD.CartonNo
-                           INNER JOIN PickHeader PH WITH (NOLOCK)
-                           ON PD.PickSlipNo = PH.PickHeaderKey
-                        AND PD.StorerKey = PH.StorerKey
-                        WHERE
-                           PD.StorerKey = @cStorerKey
-                          AND PD.DropID = @cToteID --ToteID
-                          AND PD.SKU = @cSKU
-                          AND ISNULL(PI.CartonStatus,'') <> 'PACKED'
-
-                        SET @cDropID = @cLabelNo
-
-                     END
-                  END --ToteID scanned
-                  --V1.4.0 end
-
-                  -- FCR-13139: C_STRING1, C_STRING2 will be saved to RDTMOBREC at Quit
-
-                  --v1.4.0 start
-                  --Original logc single unit order flag <> 'Y'
-                  IF @cSingleUnitOrdFlag <> 'Y'
+                  IF NOT EXISTS(SELECT 1
+                     FROM dbo.PackHeader PH WITH (NOLOCK)
+                     INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
+                     WHERE PD.LabelNo = @cDropID
+                     AND PH.StorerKey = @cStorerKey)
                   BEGIN
-                     -- DropID Validation
-                     -- DropID is CaseID, or changed to CaseID, so only validate CaseID
-                     IF NOT EXISTS( SELECT 1
-                        FROM dbo.PickDetail WITH (NOLOCK)
-                        WHERE CaseID = @cDropID
-                           AND StorerKey = @cStorerKey
-                           AND ShipFlag <> 'Y')
-                     BEGIN
-                        SET @nErrNo = 217353
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Inv CaseID
-                        GOTO Step_1_99_Fail
-                     END
-
-                     IF NOT EXISTS(SELECT 1
-                        FROM dbo.PackHeader PH WITH (NOLOCK)
-                        INNER JOIN dbo.PackDetail PD WITH (NOLOCK) ON (PH.PickSlipNo = PD.PickSlipNo)
-                        WHERE PD.LabelNo = @cDropID
-                        AND PH.StorerKey = @cStorerKey)
-                     BEGIN
-                        SET @cPPACartonIDByPackDetailLabelNo = ''
-                        SET @cPPACartonIDByPickDetailCaseID = '1'
-                     END
-                     ELSE
-                     BEGIN
-                        SET @cPPACartonIDByPackDetailLabelNo = '1'
-                        SET @cPPACartonIDByPickDetailCaseID = ''
-                     END
-
-                     -- Extended update
-                     IF @cExtendedUpdateSP <> ''
-                     BEGIN
-                        IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
-                        BEGIN
-                           SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                              ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, ' +
-                              ' @cSKU, @nQty, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT'
-                           SET @cSQLParam =
-                              '@nMobile         INT,       ' +
-                              '@nFunc           INT,       ' +
-                              '@cLangCode       NVARCHAR( 3),  ' +
-                              '@nStep           INT,           ' +
-                              '@nInputKey       INT,           ' +
-                              '@cStorerKey      NVARCHAR( 15), ' +
-                              '@cRefNo          NVARCHAR( 10), ' +
-                              '@cPickSlipNo     NVARCHAR( 10), ' +
-                              '@cLoadKey        NVARCHAR( 10), ' +
-                              '@cOrderKey       NVARCHAR( 10), ' +
-                              '@cDropID         NVARCHAR( 20), ' +
-                              '@cSKU            NVARCHAR( 20), ' +
-                              '@nQty            INT,           ' +
-                              '@cOption         NVARCHAR( 1),  ' +
-                              '@nErrNo          INT           OUTPUT, ' +
-                              '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-                              '@cID             NVARCHAR( 18), ' +
-                              '@cTaskDetailKey  NVARCHAR( 10),  ' +
-                              '@cReasonCode     NVARCHAR( 20)  OUTPUT '
-                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQty, '',
-                              @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT
-                           IF @nErrNo <> 0
-                              GOTO Quit
-                        END
-                     END
-
-
-                     -- V1.4.0 Set OrderKey when not single unit orders start
-                     IF EXISTS (SELECT 1
-                                 FROM dbo.ORDERS O WITH (NOLOCK)
-                                 JOIN dbo.PICKDETAIL PD WITH (NOLOCK)
-                                    ON O.orderkey = PD.OrderKey
-                                    AND O.StorerKey = PD.StorerKey
-                                 WHERE PD.StorerKey = @cStorerKey
-                                    AND PD.CaseID = @cDropID -- DropID value value is caseID when not SingleUnitOrder
-                                    AND PD.ShipFlag <> 'Y'
-                                 GROUP BY PD.CaseID
-                                    HAVING COUNT(DISTINCT O.OrderKey) = 1)
-                     BEGIN -- 1 dropid 1 corder
-                        SELECT TOP 1
-                           @cOrderKey = OrderKey
-                        FROM dbo.PickDetail PD WITH (NOLOCK)
-                        WHERE PD.StorerKey = @cStorerKey
-                           AND CaseID = @cDropID -- DropID value is caseID when not SingleUnitOrder
-                           AND PD.ShipFlag <> 'Y'
-
-                        --IF the consigneeKey exists in MPOCPERMIT, then even only 1 order in dropid
-                        --it is still a MPOC order
-                        IF EXISTS(SELECT 1
-                                    FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-                                    JOIN dbo.ORDERS AS O WITH (NOLOCK)
-                                       ON O.orderkey = PD.orderkey
-                                    JOIN dbo.CODELKUP AS C WITH (NOLOCK)
-                                       ON LISTNAME = 'MPOCPERMIT'
-                                       AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
-                                       AND C.Storerkey = O.StorerKey
-                                    WHERE  PD.OrderKey = @cOrderKey)
-                        BEGIN
-                           SET @cOrderKey = 'MPOC'
-                        END
-                     END -- DropID contians 1 order
-                     ELSE -- 1 dropid mulitple orders
-                     BEGIN
-                        --WCS will make sure all orders in one tote has same ORDERS.ConsigneeKey (ShipTo)
-                        --Check whether the ShipTo is allowed to MPOC
-                        IF EXISTS(SELECT 1
-                                    FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-                                    JOIN dbo.ORDERS AS O WITH (NOLOCK)
-                                       ON O.orderkey = PD.orderkey
-                                    JOIN dbo.CODELKUP AS C WITH (NOLOCK)
-                                       ON LISTNAME = 'MPOCPERMIT'
-                                       AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
-                                       AND C.Storerkey = O.StorerKey
-                                    WHERE  PD.CaseID = @cDropID) -- DropID value is caseID when not SingleUnitOrder
-                        BEGIN
-                           SET @cOrderKey = 'MPOC'
-                        END
-                        ELSE -- Not allow to MPOC
-                        BEGIN
-                           SET @nErrNo = 217360
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MPOC not allowed
-                           GOTO Step_1_99_Fail
-                        END
-                     END--one dropid multiple orders
-                     -- V1.4.0 Set OrderKey when not single unit orders END
-                  END --Original logc single order flag <> 'Y'
-                  ELSE --Single unit orders logic
-                  BEGIN
-                     --Single unit orders validation
-                     --PackDetail should be ready before packing
-                     IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
-                                    WHERE StorerKey = @cStorerkey
-                                       AND DropID = @cToteID --ToteID
-                     )
-                     BEGIN
-                        SET @nErrNo = 217354
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackDetail not ready
-                        GOTO Step_1_99_Fail
-                     END
-                  END -- Single unit orders validation
-
-                  -- FCR-13167: Common logic for both SUO and Normal Order - go to scn 6911
-                  SET @cSKU = ''
-
-                  -- FCR-13167: Get statistics for scn 6911 display
-                  -- Get carton-level totals from PackDetail
-                  IF @cSingleUnitOrdFlag = 'Y'
-                     SELECT @nCtnSKUTotal = COUNT(DISTINCT SKU),
-                            @nTotalQtyExpected = ISNULL(SUM(QTY), 0)
-                     FROM dbo.PackDetail WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND DropID = @cToteID
+                     SET @cPPACartonIDByPackDetailLabelNo = ''
+                     SET @cPPACartonIDByPickDetailCaseID = '1'
+                  END
                   ELSE
-                     SELECT @nCtnSKUTotal = COUNT(DISTINCT SKU),
-                            @nTotalQtyExpected = ISNULL(SUM(QTY), 0)
-                     FROM dbo.PackDetail WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                        AND LabelNo = @cDropID
-
-                  -- Get current counters from RDTPPA
-                  IF @cSingleUnitOrdFlag = 'Y'
-                     SELECT @nCtnSKUCounted = COUNT(DISTINCT PPA.SKU),
-                            @nTotalQtyCKD = ISNULL(SUM(PPA.CQty), 0)
-                     FROM dbo.PackDetail PD WITH (NOLOCK)
-                     INNER JOIN rdt.RDTPPA PPA WITH (NOLOCK)
-                        ON PD.StorerKey = PPA.StorerKey
-                        AND PD.LabelNo = PPA.DropID
-                        AND PD.SKU = PPA.SKU
-                     WHERE PD.StorerKey = @cStorerKey
-                        AND PD.DropID = @cToteID
-                        AND PPA.CQty > 0
-                  ELSE
-                     SELECT @nCtnSKUCounted = COUNT(DISTINCT SKU),
-                            @nTotalQtyCKD = ISNULL(SUM(CQty), 0)
-                     FROM rdt.RDTPPA WITH (NOLOCK)
-                     WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND CQty > 0
-
-
-                  -- FCR-13167: scn 6911 screen layout - OutField01=SKU, OutField02=QTY
-                  SET @cOutField01 = '' -- SKU input (empty for first scan)
-                  SET @cOutField02 = @cPPADefaultQTY -- QTY input (default value)
-                  SET @cOutField03 = '' -- Scanned SKU display
-                  SET @cOutField04 = '' -- Style/Color/Size
-                  SET @cOutField05 = '' -- SKU Description
-                  SET @cOutField06 = '0' -- SKU Counted (empty, no SKU scanned yet)
-                  SET @cOutField07 = CAST(ISNULL(@nCtnSKUCounted, 0) AS NVARCHAR(5)) + '/' + CAST(ISNULL(@nCtnSKUTotal, 0) AS NVARCHAR(5)) -- CTN SKU CKD/Total
-                  SET @cOutField08 = '0' -- SKU TOTAL (empty, no SKU scanned yet)
-                  SET @cOutField09 = CAST(ISNULL(@nTotalQtyCKD, 0) AS NVARCHAR(5)) + '/' + CAST(ISNULL(@nTotalQtyExpected, 0) AS NVARCHAR(5)) -- QTY CKD/Total
-                  SET @cOutField10 = '' -- VAS1
-                  SET @cOutField11 = '' -- VAS2
-                  SET @cOutField12 = '' -- VAS3
-                  SET @cOutField13 = '' -- VAS4
-                  SET @cOutField14 = '' -- VAS5
-                  EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
-
-                  -- Enable all fields
-                  SET @cFieldAttr01 = ''
-                  SET @cFieldAttr02 = ''
-                  SET @cFieldAttr03 = ''
-                  SET @cFieldAttr04 = ''
-                  SET @cFieldAttr05 = ''
-
-                  -- FCR-13167: Disable QTY field if configured (scn 6911 uses @cFieldAttr02)
-                  IF @cDisableQTYField = '1'
-                     SET @cFieldAttr02 = 'O'
-
-                  -- Go to next screen - FCR-13167: directly to scn 6911 (skip step 3)
-                  SET @nAfterScn = 6911
-                  SET @nAfterStep = 99
-                  --V1.4.0 end
-
-                  -- Extended info
-                  IF @cExtendedInfoSP <> ''
                   BEGIN
-                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-                     BEGIN
-                        INSERT INTO @tExtInfo (Variable, Value) VALUES
-                           ('@cRefNo',       @cRefNo),
-                           ('@cPickSlipNo',  @cPickSlipNo),
-                           ('@cLoadKey',     @cLoadKey),
-                           ('@cOrderKey',    @cOrderKey),
-                           ('@cDropID',      @cDropID),
-                           ('@cID',          @cID),
-                           ('@cTaskDetailKey',  @cTaskDetailKey),
-                           ('@cSKU',         @cSKU),
-                           ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
-                           ('@nCSKU',        CAST( @nCSKU AS NVARCHAR( 10))),
-                           ('@nCQTY',        CAST( @nCQTY AS NVARCHAR( 10))),
-                           ('@nPSKU',        CAST( @nPSKU AS NVARCHAR( 10))),
-                           ('@nPQTY',        CAST( @nPQTY AS NVARCHAR( 10))),
-                           ('@cOption',      @cOption)
+                     SET @cPPACartonIDByPackDetailLabelNo = '1'
+                     SET @cPPACartonIDByPickDetailCaseID = ''
+                  END
 
-                        SET @cExtendedInfo = ''
-                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo, ' +
-                           ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  -- Extended update
+                  IF @cExtendedUpdateSP <> ''
+                  BEGIN
+                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                     BEGIN
+                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, ' +
+                           ' @cSKU, @nQty, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT'
                         SET @cSQLParam =
-                           ' @nMobile        INT,           ' +
-                           ' @nFunc          INT,           ' +
-                           ' @cLangCode      NVARCHAR( 3),  ' +
-                           ' @nStep          INT,           ' +
-                           ' @nAfterStep     INT,           ' +
-                           ' @nInputKey      INT,           ' +
-                           ' @cFacility      NVARCHAR( 5),  ' +
-                           ' @cStorerKey     NVARCHAR( 15), ' +
-                           ' @tExtInfo       VariableTable READONLY, ' +
-                           ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' +
-                           ' @nErrNo         INT           OUTPUT, ' +
-                           ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                           '@nMobile         INT,       ' +
+                           '@nFunc           INT,       ' +
+                           '@cLangCode       NVARCHAR( 3),  ' +
+                           '@nStep           INT,           ' +
+                           '@nInputKey       INT,           ' +
+                           '@cStorerKey      NVARCHAR( 15), ' +
+                           '@cRefNo          NVARCHAR( 10), ' +
+                           '@cPickSlipNo     NVARCHAR( 10), ' +
+                           '@cLoadKey        NVARCHAR( 10), ' +
+                           '@cOrderKey       NVARCHAR( 10), ' +
+                           '@cDropID         NVARCHAR( 20), ' +
+                           '@cSKU            NVARCHAR( 20), ' +
+                           '@nQty            INT,           ' +
+                           '@cOption         NVARCHAR( 1),  ' +
+                           '@nErrNo          INT           OUTPUT, ' +
+                           '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                           '@cID             NVARCHAR( 18), ' +
+                           '@cTaskDetailKey  NVARCHAR( 10),  ' +
+                           '@cReasonCode     NVARCHAR( 20)  OUTPUT '
                         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                           @nMobile, @nFunc, @cLangCode, 1, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo,
-                           @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-                        SET @cOutField14 = @cExtendedInfo
+                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQty, '',
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT
+                        IF @nErrNo <> 0
+                           GOTO Quit
                      END
                   END
-               END ---- End of @nInputKey = 1
-               IF @nInputKey = 0
-               BEGIN
-                  -- (ChewKP02)
-                  EXEC RDT.rdt_STD_EventLog
-                    @cActionType = '9', -- Sign in function
-                    @cUserID     = @cUserName,
-                    @nMobileNo   = @nMobile,
-                    @nFunctionID = @nFunc,
-                    @cFacility   = @cFacility,
-                    @cStorerKey  = @cStorerKey
-                  -- Back to menu scn
-                  SET @nAfterScn  = @nMenu
-                  SET @nAfterStep = 0
-                  SET @cOutField01 = ''
 
-                  -- Enable all fields
-                  SET @cFieldAttr01 = ''
-                  SET @cFieldAttr02 = ''
-                  SET @cFieldAttr03 = ''
-                  SET @cFieldAttr04 = ''
-                  SET @cFieldAttr05 = ''
 
-                  SELECT
-                     @cFieldAttr01  =  '',
-                     @cFieldAttr02  =  '',
-                     @cFieldAttr03  =  '',
-                     @cFieldAttr04  =  '',
-                     @cFieldAttr05  =  '',
-                     @cFieldAttr06  =  '',
-                     @cFieldAttr07  =  '',
-                     @cFieldAttr08  =  '',
-                     @cFieldAttr09  =  '',
-                     @cFieldAttr10  =  ''
-               END
-               GOTO Quit
+                  -- V1.4.0 Set OrderKey when not single unit orders start
+                  IF EXISTS (SELECT 1
+                              FROM dbo.ORDERS O WITH (NOLOCK)
+                              JOIN dbo.PICKDETAIL PD WITH (NOLOCK)
+                                 ON O.orderkey = PD.OrderKey
+                                 AND O.StorerKey = PD.StorerKey
+                              WHERE PD.StorerKey = @cStorerKey
+                                 AND PD.CaseID = @cDropID -- DropID value value is caseID when not SingleUnitOrder
+                                 AND PD.ShipFlag <> 'Y'
+                              GROUP BY PD.CaseID
+                                 HAVING COUNT(DISTINCT O.OrderKey) = 1)
+                  BEGIN -- 1 dropid 1 corder
+                     SELECT TOP 1
+                        @cOrderKey = OrderKey
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND CaseID = @cDropID -- DropID value is caseID when not SingleUnitOrder
+                        AND PD.ShipFlag <> 'Y'
 
-               Step_1_99_Fail:
-               BEGIN
-                  IF ISNULL(@cMultiColScan,'')=''
+                     --IF the consigneeKey exists in MPOCPERMIT, then even only 1 order in dropid
+                     --it is still a MPOC order
+                     IF EXISTS(SELECT 1
+                                 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                                 JOIN dbo.ORDERS AS O WITH (NOLOCK)
+                                    ON O.orderkey = PD.orderkey
+                                 JOIN dbo.CODELKUP AS C WITH (NOLOCK)
+                                    ON LISTNAME = 'MPOCPERMIT'
+                                    AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
+                                    AND C.Storerkey = O.StorerKey
+                                 WHERE  PD.OrderKey = @cOrderKey)
+                     BEGIN
+                        SET @cOrderKey = 'MPOC'
+                     END
+                  END -- DropID contians 1 order
+                  ELSE -- 1 dropid mulitple orders
                   BEGIN
-                     -- Reset this screen var
-                     SET @cRefNo = ''
-                     SET @cPickSlipNo = ''
-                     SET @cLoadKey = ''
-                     SET @cOrderKey = ''
-                     SET @cDropID = ''
-                     SET @cID = ''
-                     SET @cTaskDetailKey = ''
-                  END
-                  ELSE
+                     --WCS will make sure all orders in one tote has same ORDERS.ConsigneeKey (ShipTo)
+                     --Check whether the ShipTo is allowed to MPOC
+                     IF EXISTS(SELECT 1
+                                 FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                                 JOIN dbo.ORDERS AS O WITH (NOLOCK)
+                                    ON O.orderkey = PD.orderkey
+                                 JOIN dbo.CODELKUP AS C WITH (NOLOCK)
+                                    ON LISTNAME = 'MPOCPERMIT'
+                                    AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
+                                    AND C.Storerkey = O.StorerKey
+                                 WHERE  PD.CaseID = @cDropID) -- DropID value is caseID when not SingleUnitOrder
+                     BEGIN
+                        SET @cOrderKey = 'MPOC'
+                     END
+                     ELSE -- Not allow to MPOC
+                     BEGIN
+                        SET @nErrNo = 217360
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MPOC not allowed
+                        GOTO Step_1_99_Fail
+                     END
+                  END--one dropid multiple orders
+                  -- V1.4.0 Set OrderKey when not single unit orders END
+               END --Original logc single order flag <> 'Y'
+               ELSE --Single unit orders logic
+               BEGIN
+                  --Single unit orders validation
+                  --PackDetail should be ready before packing
+                  IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
+                                 WHERE StorerKey = @cStorerkey
+                                    AND DropID = @cToteID --ToteID
+                  )
                   BEGIN
-                     -- Prepare next screen var
-                     SET @cOutField01 = @cRefNo
-                     SET @cOutField02 = @cPickSlipNo
-                     SET @cOutField03 = @cLoadKey
-                     SET @cOutField04 = @cOrderKey
-                     SET @cOutField05 = @cDropID
-                     SET @cOutField06 = @cSKUStat
-                     SET @cOutField07 = @cQTYStat
-                     SET @cOutField08 = '' -- @cExtendedInfo
-                     SET @cOutField09 = @cID
-                     SET @cOutField10 = @cTaskDetailKey		--INC1045866
+                     SET @nErrNo = 217354
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackDetail not ready
+                     GOTO Step_1_99_Fail
+                  END
+               END -- Single unit orders validation
+
+               -- FCR-13167: Common logic for both SUO and Normal Order - go to scn 6911
+               SET @cSKU = ''
+
+               -- FCR-13167: Get statistics for scn 6911 display
+               -- Get carton-level totals from PackDetail
+               IF @cSingleUnitOrdFlag = 'Y'
+                  SELECT @nCtnSKUTotal = COUNT(DISTINCT SKU),
+                         @nTotalQtyExpected = ISNULL(SUM(QTY), 0)
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cToteID
+               ELSE
+                  SELECT @nCtnSKUTotal = COUNT(DISTINCT SKU),
+                         @nTotalQtyExpected = ISNULL(SUM(QTY), 0)
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND LabelNo = @cDropID
+
+               -- Get current counters from RDTPPA
+               IF @cSingleUnitOrdFlag = 'Y'
+                  SELECT @nCtnSKUCounted = COUNT(DISTINCT PPA.SKU),
+                         @nTotalQtyCKD = ISNULL(SUM(PPA.CQty), 0)
+                  FROM dbo.PackDetail PD WITH (NOLOCK)
+                  INNER JOIN rdt.RDTPPA PPA WITH (NOLOCK)
+                     ON PD.StorerKey = PPA.StorerKey
+                     AND PD.LabelNo = PPA.DropID
+                     AND PD.SKU = PPA.SKU
+                  WHERE PD.StorerKey = @cStorerKey
+                     AND PD.DropID = @cToteID
+                     AND PPA.CQty > 0
+               ELSE
+                  SELECT @nCtnSKUCounted = COUNT(DISTINCT SKU),
+                         @nTotalQtyCKD = ISNULL(SUM(CQty), 0)
+                  FROM rdt.RDTPPA WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND CQty > 0
+
+
+               -- FCR-13167: scn 6911 screen layout - OutField01=SKU, OutField02=QTY
+               SET @cOutField01 = '' -- SKU input (empty for first scan)
+               SET @cOutField02 = @cPPADefaultQTY -- QTY input (default value)
+               SET @cOutField03 = '' -- Scanned SKU display
+               SET @cOutField04 = '' -- Style/Color/Size
+               SET @cOutField05 = '' -- SKU Description
+               SET @cOutField06 = '0' -- SKU Counted (empty, no SKU scanned yet)
+               SET @cOutField07 = CAST(ISNULL(@nCtnSKUCounted, 0) AS NVARCHAR(5)) + '/' + CAST(ISNULL(@nCtnSKUTotal, 0) AS NVARCHAR(5)) -- CTN SKU CKD/Total
+               SET @cOutField08 = '0' -- SKU TOTAL (empty, no SKU scanned yet)
+               SET @cOutField09 = CAST(ISNULL(@nTotalQtyCKD, 0) AS NVARCHAR(5)) + '/' + CAST(ISNULL(@nTotalQtyExpected, 0) AS NVARCHAR(5)) -- QTY CKD/Total
+               SET @cOutField10 = '' -- VAS1
+               SET @cOutField11 = '' -- VAS2
+               SET @cOutField12 = '' -- VAS3
+               SET @cOutField13 = '' -- VAS4
+               SET @cOutField14 = '' -- VAS5
+               EXEC rdt.rdtSetFocusField @nMobile, 1 --SKU
+
+               -- Enable all fields
+               SET @cFieldAttr01 = ''
+               SET @cFieldAttr02 = ''
+               SET @cFieldAttr03 = ''
+               SET @cFieldAttr04 = ''
+               SET @cFieldAttr05 = ''
+
+               -- FCR-13167: Disable QTY field if configured (scn 6911 uses @cFieldAttr02)
+               IF @cDisableQTYField = '1'
+                  SET @cFieldAttr02 = 'O'
+
+               -- Go to next screen - FCR-13167: directly to scn 6911 (skip step 3)
+               SET @nAfterScn = 6911
+               SET @nAfterStep = 99
+               --V1.4.0 end
+
+               -- Extended info
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     INSERT INTO @tExtInfo (Variable, Value) VALUES
+                        ('@cRefNo',       @cRefNo),
+                        ('@cPickSlipNo',  @cPickSlipNo),
+                        ('@cLoadKey',     @cLoadKey),
+                        ('@cOrderKey',    @cOrderKey),
+                        ('@cDropID',      @cDropID),
+                        ('@cID',          @cID),
+                        ('@cTaskDetailKey',  @cTaskDetailKey),
+                        ('@cSKU',         @cSKU),
+                        ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+                        ('@nCSKU',        CAST( @nCSKU AS NVARCHAR( 10))),
+                        ('@nCQTY',        CAST( @nCQTY AS NVARCHAR( 10))),
+                        ('@nPSKU',        CAST( @nPSKU AS NVARCHAR( 10))),
+                        ('@nPQTY',        CAST( @nPQTY AS NVARCHAR( 10))),
+                        ('@cOption',      @cOption)
+
+                     SET @cExtendedInfo = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo, ' +
+                        ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                     SET @cSQLParam =
+                        ' @nMobile        INT,           ' +
+                        ' @nFunc          INT,           ' +
+                        ' @cLangCode      NVARCHAR( 3),  ' +
+                        ' @nStep          INT,           ' +
+                        ' @nAfterStep     INT,           ' +
+                        ' @nInputKey      INT,           ' +
+                        ' @cFacility      NVARCHAR( 5),  ' +
+                        ' @cStorerKey     NVARCHAR( 15), ' +
+                        ' @tExtInfo       VariableTable READONLY, ' +
+                        ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' +
+                        ' @nErrNo         INT           OUTPUT, ' +
+                        ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, 1, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo,
+                        @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     SET @cOutField14 = @cExtendedInfo
                   END
                END
-            END -- end of @nAction = 0
+            END ---- End of @nInputKey = 1
+            IF @nInputKey = 0
+            BEGIN
+               -- (ChewKP02)
+               EXEC RDT.rdt_STD_EventLog
+                 @cActionType = '9', -- Sign in function
+                 @cUserID     = @cUserName,
+                 @nMobileNo   = @nMobile,
+                 @nFunctionID = @nFunc,
+                 @cFacility   = @cFacility,
+                 @cStorerKey  = @cStorerKey
+               -- Back to menu scn
+               SET @nAfterScn  = @nMenu
+               SET @nAfterStep = 0
+               SET @cOutField01 = ''
+
+               -- Enable all fields
+               SET @cFieldAttr01 = ''
+               SET @cFieldAttr02 = ''
+               SET @cFieldAttr03 = ''
+               SET @cFieldAttr04 = ''
+               SET @cFieldAttr05 = ''
+
+               SELECT
+                  @cFieldAttr01  =  '',
+                  @cFieldAttr02  =  '',
+                  @cFieldAttr03  =  '',
+                  @cFieldAttr04  =  '',
+                  @cFieldAttr05  =  '',
+                  @cFieldAttr06  =  '',
+                  @cFieldAttr07  =  '',
+                  @cFieldAttr08  =  '',
+                  @cFieldAttr09  =  '',
+                  @cFieldAttr10  =  ''
+            END
+            GOTO Quit
+
+            Step_1_99_Fail:
+            BEGIN
+               IF ISNULL(@cMultiColScan,'')=''
+               BEGIN
+                  -- Reset this screen var
+                  SET @cRefNo = ''
+                  SET @cPickSlipNo = ''
+                  SET @cLoadKey = ''
+                  SET @cOrderKey = ''
+                  SET @cDropID = ''
+                  SET @cID = ''
+                  SET @cTaskDetailKey = ''
+               END
+               ELSE
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cRefNo
+                  SET @cOutField02 = @cPickSlipNo
+                  SET @cOutField03 = @cLoadKey
+                  SET @cOutField04 = @cOrderKey
+                  SET @cOutField05 = @cDropID
+                  SET @cOutField06 = @cSKUStat
+                  SET @cOutField07 = @cQTYStat
+                  SET @cOutField08 = '' -- @cExtendedInfo
+                  SET @cOutField09 = @cID
+                  SET @cOutField10 = @cTaskDetailKey		--INC1045866
+               END
+            END
          END -- end of 814
 
          --V1.4.0 END
@@ -1216,7 +1212,7 @@ BEGIN
                            AND CaseID = @cDropID
                            AND SKU = @cSKU)
                         BEGIN
-                           SET @nErrNo = 268655
+                           SET @nErrNo = 268671
                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --SKU not in carton
                            GOTO Scn_6911_Fail
                         END
@@ -1354,6 +1350,7 @@ BEGIN
                         AND pkd.OrderLinenumber = wod.ExternLineNo
                      WHERE wo.StorerKey = @cStorerKey
                         AND pkd.CaseID = @cDropID
+                        AND pkd.Sku = @cSKU
                         AND wod.ExternWorkOrderKey IS NOT NULL
                         AND wod.ExternWorkOrderKey <> ''
                   ),
@@ -1381,7 +1378,7 @@ BEGIN
                         INNER JOIN dbo.WorkOrder wo WITH (NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                         INNER JOIN dbo.CODELKUP lk WITH (NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND ISNULL(lk.Short, '') <> 'Y' AND lk.LISTNAME = 'WKORDTYPE'
                         INNER JOIN dbo.PickDetail pkd WITH (NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
-                        WHERE wo.StorerKey = @cStorerKey AND pkd.CaseID = @cDropID AND wod.ExternWorkOrderKey IS NOT NULL AND wod.ExternWorkOrderKey <> ''
+                        WHERE wo.StorerKey = @cStorerKey AND pkd.CaseID = @cDropID AND pkd.Sku = @cSKU AND wod.ExternWorkOrderKey IS NOT NULL AND wod.ExternWorkOrderKey <> ''
                      ),
                      VAS_LINE_CTE AS (
                         SELECT VASCode, VASDescription, ROW_NUMBER() OVER (ORDER BY VASCode) AS RowNum FROM VAS_LINE_RAW
@@ -1408,7 +1405,7 @@ BEGIN
                         INNER JOIN dbo.WorkOrder wo WITH (NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                         INNER JOIN dbo.CODELKUP lk WITH (NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND ISNULL(lk.Short, '') <> 'Y' AND lk.LISTNAME = 'WKORDTYPE'
                         INNER JOIN dbo.PickDetail pkd WITH (NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
-                        WHERE wo.StorerKey = @cStorerKey AND pkd.CaseID = @cDropID AND wod.ExternWorkOrderKey IS NOT NULL AND wod.ExternWorkOrderKey <> ''
+                        WHERE wo.StorerKey = @cStorerKey AND pkd.CaseID = @cDropID AND pkd.Sku = @cSKU AND wod.ExternWorkOrderKey IS NOT NULL AND wod.ExternWorkOrderKey <> ''
                      ),
                      VAS_LINE_CTE AS (
                         SELECT VASCode, VASDescription, ROW_NUMBER() OVER (ORDER BY VASCode) AS RowNum FROM VAS_LINE_RAW
@@ -1854,7 +1851,7 @@ BEGIN
                   END
 
                   -- FCR-13139: Show Packing Complete message and stay on scn 6911
-                  SET @nErrNo = 268663
+                  SET @nErrNo = 268672
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Packing Complete
                   SET @nErrNo = 0
                   SET @cOutField01 = '' -- Clear SKU for next scan
@@ -1878,7 +1875,7 @@ BEGIN
                   )
                   BEGIN
                      -- All SKUs complete - trigger completion
-                     SET @nErrNo = 268663
+                     SET @nErrNo = 268673
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Packing Complete
                      SET @nErrNo = 0
 
@@ -2216,7 +2213,7 @@ BEGIN
             -- FCR-6657: If from 814 (WorkOrder qty mismatch), only option 1 is allowed
             IF @cFrom814Flag = 'Y' AND @cOption <> '1'
             BEGIN
-               SET @nErrNo = 273309
+               SET @nErrNo = 268677
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Only option 1 allowed
                SET @nAfterScn = 6915
                SET @nAfterStep = 99
@@ -2391,7 +2388,7 @@ BEGIN
             -- FCR-6657: If from 814 (WorkOrder qty mismatch), ESC is not allowed
             IF @cFrom814Flag = 'Y'
             BEGIN
-               SET @nErrNo = 273309
+               SET @nErrNo = 268676
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Only option 1 allowed
                SET @nAfterScn = 6915
                SET @nAfterStep = 99
@@ -2646,7 +2643,7 @@ BEGIN
                   ELSE
                   BEGIN
                      -- All CaseIDs packed (last scan) - stay on scn 6911 with Packing Complete message
-                     SET @nErrNo = 268663
+                     SET @nErrNo = 268674
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Packing Complete
                      SET @nErrNo = 0
                      SET @cOutField01 = '' -- Clear SKU for next scan
@@ -2657,7 +2654,7 @@ BEGIN
                ELSE
                BEGIN
                   -- Normal Order - last scan, stay on scn 6911 with Packing Complete message
-                  SET @nErrNo = 268663
+                  SET @nErrNo = 268675
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Packing Complete
                   SET @nErrNo = 0
                   SET @cOutField01 = '' -- Clear SKU for next scan

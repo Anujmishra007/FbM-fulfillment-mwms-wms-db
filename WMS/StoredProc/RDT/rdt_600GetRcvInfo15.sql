@@ -12,6 +12,8 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2026-06-29  Sreeja    1.0   FCR-14112 Created                              */
+/* 2026-08-07  Dennis    1.1   FCR-14211 Populate Lottable03/04 from ID-based */
+/*                            ReceiptDetail lookup; clear both if ID not found */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600GetRcvInfo15 (
@@ -75,16 +77,14 @@ BEGIN
         BEGIN
             IF @nInputKey = 1
             BEGIN
+                SET @cLottable07 = '' -- PCS DOT - do not auto-populate
                 -- Get lottable values from ReceiptDetail (first matching line)
                 -- NOTE: Do NOT populate Lottable02 (MIN DOT) or Lottable07 (PCS DOT) - user must enter them
                 SELECT TOP 1
                     @cLottable01 = Lottable01,
-                    -- @cLottable02 = Lottable02,  -- MIN DOT - do not auto-populate
-                    @cLottable03 = Lottable03,
-                    @dLottable04 = Lottable04,
+                    @cLottable02 = Lottable02,  -- MIN DOT - do not auto-populate
                     @dLottable05 = Lottable05,
                     @cLottable06 = Lottable06,
-                    -- @cLottable07 = Lottable07,  -- PCS DOT - do not auto-populate
                     @cLottable08 = Lottable08,
                     @cLottable09 = Lottable09,
                     @cLottable10 = Lottable10,
@@ -95,47 +95,32 @@ BEGIN
                     @dLottable15 = Lottable15
                 FROM dbo.ReceiptDetail WITH (NOLOCK)
                 WHERE ReceiptKey = @cReceiptKey
-                AND StorerKey = @cStorerKey
-                AND SKU = @cSKU
-                ORDER BY CASE WHEN ISNULL(Lottable06, '') <> '' THEN 0 ELSE 1 END, ReceiptLineNumber
-            END
-        END
+                  AND StorerKey  = @cStorerKey
+                  AND SKU        = @cSKU
+                ORDER BY ReceiptLineNumber
 
-        -- Step 5: Lottable screen - Set default QTY
-        IF @nStep = 5
-        BEGIN
-            IF @nInputKey = 1
-            BEGIN
-                 -- Get SKU CLASS only
-                SELECT @cSKUClass = Class
-                FROM dbo.SKU WITH (NOLOCK)
-                WHERE StorerKey = @cStorerKey
-                    AND SKU = @cSKU
-
-                -- Lookup default QTY if CLASS found
-                IF ISNULL(@cSKUClass, '')  IN ('PC', 'TB') AND ISNULL(@nQTY, 0) = 0
+                -- Lottable02/03/04: clear first, then populate only if this ID already has received lines
+                SET @cLottable02 = ''
+                SET @cLottable03 = ''
+                SET @dLottable04 = NULL
+                IF EXISTS (
+                    SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+                    WHERE ReceiptKey = @cReceiptKey
+                      AND StorerKey  = @cStorerKey
+                      AND SKU        = @cSKU
+                      AND ToID       = @cID
+                )
                 BEGIN
-                    SELECT @cMasterUOM = P.PackUOM3
-                    FROM dbo.SKU S WITH (NOLOCK)
-                    INNER JOIN dbo.Pack P WITH (NOLOCK) ON S.PackKey = P.PackKey
-                    WHERE S.StorerKey = @cStorerKey AND S.SKU = @cSKU
-
-                    SELECT TOP 1 @cDefaultQty = Short
-                    FROM dbo.CODELKUP WITH (NOLOCK)
-                    WHERE ListName = 'MICPCSIBDF'
-                      AND StorerKey = @cStorerKey
-                      AND Code = @cSKUClass
-                      AND Long = @cMasterUOM  -- Validate master UoM matches
-
-                    -- Set QTY if valid number found
-                    IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
-                    BEGIN
-                        SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
-                        IF ISNULL(@nDefaultQty, 0) > 0
-                        BEGIN
-                            SET @nQTY = @nDefaultQty
-                        END
-                    END
+                    SELECT TOP 1
+                        @cLottable02 = Lottable02,
+                        @cLottable03 = Lottable03,
+                        @dLottable04 = Lottable04
+                    FROM dbo.ReceiptDetail WITH (NOLOCK)
+                    WHERE ReceiptKey = @cReceiptKey
+                      AND StorerKey  = @cStorerKey
+                      AND SKU        = @cSKU
+                      AND ToID       = @cID
+                    ORDER BY ReceiptLineNumber
                 END
             END
         END
@@ -164,7 +149,7 @@ BEGIN
                     WHERE ListName = 'MICPCSIBDF'
                       AND StorerKey = @cStorerKey
                       AND Code = @cSKUClass
-                      AND Long = @cMasterUOM  -- Validate master UoM matches
+                      --AND Long = @cMasterUOM  -- Validate master UoM matches
 
                     -- Set QTY if valid number found
                     IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1

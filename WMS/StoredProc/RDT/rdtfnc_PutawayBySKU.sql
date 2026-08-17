@@ -91,11 +91,14 @@ GO
 /*                          Add FlowThruScreen                                */
 /*                          Add rdt format for ID                             */ 
 /*                          Add suggest alternate LOC, reason code            */
+/*                          Add SerialNoUpdateLotLocID                        */
+/*                          Add SerialNoUniqueAtStorerLevel                   */
 /* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */   
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */  
 /* 2026-06-02 5.9  Dennis   UWP-52316 Remove Barcode in RDTMOBREC             */
 /* 2026-06-02 6.0  Sreeja   FCR-14094 Add DEFAULTCURSOR Config                */
 /*                          for cursor position                               */
+/* 2026-06-12 6.1  Ung      FCR-12634 Add DefaultPutawayQTY                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
@@ -205,6 +208,8 @@ DECLARE
    @cSerialNo           NVARCHAR( 30),
    @cFlowThruScreen     NVARCHAR( 10),
    @cDefaultPutawayQTY  NVARCHAR( 1),
+   @cSerialNoUpdateLotLocID NVARCHAR( 1), 
+   @cSerialNoUniqueAtStorerLevel NVARCHAR( 1), 
    @cUPC                NVARCHAR( 30),  --(cc01)
    @cFlowThruQtyScn     NVARCHAR( 1),
    @cPieceScanSKU       NVARCHAR( 20),
@@ -284,6 +289,7 @@ SELECT
    @cUCC          = V_UCC,
    @cBarcode      = V_Barcode,
    @nFromStep     = V_FromStep, 
+   @nFromScn      = V_FromScn, 
 
    @cSuggestSKU   = V_String1,
    @cSuggestedLOC = V_String2,
@@ -312,9 +318,6 @@ SELECT
    @nPABookingKey = V_Integer7,
    @nPieceScanQTY = V_Integer8,
    @nScanSNO      = V_Integer9, 
-   
-   --C_Integer1 used in extscn (jackc01)  
-   @cLOCCheckDigitSP    = V_String40,  
 
    @cPASuggestSKU       = V_String20,
    @cPABySKUAndLOT      = V_String21,
@@ -330,16 +333,18 @@ SELECT
    @cDecodeSP           = V_String31,
    @cSKUStatus          = V_String32, -- (james10)
    @cLOCLookupSP        = V_String33, -- (yeekung02)
-   @nFromScn            = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String34, 5), 0) = 1 THEN LEFT( V_String34, 5) ELSE 0 END, --(yekung03)
+   @cLOCCheckDigitSP    = V_String34,
    @cMultiSKUBarcode    = V_String35, --(yeekung03)
    @cSKUVar             = V_String36,
    @cSKUDefault         = V_String37,
    @cPieceScan          = V_String38,
    @cPAToIDSP           = V_String39,
-   @cSerialNoCapture    = V_String44,
+   @cSerialNoCapture    = V_String40,
    @cSerialNo           = V_String41, 
    @cFlowThruScreen     = V_String42,
    @cDefaultPutawayQTY  = V_String43,
+   @cSerialNoUpdateLotLocID = V_String44,
+   @cSerialNoUniqueAtStorerLevel = V_String45, 
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -388,6 +393,10 @@ Step_0:
 BEGIN
    -- Get preferred UOM
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+
+   -- SCE config
+   SET @cSerialNoUpdateLotLocID = dbo.fnc_GetRight( @cFacility, @cStorer, '', 'SerialNoUpdateLotLocID')
+   SET @cSerialNoUniqueAtStorerLevel = dbo.fnc_GetRight( @cFacility, @cStorer, '', 'SerialNoUniqueAtStorerLevel')
 
    -- Get storer configure
    SET @cDefaultPutawayQTY = rdt.RDTGetConfig( @nFunc, 'DefaultPutawayQTY', @cStorer)
@@ -991,7 +1000,7 @@ BEGIN
             SET @cOutField13 = CASE WHEN @cFieldAttr13 = '' AND @cDefaultPutawayQTY = '1' AND @nPQTY_PWY > 0 THEN CAST( @nPQTY_PWY AS NVARCHAR( 5)) ELSE '' END
             SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN CAST( @nPieceScanQTY AS NVARCHAR( 5))
                                     WHEN @cDefaultQTY = '1' THEN '1' 
-                                    WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 5))
+                                    WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 6))
                                     ELSE '' 
                                END            
             
@@ -1518,7 +1527,7 @@ BEGIN
       SET @cOutField13 = CASE WHEN @cFieldAttr13 = '' AND @cDefaultPutawayQTY = '1' AND @nPQTY_PWY > 0 THEN CAST( @nPQTY_PWY AS NVARCHAR( 5)) ELSE '' END
       SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN CAST( @nPieceScanQTY AS NVARCHAR( 5))
                               WHEN @cDefaultQTY = '1' THEN '1' 
-                              WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 5))
+                              WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 6))
                               ELSE '' 
                          END
    END
@@ -1586,13 +1595,12 @@ BEGIN
        	-- QTY screen
        	IF @cFlowThruQtyScn = '1' OR EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '3') -- QTY screen 
        	BEGIN
-            SET @cOutField14 = CASE WHEN @cPieceScan = '1' THEN @nPieceScanQTY
-                                    WHEN @cDefaultQTY = '1' THEN '1' 
-                                    WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 5))
-                                    ELSE '' 
-                               END
-            SET @cInField14 = @cOutField14
-            
+         SET @cInField13 = CASE WHEN @cFieldAttr13 = '' AND @cDefaultPutawayQTY = '1' AND @nPQTY_PWY > 0 THEN CAST( @nPQTY_PWY AS NVARCHAR( 5)) ELSE '' END
+         SET @cInField14 = CASE WHEN @cPieceScan = '1' THEN @nPieceScanQTY
+                                WHEN @cDefaultQTY = '1' THEN '1' 
+                                WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 6))
+                                ELSE '' 
+                           END
             GOTO Step_3
          END
       END
@@ -3266,7 +3274,14 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
-      IF @cPABySKUAndLOT = '1'
+      IF @cSerialNoUpdateLotLocID = '1'
+      BEGIN
+         IF @cSerialNoUniqueAtStorerLevel = '1'
+            SELECT @cByLOT = LOT FROM dbo.SerialNo WITH (NOLOCK) WHERE StorerKey = @cStorer AND SerialNo = @cSerialNo
+         ELSE
+            SELECT @cByLOT = LOT FROM dbo.SerialNo WITH (NOLOCK) WHERE StorerKey = @cStorer AND SKU = @cSKU AND SerialNo = @cSerialNo
+      END
+      ELSE IF @cPABySKUAndLOT = '1'
          SET @cByLOT = @cLOT
       ELSE
          SET @cByLOT = ''
@@ -3350,6 +3365,9 @@ BEGIN
          SET @cOutField05 = @cQTY_PMoveIn
          SET @cOutfield15 = '' -- ExtInfo
 
+         -- Reduce total QTY
+         SET @nQTY = @nQTY - @nScanSNO
+
          -- Go to prev screen
          SET @nScn = 2883
          SET @nStep = @nStep - 5
@@ -3428,7 +3446,7 @@ BEGIN
          GOTO Quit
       END
 
-      -- Check optin valid
+      -- Check option valid
       IF @cOption NOT IN ('1', '2')
       BEGIN
          SET @nErrNo = 73891
@@ -3881,6 +3899,7 @@ BEGIN
       V_UCC        = @cUCC,
       V_Barcode    = @cBarcode,
       V_FromStep   = @nFromStep, 
+      V_FromScn    = @nFromScn, 
 
       V_String1  = @cSuggestSKU,
       V_String2  = @cSuggestedLOC,
@@ -3909,9 +3928,6 @@ BEGIN
       V_Integer7 = @nPABookingKey,
       V_Integer8 = @nPieceScanQTY,
       V_Integer9 = @nScanSNO, 
-      
-      --C_Integer1 used in extscn (jackc01)  
-      V_String40  = @cLOCCheckDigitSP,  
 
       V_String20 = @cPASuggestSKU,
       V_String21 = @cPABySKUAndLOT,
@@ -3927,14 +3943,16 @@ BEGIN
       V_String31 = @cDecodeSP,
       V_String32 = @cSKUStatus,  -- (james10)
       V_String33 = @cLOCLookupSP,  -- (yeekung02)
-      V_String34 = @nFromScn,    -- (yeekung03)
+      V_String34 = @cLOCCheckDigitSP,
       V_String35 = @cMultiSKUBarcode, --(yeekung03)
       V_String38 = @cPieceScan,
       V_String39 = @cPAToIDSP,
-      V_String44 = @cSerialNoCapture,
+      V_String40 = @cSerialNoCapture,
       V_String41 = @cSerialNo, 
       V_String42 = @cFlowThruScreen,
       V_String43 = @cDefaultPutawayQTY,
+      V_String44 = @cSerialNoUpdateLotLocID,
+      V_String45 = @cSerialNoUniqueAtStorerLevel, 
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

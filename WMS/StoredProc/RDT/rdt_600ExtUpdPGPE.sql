@@ -9,8 +9,11 @@
 /* Date         Author    Ver.  Purposes                                      */
 /* 2026-03-25   FRO014    1.0   RITM9002088/UWP-61804                         */
 /*                              Assigns the STICKERING flag to specific SKUs, */
-/*                              and auto-prints the SENASA label once per      */
-/*                              pallet.                                        */
+/*                              and auto-prints the SENASA label once per     */
+/*                              pallet.                                       */
+/* 2026-07-03   FRO014    2.0   RITM9054096/UWP-63764                         */
+/*                              Change to the trigger of the Stickering       */
+/*                              process: from Step 4 to Step 6                */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_600ExtUpdPGPE]
@@ -59,7 +62,7 @@ BEGIN
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
-      IF @nStep = 4 -- Scan SKU
+      IF @nStep = 6 -- Input QTY  --> Change UWP-63764
       BEGIN
          -- Logic for applying stickering
          SELECT TOP 1 @cSKU = SKU

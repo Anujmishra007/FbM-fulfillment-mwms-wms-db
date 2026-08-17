@@ -48,5 +48,6 @@ EXECUTE rdt.rdtAddMsg 255643, 10, '255643 UpdUCCtlFail',                      'u
 EXECUTE rdt.rdtAddMsg 255644, 10, '255644 UpdSNFail',                         'us_english', 839, 0, '255644 Update SerialNo failed'
 EXECUTE rdt.rdtAddMsg 255645, 10, '255645 UpdMasterSNFail',                   'us_english', 839, 0, '255645 Update MasterSerialNo failed'
 EXECUTE rdt.rdtAddMsg 255646, 10, '255646 UpdUCCFail',                        'us_english', 839, 0, '255646 Update UCC failed'
+EXECUTE rdt.rdtAddMsg 255647, 10, '255647 InsKDtlFail',                       'us_english', 839, 0, '255647 Insert into @tPickedKeys failed'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255601 AND 255650

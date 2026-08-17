@@ -19,6 +19,12 @@
 /* 28-AUG-2025    Jiawen   #UWP-40141 Update REDO filename              */
 /* 15-OCT-2025    Jiawen   #UWP-42320 Update REPACK, REDO filename      */
 /* 16-DEC-2025    Jiawen   #FCR-9127 Update filename                    */
+/* 13-APR-2026    JWF011   #FCR-12163 Add 'EPACKCCTVEndPreRec' rule     */
+/* 27-MAY-2026    Sean     #FCR-12877 Add 'CLICKORDER' FuncName for     */
+/*                                    Batch Multi-item click orderkey   */
+/* 16-JUL-2026    Sean     #FCR-13894 Add 'SINGLEBATCHSLICE' FuncName   */
+/*                                    for Batch Single Mode scan-SKU    */
+/*                                    slicing                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GENCCTVFileName] (
@@ -49,6 +55,7 @@ BEGIN
          , @c_FuncName                    NVARCHAR(20)   = ''
          , @c_TaskBatchNo                 NVARCHAR(20)   = ''
          , @c_OrderKey                    NVARCHAR(20)   = ''
+         , @c_OrderMode                   NVARCHAR(5)    = ''
 
          , @c_FileName                    NVARCHAR(120)  = ''
          , @c_CurrentTimeStamp            NVARCHAR(12)   = (CONVERT(VARCHAR, GETDATE(), 112) + REPLACE(convert(varchar, getdate(), 108), ':', ''))
@@ -85,6 +92,7 @@ BEGIN
          ,@c_FuncName       = ISNULL(RTRIM(FuncName     ), '')
          ,@c_TaskBatchNo    = ISNULL(RTRIM(TaskBatchNo  ), '')
          ,@c_OrderKey       = ISNULL(RTRIM(OrderKey     ), '')
+         ,@c_OrderMode      = ISNULL(RTRIM(OrderMode    ), '')
    FROM OPENJSON (@c_RequestString)
    WITH ( 
       Facility          NVARCHAR(10)       '$.Facility',
@@ -92,10 +100,11 @@ BEGIN
       PickSlipNo        NVARCHAR(10)       '$.PickSlipNo',
       [FuncName]        NVARCHAR(20)       '$.FuncName',
       TaskBatchNo       NVARCHAR(20)       '$.TaskBatchNo',
-      OrderKey          NVARCHAR(20)       '$.OrderKey'
+      OrderKey          NVARCHAR(20)       '$.OrderKey',
+      OrderMode         NVARCHAR(5)        '$.OrderMode'
    )
 
-   IF @c_FuncName NOT IN ('REDO', 'PACKCONFIRM', 'PENDPACKEXIT', 'CANC')
+   IF @c_FuncName NOT IN ('REDO', 'PACKCONFIRM', 'PENDPACKEXIT', 'CANC', 'CLICKORDER', 'SINGLEBATCHSLICE')
    BEGIN
       SET @n_Continue = 3      
       SET @n_ErrNo = 81300      
@@ -104,6 +113,11 @@ BEGIN
    END
 
    IF @c_FuncName IN ('PENDPACKEXIT', 'CANC')
+      AND (@c_OrderMode <> 'M'
+         OR (@c_OrderMode = 'M'
+            AND dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec') = '0'
+         )
+      )
    BEGIN
       SET @c_FileName = 'HD_' + @c_CurrentTimeStamp + '.mp4'
    END
@@ -125,10 +139,54 @@ BEGIN
       END
    END
    ELSE IF @c_FuncName = 'PACKCONFIRM'
-   BEGIN 
-      SELECT @c_FileName = ISNULL(RTRIM(TaskBatchNo), '') + '_' + @c_CurrentTimeStamp + '.mp4'
-      FROM [dbo].[PackHeader] WITH (NOLOCK) 
-      WHERE PickSlipNo = @c_PickSlipNo
+      OR (@c_FuncName IN ('PENDPACKEXIT', 'CANC')
+         AND @c_OrderMode = 'M'
+         AND dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec') = '1'
+      )
+      OR @c_FuncName = 'CLICKORDER'  -- FCR-12877
+      OR @c_FuncName = 'SINGLEBATCHSLICE'  -- FCR-13894
+   BEGIN
+      -- FCR-12877 (Start) - For CLICKORDER, if the previous order was NOT yet
+      -- packed when user clicked the next orderkey, fall back to HD_<OrderKey>_<ts>.mp4
+      -- FCR-13894 - SINGLEBATCHSLICE (Batch Single Mode scan-SKU slicing) follows
+      -- the same fallback rule.
+      IF @c_FuncName IN ('CLICKORDER', 'SINGLEBATCHSLICE') AND @c_OrderKey <> ''
+      BEGIN
+         DECLARE @c_LastOrderPacked  INT = 0
+         
+         -- An order is considered "packed" if there is a PackHeader row 
+         -- linked to this OrderKey with PackStatus = '9' (confirmed)
+         SELECT TOP 1 @c_LastOrderPacked = 1
+         FROM [dbo].[PackHeader] WITH (NOLOCK)
+         WHERE OrderKey = @c_OrderKey
+           AND ISNULL(RTRIM(PackStatus), '') = '9'
+
+         IF @c_LastOrderPacked = 0
+         BEGIN
+            SET @c_FileName = 'HD_' + ISNULL(RTRIM(@c_OrderKey), '') + '_' + @c_CurrentTimeStamp + '.mp4'
+            GOTO RESPONSE
+         END
+      END
+      -- FCR-12877 (End)
+
+      IF @c_OrderKey = ''
+      BEGIN
+         IF @c_PickSlipNo = ''
+         BEGIN
+            IF @c_TaskBatchNo <> ''
+            BEGIN
+               SELECT TOP 1 @c_OrderKey = OrderKey 
+               FROM [dbo].[PACKTASKDETAIL] WITH (NOLOCK) 
+               WHERE TaskBatchNo = @c_TaskBatchNo
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @c_OrderKey = OrderKey 
+            FROM [dbo].[PackHeader] WITH (NOLOCK) 
+            WHERE PickSlipNo = @c_PickSlipNo
+         END
+      END
 
       EXEC [dbo].[nspGetRight]
          @c_Facility          = @c_Facility
@@ -166,21 +224,21 @@ BEGIN
                       + ', @c_TempValue4 = ' + CASE WHEN @c_sc_Option4 <> '' AND @c_sc_Option4 LIKE 'ORDERS.%' THEN @c_sc_Option4 ELSE ''''' ' END 
                       + ', @c_TempValue5 = ' + CASE WHEN @c_sc_Option5 <> '' AND @c_sc_Option5 LIKE 'ORDERS.%' THEN @c_sc_Option5 ELSE ''''' ' END 
                       + 'FROM [dbo].[ORDERS] WITH (NOLOCK) '
-                      + 'WHERE OrderKey = ( SELECT TOP 1 OrderKey FROM [dbo].[PackHeader] WITH (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo ) '
+                      + 'WHERE OrderKey = @c_OrderKey '
       
       IF @b_Debug = 1
       BEGIN
          PRINT @c_SQLQuery
       END
 
-      SET @c_SQLParams = '@c_PickSlipNo NVARCHAR(10), '
+      SET @c_SQLParams = '@c_OrderKey NVARCHAR(20), '
                        + '@c_TempValue1 NVARCHAR(400) OUTPUT, '
                        + '@c_TempValue2 NVARCHAR(400) OUTPUT, '
                        + '@c_TempValue3 NVARCHAR(400) OUTPUT, '
                        + '@c_TempValue4 NVARCHAR(400) OUTPUT, ' 
                        + '@c_TempValue5 NVARCHAR(400) OUTPUT  '
 
-      EXEC sp_executesql @c_SQLQuery, @c_SQLParams, @c_PickSlipNo, @c_TempValue1 OUTPUT, @c_TempValue2 OUTPUT, @c_TempValue3 OUTPUT, @c_TempValue4 OUTPUT, @c_TempValue5 OUTPUT
+      EXEC sp_executesql @c_SQLQuery, @c_SQLParams, @c_OrderKey, @c_TempValue1 OUTPUT, @c_TempValue2 OUTPUT, @c_TempValue3 OUTPUT, @c_TempValue4 OUTPUT, @c_TempValue5 OUTPUT
       
       IF @b_Debug = 1
       BEGIN
@@ -205,19 +263,22 @@ BEGIN
 
       SET @c_FileName = @c_FileName + CASE WHEN @c_FileName <> '' THEN '_' ELSE '' END + @c_CurrentTimeStamp + '.mp4'
 
-      --Add Repack Rule
-      SELECT @c_PackStatus = ISNULL(RTRIM(PackStatus), '')
-      FROM [dbo].[PackHeader] WITH (NOLOCK) 
-      WHERE PickSlipNo = @c_PickSlipNo
-
-      IF @c_PackStatus = 'REPACK'
+      IF @c_FuncName = 'PACKCONFIRM'
       BEGIN
-         SET @c_FileName = 'REPACK_' + @c_FileName
-      END
-      --Add Repack Rule (END)
+         --Add Repack Rule
+         SELECT @c_PackStatus = ISNULL(RTRIM(PackStatus), '')
+         FROM [dbo].[PackHeader] WITH (NOLOCK) 
+         WHERE PickSlipNo = @c_PickSlipNo
 
+         IF @c_PackStatus = 'REPACK'
+         BEGIN
+            SET @c_FileName = 'REPACK_' + @c_FileName
+         END
+         --Add Repack Rule (END)
+      END
    END
 
+   RESPONSE:  -- FCR-12877
    SET @c_ResponseString = ISNULL(( 
                               SELECT @c_FileName  As 'NewFileName'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER

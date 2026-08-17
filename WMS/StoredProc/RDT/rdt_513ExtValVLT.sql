@@ -14,6 +14,7 @@ GO
 /* 18/10/2024   1.2   PPA374   Adding checks for shelf AND cons          */
 /* 28/10/2024   1.3.0 WSE016   UWP-26437                                 */
 /* 27/07/2026   1.4   PPA374   Updating duplicate val to allow some locs */
+/* 30/07/2026   1.5   PPA374   Adding validation control for shelving    */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_513ExtValVLT] (
@@ -224,6 +225,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218016
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Not SHLV storage loc'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Shelf SKU should NOT be moved to a shelf location NOT assigned to that SKU
@@ -233,6 +241,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218017
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT set for loc'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Non-shelf SKU should NOT be moved to shelf location
@@ -241,6 +256,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218018
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT shelf type'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Consumable location
