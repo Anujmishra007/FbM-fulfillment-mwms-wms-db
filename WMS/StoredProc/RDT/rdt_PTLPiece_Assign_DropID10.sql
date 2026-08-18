@@ -14,6 +14,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2026-07-06 1.0  Cuize    FCR-13139 Created                                 */
+/* 2026-08-17 1.1  Cuize    UWP-63852 Fix operator count and color lookup     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID10] (
@@ -88,6 +89,7 @@ BEGIN
       WHERE Station = @cStation
         AND UserDefine02 = 'INPROGRESS'
         AND ISNULL(UserDefine01, '') <> ''
+        AND AddWho <> @cUserName
 
       IF @nOperatorCount >= 3
       BEGIN
@@ -100,11 +102,15 @@ BEGIN
       -- CHECK 2: Assign color to user
       -- ========================================================================
       -- Check if user already has a color assigned
+      -- FCR-13139 FIX: Only select records WITH a color assigned
+      -- Avoids returning empty string when user has mixed records
       SELECT TOP 1 @cUserColor = UserDefine01
       FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
       WHERE Station = @cStation
         AND AddWho = @cUserName
         AND UserDefine02 = 'INPROGRESS'
+        AND ISNULL(UserDefine01, '') <> ''
+      ORDER BY EditDate DESC
 
       IF @cUserColor IS NULL OR @cUserColor = ''
       BEGIN
@@ -280,11 +286,14 @@ BEGIN
       -- CHECK 5: Assign virtual cartons to physical slots
       -- ========================================================================
       -- Get user's color (should already be assigned from POPULATE-IN)
+      -- FCR-13139 FIX: Only select records WITH a color assigned
       SELECT TOP 1 @cUserColor = UserDefine01
       FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
       WHERE Station = @cStation
         AND AddWho = @cUserName
         AND UserDefine02 = 'INPROGRESS'
+        AND ISNULL(UserDefine01, '') <> ''
+      ORDER BY EditDate DESC
 
       IF @cUserColor IS NULL OR @cUserColor = ''
       BEGIN

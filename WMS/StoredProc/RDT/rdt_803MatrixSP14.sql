@@ -83,6 +83,8 @@ BEGIN
    WHERE L.Station = @cStation
      AND L.AddWho = @cUserName
      AND L.UserDefine02 = 'INPROGRESS'
+     AND ISNULL(L.UserDefine01, '') <> ''
+   ORDER BY EditDate DESC
 
    -- Get HEX color code for PTL light
    SELECT TOP 1 @cColorHex = UDF02
