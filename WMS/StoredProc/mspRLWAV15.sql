@@ -86,7 +86,9 @@ BEGIN
          , @c_Lottable11               NVARCHAR(30)   = ''
          , @c_Top1Sku                  NVARCHAR(20)   = ''
          , @n_SkuCount                 INT
+         , @n_LotCount                 INT 
          , @c_TD_Sku                   NVARCHAR(20)   = ''
+         , @c_TD_Lot                   NVARCHAR(10)   = ''
          , @n_PalletQty                INT 
          , @c_Wave_UDF01               NVARCHAR(20)   = ''
          , @c_TD_CaseID                NVARCHAR(20)   = ''
@@ -220,11 +222,11 @@ BEGIN
 
       SET @CUR_RPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT STRING_AGG(PD.PickDetailKey, ',') AS PickDetailKeys
-           , PD.Lot
+           , MAX(PD.Lot)                       AS Lot
            , PD.Loc
            , PD.ID
            , PD.UOM
-           , SUM(PD.Qty)
+           , SUM(PD.Qty)                       AS TotalQty
            , Loc.LocAisle
       FROM #PickDetail_WIP PD
       JOIN LOC (NOLOCK) ON PD.Loc = LOC.Loc
@@ -232,13 +234,11 @@ BEGIN
       AND (PD.TaskDetailKey IS NULL OR PD.TaskDetailKey = '')
       AND PD.UOM = '6'
       AND LOC.LocationType <> 'PICK'
-      GROUP BY PD.Lot
-             , PD.Loc
+      GROUP BY PD.Loc
              , PD.ID
              , PD.UOM
              , Loc.LocAisle
-      ORDER BY PD.Lot
-             , PD.Loc
+      ORDER BY PD.Loc
              , PD.ID
              , PD.UOM
              , Loc.LocAisle
@@ -248,8 +248,10 @@ BEGIN
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
          SET @n_SkuCount = 0
+         SET @n_LotCount = 0
          SET @c_Top1Sku = ''
          SET @c_TD_Sku = ''
+         SET @c_TD_Lot = ''
          SET @c_RPF_ToLoc = ''
 
          --Get TOP 1 PickDetail.SKU for ToLOC lookup
@@ -261,11 +263,13 @@ BEGIN
          )
 
          SELECT @n_SkuCount = COUNT(DISTINCT Sku)
+               ,@n_LotCount = COUNT(DISTINCT Lot)
          FROM LOTxLOCxID (NOLOCK)
-         WHERE Loc = @c_FromLoc AND ID = @c_FromID
+         WHERE Loc = @c_FromLoc 
+         AND ID = @c_FromID
 
          SET @c_TD_Sku = CASE WHEN @n_SkuCount > 1 THEN '' ELSE @c_Top1Sku END
-
+         SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 THEN '' ELSE @c_Lot END
          --Find RPF ToLoc
 
          --1. Check pickface
@@ -353,11 +357,11 @@ BEGIN
          SET @c_Priority   = '3'
          SET @c_TaskStatus = '0'
          SET @c_PickMethod = 'FP'
+         SET @c_RPF_TaskDetailKey = ''
 
          SELECT @n_PalletQty = SUM(ISNULL(Qty, 0))
          FROM LOTxLOCxID WITH (NOLOCK) 
-         WHERE Lot = @c_Lot
-         AND   Loc = @c_FromLoc
+         WHERE Loc = @c_FromLoc
          AND   ID  = @c_FromID
          AND   StorerKey = @c_StorerKey
 
@@ -366,7 +370,7 @@ BEGIN
              ,@c_TaskType              = @c_TaskType             
              ,@c_Storerkey             = @c_Storerkey  
              ,@c_Sku                   = @c_TD_Sku  
-             ,@c_Lot                   = @c_Lot   
+             ,@c_Lot                   = @c_TD_Lot  
              ,@c_UOM                   = '1'        
              ,@n_UOMQty                = @n_PalletQty 
              ,@n_Qty                   = @n_PalletQty        
@@ -403,13 +407,14 @@ BEGIN
          SET @c_Priority   = '5'
          SET @c_TaskStatus = 'S'
          SET @c_PickMethod = 'PP'
+         SET @c_FCP_TaskDetailKey = ''
 
          EXEC isp_InsertTaskDetail 
               @c_TaskDetailKey         = @c_FCP_TaskDetailKey OUTPUT
              ,@c_TaskType              = @c_TaskType             
              ,@c_Storerkey             = @c_Storerkey  
              ,@c_Sku                   = @c_TD_Sku  
-             ,@c_Lot                   = @c_Lot   
+             ,@c_Lot                   = @c_TD_Lot   
              ,@c_UOM                   = @c_UOM        
              ,@n_UOMQty                = @n_Qty     
              ,@n_Qty                   = @n_Qty        
@@ -466,7 +471,7 @@ BEGIN
 
       SET @CUR_PICK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT STRING_AGG(PD.PickDetailKey, ',') AS PickDetailKeys
-           , PD.Lot
+           , MAX(PD.Lot)                       AS Lot
            , PD.Loc                            AS FromLoc
            , PD.ID                             AS FromID
            , PD.UOM
@@ -484,7 +489,6 @@ BEGIN
          OR ( PD.UOM = '6' AND LOC.LocationType = 'PICK' )
       )
       GROUP BY O.OrderGroup
-             , PD.Lot
              , PD.Loc
              , PD.ID
              , PD.UOM
@@ -497,6 +501,9 @@ BEGIN
       BEGIN
          SET @c_FCP_TaskDetailKey = ''
          SET @c_FCP_ToLOC         = ''
+         SET @n_SkuCount = 0
+         SET @n_LotCount = 0
+         SET @c_Top1Sku = ''
 
          -- Find ToLoc for FCP task
          IF @c_OrderGroup = 'KITTING'
@@ -533,10 +540,11 @@ BEGIN
 
          --Check if Multi-SKUs in ID.
          SELECT @n_SkuCount = COUNT(DISTINCT Sku) 
+               ,@n_LotCount = COUNT(DISTINCT Lot)
          FROM LOTxLOCxID (NOLOCK) 
-         WHERE Lot = @c_Lot
+         WHERE ID  = @c_FromID
          AND   Loc = @c_FromLoc 
-         AND   ID  = @c_FromID
+         AND   StorerKey = @c_Storerkey
 
          SELECT TOP 1 @c_Top1Sku = Sku 
          FROM #PickDetail_WIP 
@@ -544,6 +552,7 @@ BEGIN
             SELECT RTRIM(value) FROM STRING_SPLIT(@c_PickDetailKeys, ',')
          )
 
+         SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 THEN '' ELSE @c_Lot END
          SET @c_TD_Sku = CASE WHEN @n_SkuCount > 1 THEN '' ELSE @c_Top1Sku END
          SET @c_TD_CaseID  = CASE WHEN @c_UOM = '2' THEN @c_Lottable11 ELSE '' END
 
@@ -555,7 +564,7 @@ BEGIN
              ,@c_TaskType      = @c_TaskType
              ,@c_Storerkey     = @c_StorerKey
              ,@c_Sku           = @c_TD_Sku
-             ,@c_Lot           = @c_Lot
+             ,@c_Lot           = @c_TD_Lot
              ,@c_UOM           = @c_UOM
              ,@n_UOMQty        = @n_Qty
              ,@n_Qty           = @n_Qty
