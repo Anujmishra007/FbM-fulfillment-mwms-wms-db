@@ -1,3 +1,9 @@
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /******************************************************************************/
 /* Store procedure: rdt_600ExtVal_PGPE                                        */
 /* Copyright      : LF Logistics                                              */
@@ -11,7 +17,8 @@
 /*                              lot expiration dates within a Pallet ID       */
 /*                              differ by no more than 90 days, Pallet ID     */
 /*                              has not been used, and Pallet ID quantity     */
-/*                              does not exceed the SPS configured limit.     */
+/*                              does not exceed the SPS configured limit      */
+/* 2026-08-18   Dennis    1.1   UWP-63764                                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_600ExtVal_PGPE]
@@ -56,38 +63,38 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nPalletExists  TINYINT  = 0
-   DECLARE @dMinExpDate    DATETIME
-   DECLARE @dMaxExpDate    DATETIME
-   DECLARE @nQtyAccumulated INT     = 0
-   DECLARE @nMaxQtyPallet   INT     = 0
+   DECLARE @nPalletExists   TINYINT  = 0
+   DECLARE @dMinExpDate     DATETIME
+   DECLARE @dMaxExpDate     DATETIME
+   DECLARE @nQtyAccumulated INT      = 0
+   DECLARE @nMaxQtyPallet   INT      = 0
 
    IF @nFunc = 600
    BEGIN
       -- Not allow to receive a used LPN
       IF @nStep = 3 -- ID
       BEGIN
-         -- Check on GLOARCHIVE
+         -- Check on PERARCHIVE
          IF EXISTS (
             SELECT 1
-            FROM GLOARCHIVE.dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE ReceiptKey <> @cReceiptKey
-               AND ToId = @cID
-               AND BeforeReceivedQty > 0
-               AND StorerKey = @cStorerKey
+            FROM PERARCHIVE.dbo.RECEIPTDETAIL WITH (NOLOCK)
+            WHERE ReceiptKey        <> @cReceiptKey
+              AND ToId               = @cID
+              AND BeforeReceivedQty  > 0
+              AND StorerKey          = @cStorerKey
          )
          BEGIN
             SET @nPalletExists = 1
          END
 
-         -- Check on GLOWMS
+         -- Check on WMS
          IF EXISTS (
             SELECT 1
             FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE ReceiptKey <> @cReceiptKey
-               AND ToId = @cID
-               AND BeforeReceivedQty > 0
-               AND StorerKey = @cStorerKey
+            WHERE ReceiptKey        <> @cReceiptKey
+              AND ToId               = @cID
+              AND BeforeReceivedQty  > 0
+              AND StorerKey          = @cStorerKey
          )
          BEGIN
             SET @nPalletExists = 1
@@ -95,8 +102,8 @@ BEGIN
 
          IF @nPalletExists > 0
          BEGIN
-            SET @nErrNo = 275052
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Used LPN
+            SET @nErrNo  = 275052
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Used LPN
             GOTO Quit
          END
       END
@@ -106,28 +113,25 @@ BEGIN
       IF @nStep = 6 -- SKU, Qty
       BEGIN
          -- Check if there is only one SKU on the pallet
-         IF (
-            SELECT COUNT(DISTINCT SKU)
-            FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE ReceiptKey = @cReceiptKey
-               AND ToId = @cID
+         IF (SELECT COUNT(DISTINCT SKU)
+             FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+             WHERE ReceiptKey       = @cReceiptKey
+               AND ToId             = @cID
                AND BeforeReceivedQty > 0
-               AND StorerKey = @cStorerKey
-         ) = 1
+               AND StorerKey        = @cStorerKey) = 1
          BEGIN
             -- Check number of batches (max 5)
             IF (
                SELECT COUNT(DISTINCT Lottable01) + 1
                FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-               WHERE ReceiptKey = @cReceiptKey
-                  AND ToId = @cID
-                  AND BeforeReceivedQty > 0
-                  AND StorerKey = @cStorerKey
-                  AND SKU = @cSKU
-            ) > 5
+               WHERE ReceiptKey       = @cReceiptKey
+                 AND ToId             = @cID
+                 AND BeforeReceivedQty > 0
+                 AND StorerKey        = @cStorerKey
+                 AND SKU              = @cSKU) > 5
             BEGIN
-               SET @nErrNo = 275053
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Max 5 batches
+               SET @nErrNo  = 275053
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Max 5 batches
                GOTO Quit
             END
 
@@ -135,11 +139,11 @@ BEGIN
             SELECT @dMinExpDate = MIN(Lottable04),
                    @dMaxExpDate = MAX(Lottable04)
             FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-            WHERE ReceiptKey = @cReceiptKey
-               AND ToId = @cID
-               AND BeforeReceivedQty > 0
-               AND StorerKey = @cStorerKey
-               AND SKU = @cSKU
+            WHERE ReceiptKey       = @cReceiptKey
+              AND ToId             = @cID
+              AND BeforeReceivedQty > 0
+              AND StorerKey        = @cStorerKey
+              AND SKU              = @cSKU
 
             IF @dMinExpDate > @dLottable04
                SET @dMinExpDate = @dLottable04
@@ -147,10 +151,10 @@ BEGIN
             IF @dMaxExpDate < @dLottable04
                SET @dMaxExpDate = @dLottable04
 
-            IF DATEDIFF( DAY, @dMinExpDate, @dMaxExpDate) > 90
+            IF DATEDIFF(DAY, @dMinExpDate, @dMaxExpDate) > 90
             BEGIN
-               SET @nErrNo = 275054
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff.ExpDate>90days
+               SET @nErrNo  = 275054
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Diff.ExpDate>90days
                GOTO Quit
             END
          END
@@ -160,23 +164,21 @@ BEGIN
             SELECT SUM(QtyReceived)
             FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
             WHERE ReceiptKey = @cReceiptKey
-               AND ToId = @cID
-               AND StorerKey = @cStorerKey
-               AND SKU = @cSKU
-         ), 0) + @nQTY
+              AND ToId       = @cID
+              AND StorerKey  = @cStorerKey
+              AND SKU        = @cSKU), 0) + @nQTY
 
          SET @nMaxQtyPallet = ISNULL((
             SELECT p.Pallet
             FROM dbo.SKU s WITH (NOLOCK)
             INNER JOIN dbo.PACK p WITH (NOLOCK) ON p.PackKey = s.PackKey
             WHERE s.StorerKey = @cStorerKey
-               AND s.SKU = @cSKU
-         ), 0)
+              AND s.SKU       = @cSKU), 0)
 
          IF @nMaxQtyPallet < @nQtyAccumulated
          BEGIN
-            SET @nErrNo = 275055
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty>MaxPallet
+            SET @nErrNo  = 275055
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Qty>MaxPallet
             GOTO Quit
          END
       END
@@ -186,5 +188,10 @@ Quit:
 END
 GO
 
-GRANT EXECUTE ON [RDT].[rdt_600ExtVal_PGPE] TO [NSQL]
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_600ExtVal_PGPE] TO NSQL
 GO
