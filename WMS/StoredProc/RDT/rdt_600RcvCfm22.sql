@@ -17,6 +17,8 @@ GO
 /* 2026-08-12 1.3  Dennis   FCR-14211 Apply same DOT logic to TB class     */
 /* 2026-08-12 1.4  Dennis   FCR-14211 DOT logic applies to all SKU classes */
 /* 2026-08-14 1.5  Dennis   FCR-14211 Revert: only PC class applies OLD/FRESH */
+/* 2026-08-18 1.6  Dennis   FCR-14211 OLD rule (by year) applies to all classes; */
+/*                                    MICDOTCTOF cutoff for PC class only        */
 /***************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600RcvCfm22](
@@ -184,10 +186,15 @@ BEGIN
       GOTO Receive
    END
 
-   -- FCR-14211: Only PC class applies OLD/FRESH cutoff logic; all other classes default to FRESH
-   IF @cSKUType <> 'PC'
+   -- FCR-14211: Non-PC class: OLD if PCS DOT year < current year, else FRESH. No MICDOTCTOF cutoff.
+   IF ISNULL(@cSKUType, '') <> 'PC'
    BEGIN
-      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
+      IF LEN(ISNULL(@cLottable07, '')) = 4
+         AND TRY_CAST(RIGHT(@cLottable07, 2) AS INT) IS NOT NULL
+         AND (2000 + TRY_CAST(RIGHT(@cLottable07, 2) AS INT)) < YEAR(@CurrentDate)
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'OLD'
+      ELSE
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
    END
 
