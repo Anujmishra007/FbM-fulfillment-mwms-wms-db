@@ -38,6 +38,9 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
+
    IF @nFunc = 513 -- Move by SKU
    BEGIN
       IF @nStep = 6 -- ToLOC
