@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
 /* 2026-08-05  Wan01    1.0   Created.                                  */
+/* 2026-08-18  Wan      1.0   UWP-64392 - Fix                           */     
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCBUSK01]  
    @c_OrderKey        NVARCHAR(10)
@@ -80,13 +81,14 @@ BEGIN
          , @n_QtyAvailable          INT = 0
          , @n_LotQtyAvai            INT = 0
          , @n_ExtraQty              INT = 0
-         , @n_QtyLeftToFulfill      INT
+         , @n_QtyLeftToFulfill      INT = 0                                         --UWP-64392 
 
          , @c_PickDetailKey         NVARCHAR(10)   = '' 
          , @c_PackUOM3              NVARCHAR(10)   = ''                                
          
          , @c_SQL                   NVARCHAR(MAX)  = ''
          , @c_SQLParm               NVARCHAR(MAX)  = ''
+         , @c_ApplyJoin             NVARCHAR(2000) = ''                             --UWP-64392          
          , @c_Condition             NVARCHAR(MAX)  = '' 
          , @c_Conditions            NVARCHAR(MAX)  = ''
          , @c_Sorting               NVARCHAR(MAX)  = ''
@@ -117,27 +119,29 @@ BEGIN
    ,  QtyAvailable   INT            NOT NULL DEFAULT(0)    
    )  
 
-   --SET @c_ApplyJoin  = ' CROSS APPLY ( SELECT 
-   --                                    Qty = SUM(LOTxLOCxID.Qty) OVER  
-   --                                          (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID)
-   --                                  , Lottable05 = MAX(LOTATTRIBUTE.Lottable05) OVER
-   --                                          (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID)
-   --                                  ) CROSSJOIN' + CHAR(13)
+   --UWP-64392
+   SET @c_ApplyJoin  = ' CROSS APPLY(SELECT Qty = SUM(lli1.QTY)
+                                     FROM LOTxLOCxID lli1 (NOLOCK) 
+                                     --JOIN LOTAttribute la1 (NOLOCK) ON la1.Lot = lli1.Lot
+                                     WHERE lli1.Loc = LOTxLOCxID.Loc 
+                                     AND lli1.ID = LOTxLOCxID.ID
+                                     AND lli1.QTY > 0
+                                     AND lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen = 0
+                                     --AND la1.Lottable11 = LOTATTRIBUTE.Lottable11
+                                     GROUP BY lli1.Loc, lli1.ID--, la1.Lottable11
+                                     HAVING COUNT(DISTINCT lli1.SKU) = 1
+                                     AND SUM(lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen) = 0
+                                    ) ApplyJoin' + CHAR(13)
 
    SET @c_Condition  = ' AND LOC.LocationType <> ''PICK'''
                      + ' AND LOTxLOCxID.QtyAllocated+LOTxLOCxID.QtyPicked+LOTxLOCxID.QtyReplen = 0' 
-                     + ' AND EXISTS (SELECT 1 FROM LOTxLOCxID lli1 (NOLOCK)
-                                     WHERE lli1.ID = LOTxLOCxID.ID
-                                     AND   lli1.Loc = LOTxLOCxID.Loc
-                                     HAVING COUNT(DISTINCT SKU) = 1
-                                    )'
-   SET @c_OrderBy    = ' ORDER BY MAX(LOTATTRIBUTE.Lottable05) OVER
-                                     (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID)'
-                     +        ' , SUM(LOTxLOCxID.Qty) OVER  
-                                     (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID) DESC'   
-                     +        ' , LOTxLOCxID.LOC'   
-                     +        ' , LOTxLOCxID.ID'                            
-                     +        ' , LOC.LogicalLocation'                         
+
+   SET @c_OrderBy = ' ORDER BY LOTATTRIBUTE.Lottable05'                             --UWP-64392
+                  + ', ApplyJoin.Qty DESC'  
+                  + ', LOTxLOCxID.LOC'   
+                  + ', LOTxLOCxID.ID' 
+                  + ', LOTATTRIBUTE.Lottable11'                             
+                  + ', LOC.LogicalLocation'                         
    
    SELECT TOP 1 @c_Cond = cl.Notes                                                        
    FROM CODELKUP cl (NOLOCK)
@@ -327,8 +331,9 @@ BEGIN
          JOIN SKUXLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUXLOC.Storerkey 
                               AND LOTxLOCxID.Sku = SKUXLOC.Sku 
                               AND LOTxLOCxID.Loc = SKUXLOC.Loc
-         JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = Sku.Storerkey AND LOTxLOCxID.Sku = Sku.Sku
-         WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                 
+         JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = Sku.Storerkey AND LOTxLOCxID.Sku = Sku.Sku'
+      +  CHAR(13) + @c_ApplyJoin                                                    --UWP-64392    
+      + 'WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                 
          AND LOC.Status = ''OK''
          AND LOT.Status = ''OK''
          AND ID.Status = ''OK''
@@ -453,7 +458,7 @@ BEGIN
                      
                IF @n_err <> 0
                BEGIN
-                  SET @n_continue = 3
+                  SET @n_Continue = 3
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
                   SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Failed. (ispPRJCBUSK01)'

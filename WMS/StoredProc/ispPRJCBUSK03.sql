@@ -80,7 +80,7 @@ BEGIN
          , @n_QtyAvailable          INT = 0   
          , @n_LotQtyAvai            INT = 0
          , @n_ExtraQty              INT = 0
-         , @n_QtyLeftToFulfill      INT
+         , @n_QtyLeftToFulfill      INT = 0
 
          , @c_PickDetailKey         NVARCHAR(10)   = '' 
          , @c_PackUOM3              NVARCHAR(10)   = ''                                
@@ -117,13 +117,6 @@ BEGIN
    ,  Lottable11     NVARCHAR(10)   NOT NULL DEFAULT('')   
    ,  QtyAvailable   INT            NOT NULL DEFAULT(0)    
    )  
-
-   --SET @c_ApplyJoin  = ' CROSS APPLY ( SELECT 
-   --                                    Qty = SUM(LOTxLOCxID.Qty) OVER  
-   --                                          (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID)
-   --                                  , Lottable05 = MAX(LOTATTRIBUTE.Lottable05) OVER
-   --                                          (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID)
-   --                                  ) CROSSJOIN' + CHAR(13)
 
    SET @c_Condition = ' AND SKUxLOC.LocationType = ''PICK'''
    SET @c_OrderBy = ' ORDER BY LOTATTRIBUTE.Lottable05'
@@ -436,7 +429,7 @@ BEGIN
                      
                IF @n_err <> 0
                BEGIN
-                  SET @n_continue = 3
+                  SET @n_Continue = 3
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
                   SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Failed. (ispPRJCBUSK03)'
