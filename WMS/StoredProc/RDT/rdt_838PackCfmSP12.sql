@@ -17,6 +17,7 @@ GO
 /* 2026-04-14 1.3    JackC       FCR-12450 Update PKD status & merge duplicates */
 /* 2026-05-08 1.3.1  JackC       UWP-55429 Hotfix for PICK-TRF config on Prod   */
 /* 2026-07-28 1.4    NYE018      FCR-13548 B2C Single: only PackHeader Status=0 */
+/* 2026-08-18 1.5    NYE018      FCR-13548 Archive PackDetail.DropID            */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
@@ -68,6 +69,21 @@ BEGIN
    DECLARE @cMsg01                  NVARCHAR (60)
    DECLARE @cMsg02                  NVARCHAR (60)
    DECLARE @cMsg03                  NVARCHAR (60)
+   DECLARE @cArcPackDtlFlag         NVARCHAR(1) = '' --V1.5
+
+   --V1.5
+   DECLARE @nPackDtlLoopRow    INT          = 0
+   DECLARE @cLoopPackSlipNo    NVARCHAR(10) = ''
+   DECLARE @nLoopPackCartonNo  INT          = 0
+   DECLARE @cLoopPackLabelNo   NVARCHAR(20) = ''
+   DECLARE @cLoopPackLabelLine NVARCHAR(5)  = ''
+   DECLARE @tPackDetail TABLE (
+      RowRef     INT IDENTITY(1,1),
+      PickSlipNo NVARCHAR( 10) NOT NULL,
+      CartonNo   INT           NOT NULL,
+      LabelNo    NVARCHAR( 20) NOT NULL,
+      LabelLine  NVARCHAR(  5) NOT NULL
+   )
 
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
@@ -265,7 +281,8 @@ BEGIN
 
                   IF @nDebugFlag = 1
                      SELECT 'Set MoveInvFlag = 1'
-                  SET @cMoveInvFlag = '1' 
+                  SET @cMoveInvFlag    = '1'
+                  SET @cArcPackDtlFlag = 'Y' --V1.5
                END
                ELSE
                BEGIN
@@ -293,6 +310,8 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END CATCH
+
+               SET @cArcPackDtlFlag = 'Y' --V1.5
             END -- UCC packing
          END
          ELSE
@@ -843,8 +862,72 @@ BEGIN
          IF @bSuccess <> 1            
             GOTO RollBackTran       
       END 
-   END-- pack confirm          
-      
+   END-- pack confirm
+
+   --V1.5 start: Archive PackDetail.DropID after pack confirm
+   IF @cArcPackDtlFlag = 'Y'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Archive PackDetail DropID', @cFromDropID AS FromDropID, @cMoveInvFlag AS MoveInvFlag, @cArcPackDtlFlag AS ArcPackDtlFlag
+
+      BEGIN TRY
+         IF @cMoveInvFlag = '1'
+            -- UOM6: DropID was updated to LabelNo by V1.1; DropID = LabelNo is a column-to-column filter
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey  = @cStorerKey
+               AND PickSlipNo = @cPickSlipNo
+               AND DropID     = LabelNo
+         ELSE
+            -- UCC: DropID is still @cFromDropID
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND DropID   = @cFromDropID
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 262665
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
+         GOTO RollBackTran
+      END CATCH
+
+      SET @nPackDtlLoopRow = 0
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @nPackDtlLoopRow    = RowRef,
+            @cLoopPackSlipNo    = PickSlipNo,
+            @nLoopPackCartonNo  = CartonNo,
+            @cLoopPackLabelNo   = LabelNo,
+            @cLoopPackLabelLine = LabelLine
+         FROM @tPackDetail
+         WHERE RowRef > @nPackDtlLoopRow
+         ORDER BY RowRef
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         BEGIN TRY
+            UPDATE dbo.PackDetail WITH (ROWLOCK)
+            SET DropID   = LEFT('ARC' + DropID, 20),
+                EditDate = GETDATE(),
+                EditWho  = SUSER_SNAME()
+            WHERE PickSlipNo = @cLoopPackSlipNo
+               AND CartonNo  = @nLoopPackCartonNo
+               AND LabelNo   = @cLoopPackLabelNo
+               AND LabelLine = @cLoopPackLabelLine
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 262666
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --ArcPackDtlDropIDFail
+            GOTO RollBackTran
+         END CATCH
+      END
+   END
+   --V1.5 end
+
    COMMIT TRAN rdt_838PackCfmSP12      
    GOTO Quit      
       
