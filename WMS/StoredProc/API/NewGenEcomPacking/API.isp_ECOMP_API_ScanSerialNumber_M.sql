@@ -20,7 +20,9 @@
 /* 05-Jul-2023    Alex     #JIRA PAC-7 Initial                          */
 /* 09-JUL-2024    Alex01   #JIRA PAC-344 & PAC-350                      */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
-/* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 15-Dec-2025    Sean01   FCR-8269 - tracking no refresh in the UI     */
+/* 24-Mar-2026    Sean02   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 23-Jun-2026    Sean03    FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSerialNumber_M](
      @b_Debug           INT            = 0
@@ -398,13 +400,15 @@ BEGIN
    --   ,  @c_DropID         = @c_DropID
 
    EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-        @c_PickSlipNo            = @c_PickSlipNo  
+        @c_StorerKey             = @c_StorerKey   --Sean03
+      , @c_Facility              = @c_Facility    --Sean03
+      , @c_PickSlipNo            = @c_PickSlipNo  
       , @c_TaskBatchID           = @c_TaskBatchID 
       , @c_OrderKey              = @c_Orderkey    
       , @c_DropID                = @c_DropID
       , @c_MultiPackResponse     = @c_MultiPackResponse OUTPUT
 
-   -- Sean Start
+   -- FCR-8269 Sean01 Start
    -- Get EPACK CCTV Config Start
    EXEC [API].[isp_ECOMP_GetEPackConfigs]
       @c_StorerKey       = @c_StorerKey   
@@ -447,7 +451,7 @@ BEGIN
    SET @b_CCTVREFRESHTRACKNO = CASE WHEN @c_EPACKCCTVREFRESHTRACKNO = '1' THEN 1 ELSE 0 END;
 
    -- Get EPACK CCTV Config End
-   -- Sean End
+   -- FCR-8269 Sean01 End
 
    SET @c_TrackingNumber = ''
 
@@ -456,8 +460,8 @@ BEGIN
          @b_Debug                   = @b_Debug
        , @c_PickSlipNo              = @c_PickSlipNo
        , @n_CartonNo                = @n_CartonNo
-       , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean
-       , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean
+       , @b_CCTV_JD_Online          = @b_CCTV_JD_Online -- Sean01
+       , @b_CCTVREFRESHTRACKNO      = @b_CCTVREFRESHTRACKNO -- Sean01
        , @b_Success                 = @b_sp_Success         OUTPUT
        , @n_ErrNo                   = @n_sp_err             OUTPUT
        , @c_ErrMsg                  = @c_sp_errmsg          OUTPUT

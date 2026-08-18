@@ -10,9 +10,16 @@ GO
 /*                                                                         */  
 /* Purpose: Client VNM Michelin                                            */
 /*                                                                         */
-/* Date       Rev  Author  Purposes                                        */  
+/* Date       Rev  Author  Purposes                                        */
 /* 2025-05-20 1.0  CYU027   FCR-4213 Created                               */
-/***************************************************************************/  
+/* 2026-06-29 1.1  Sreeja   FCR-14112 Default QTY for PC&TB tires          */
+/* 2026-07-28 1.2  Cuize    FCR-14406 Configurable cutoff, PC class only   */
+/* 2026-08-12 1.3  Dennis   FCR-14211 Apply same DOT logic to TB class     */
+/* 2026-08-12 1.4  Dennis   FCR-14211 DOT logic applies to all SKU classes */
+/* 2026-08-14 1.5  Dennis   FCR-14211 Revert: only PC class applies OLD/FRESH */
+/* 2026-08-18 1.6  Dennis   FCR-14211 OLD rule (by year) applies to all classes; */
+/*                                    MICDOTCTOF cutoff for PC class only        */
+/***************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600RcvCfm22](
    @nFunc          INT,             
@@ -63,6 +70,14 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   -- Restore pallet ID when framework cleared V_ID after prior receipt confirm
+   IF ISNULL(@cToID, '') = ''
+   BEGIN
+       SELECT @cToID = LTRIM(RTRIM(C_String3))
+       FROM rdt.RDTMOBREC WITH (NOLOCK)
+       WHERE Mobile = @nMobile
+   END
+
    DECLARE  @cUserDefine01       NVARCHAR( 60),
             @TargetDate          DATETIME,
             @FirstWeekDay        DATETIME,
@@ -71,19 +86,50 @@ BEGIN
             @Year                INT,
             @WeekYear            VARCHAR(4)
 
-
-
-
    SET DATEFIRST 1 -- Monday as first day
 
    DECLARE @cSKUType NVARCHAR(10) = ''
-   SELECT @cSKUType = itemclass FROM SKU (NOLOCK)
+   DECLARE @cItemClass NVARCHAR(10) = ''
+   SELECT @cSKUType = Class, @cItemClass = ItemClass
+   FROM dbo.SKU WITH (NOLOCK)
    WHERE SKU = @cSKUCode
      AND StorerKey = @cStorerKey
 
-   IF (ISNULL(@cSKUType,'') = 'POSM')
+   -- Use ItemClass for POSM check (POSM is stored in ItemClass column)
+   IF (ISNULL(@cItemClass,'') = 'POSM')
    BEGIN
       GOTO Receive
+   END
+
+   -- FCR-14406: Get facility prefix for sub-inventory code
+   DECLARE @cFacilityPrefix NVARCHAR(30)
+   SELECT @cFacilityPrefix = UserDefine01
+   FROM dbo.Facility WITH (NOLOCK)
+   WHERE Facility = @cFacility
+
+   -- Determine correct MIN DOT BEFORE date conversion
+   -- First tire on pallet: MIN DOT defaults to PCS DOT
+   IF ISNULL(@cLottable02, '') = '' AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+   BEGIN
+      SET @cLottable02 = @cLottable07
+   END
+   -- PCS DOT older than existing MIN DOT (same year): this row also uses PCS DOT as MIN DOT
+   ELSE IF ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+        AND ISNULL(@cLottable02, '') <> '' AND LEN(@cLottable02) = 4
+   BEGIN
+      DECLARE @nPCSDOT_W_Cfm INT
+      DECLARE @nPCSDOT_Y_Cfm INT
+      DECLARE @nMINDOT_W_Cfm INT
+      DECLARE @nMINDOT_Y_Cfm INT
+      SET @nPCSDOT_W_Cfm = TRY_CAST(LEFT(@cLottable07, 2) AS INT)
+      SET @nPCSDOT_Y_Cfm = TRY_CAST(RIGHT(@cLottable07, 2) AS INT)
+      SET @nMINDOT_W_Cfm = TRY_CAST(LEFT(@cLottable02, 2) AS INT)
+      SET @nMINDOT_Y_Cfm = TRY_CAST(RIGHT(@cLottable02, 2) AS INT)
+      IF @nPCSDOT_Y_Cfm IS NOT NULL AND @nMINDOT_Y_Cfm IS NOT NULL
+         AND @nPCSDOT_Y_Cfm = @nMINDOT_Y_Cfm AND @nPCSDOT_W_Cfm < @nMINDOT_W_Cfm
+      BEGIN
+         SET @cLottable02 = @cLottable07
+      END
    END
 
    SET @WeekYear = @cLottable02
@@ -119,11 +165,13 @@ BEGIN
       END
       ELSE
       BEGIN
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
          GOTO Receive
       END
    END
    ELSE
    BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
    END
 
@@ -132,20 +180,73 @@ BEGIN
    DECLARE @CurrentDate DATETIME
    SET @CurrentDate = GETDATE()
 
-   IF @TargetDate>@CurrentDate OR YEAR(@TargetDate) > 2000+@Year
+   IF @TargetDate > @CurrentDate OR YEAR(@TargetDate) > 2000 + @Year
    BEGIN
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
       GOTO Receive
    END
 
+   -- FCR-14211: Non-PC class: OLD if PCS DOT year < current year, else FRESH. No MICDOTCTOF cutoff.
+   IF ISNULL(@cSKUType, '') <> 'PC'
+   BEGIN
+      IF LEN(ISNULL(@cLottable07, '')) = 4
+         AND TRY_CAST(RIGHT(@cLottable07, 2) AS INT) IS NOT NULL
+         AND (2000 + TRY_CAST(RIGHT(@cLottable07, 2) AS INT)) < YEAR(@CurrentDate)
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'OLD'
+      ELSE
+         SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
+      GOTO Receive
+   END
 
-   DECLARE @cFacilityPrefix NVARCHAR(30)
-   SELECT @cFacilityPrefix = UserDefine01 FROM Facility where Facility = @cFacility
+   -- FCR-14406: Get cutoff date from CODELKUP based on SKU Class
+   DECLARE @cCutoffMMDD NVARCHAR(10)
+   DECLARE @dCutoffDate DATE
+   DECLARE @nThisYear INT = YEAR(@CurrentDate)
+   DECLARE @nDotYear INT = 2000 + @Year
 
-   IF (MONTH(@CurrentDate) < 7 AND YEAR(@TargetDate) < (YEAR(@CurrentDate)-1))
-      OR (MONTH(@CurrentDate) >= 7 AND YEAR(@TargetDate) < YEAR(@CurrentDate))
-      SET @cLottable03 =  @cFacilityPrefix +'-'+'OLD'
+   SELECT TOP 1 @cCutoffMMDD = Short
+   FROM dbo.CODELKUP WITH (NOLOCK)
+   WHERE ListName = 'MICDOTCTOF'
+     AND Code = @cSKUType
+     AND Storerkey = @cStorerKey
+
+   -- Validate cutoff date exists and has correct format (MMDD)
+   IF ISNULL(@cCutoffMMDD, '') = ''
+   BEGIN
+      SET @nErrNo = 275901
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END
+
+   IF LEN(@cCutoffMMDD) <> 4 OR ISNUMERIC(@cCutoffMMDD) = 0
+   BEGIN
+      SET @nErrNo = 275902
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END
+
+   -- Build cutoff date from MMDD
+   BEGIN TRY
+      SET @dCutoffDate = DATEFROMPARTS(
+         @nThisYear,
+         CAST(LEFT(@cCutoffMMDD, 2) AS INT),
+         CAST(RIGHT(@cCutoffMMDD, 2) AS INT)
+      )
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 275903
+      SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+      GOTO Quit
+   END CATCH
+
+   -- FCR-14406: Apply FRESH/OLD logic based on cutoff date
+   -- If today < cutoff: DOT year < (ThisYear - 1) → OLD, else FRESH
+   -- If today >= cutoff: DOT year < ThisYear → OLD, else FRESH
+   IF (@CurrentDate < @dCutoffDate AND @nDotYear < (@nThisYear - 1))
+      OR (@CurrentDate >= @dCutoffDate AND @nDotYear < @nThisYear)
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'OLD'
    ELSE
-      SET @cLottable03 = @cFacilityPrefix +'-'+'FRESH'
+      SET @cLottable03 = @cFacilityPrefix + '-' + 'FRESH'
 
 --    UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET
 --                                               Lottable04 = @dLottable04,
@@ -156,7 +257,33 @@ BEGIN
 --      AND ReceiptLineNumber = @cReceiptLineNumber
 
    Receive:
-   -- Receive    
+   -- FCR-14112: VND Michelin - Default QTY from CODELKUP for PC/TB tires if incoming QTY is 0
+   IF ISNULL(@nSKUQTY, 0) = 0 AND @cSKUType IN ('PC', 'TB')
+   BEGIN
+       DECLARE @cDefaultQty NVARCHAR(10)
+       DECLARE @nDefaultQty INT
+
+       -- Lookup default QTY from CODELKUP based on SKU CLASS and master UoM
+       SELECT TOP 1 @cDefaultQty = Short
+       FROM dbo.CODELKUP WITH (NOLOCK)
+       WHERE ListName = 'MICPCSIBDF'
+         AND StorerKey = @cStorerKey
+         AND Code = @cSKUType
+         AND Long = @cSKUUOM  -- Validate master UoM matches
+
+       -- Set QTY only if valid number found in CODELKUP
+       IF ISNULL(@cDefaultQty, '') <> '' AND RDT.rdtIsValidQty(@cDefaultQty, 1) = 1
+       BEGIN
+           SET @nDefaultQty = TRY_CAST(@cDefaultQty AS INT)
+           IF ISNULL(@nDefaultQty, 0) > 0
+           BEGIN
+               SET @nSKUQTY = @nDefaultQty
+           END
+       END
+       -- If no CODELKUP entry found, QTY remains as-is (blank behavior per requirement)
+   END
+
+   -- Call rdt_Receive_V7 to complete receiving
    EXEC rdt.rdt_Receive_V7
       @nFunc         = @nFunc,    
       @nMobile       = @nMobile,    
@@ -192,12 +319,69 @@ BEGIN
       @dLottable14   = @dLottable14,    
       @dLottable15   = @dLottable15,    
       @nNOPOFlag     = @nNOPOFlag,    
-      @cConditionCode = @cConditionCode,    
-      @cSubreasonCode = '',     
-      @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT    
-  
-  
-END  
+      @cConditionCode = @cConditionCode,
+      @cSubreasonCode = '',
+      @cReceiptLineNumberOutput = @cReceiptLineNumberOutput OUTPUT
+
+      IF @nErrNo = 0 AND ISNULL(@cLottable07, '') <> '' AND LEN(@cLottable07) = 4
+      BEGIN
+         -- Update prior confirmed lines on this pallet when current PCS DOT is older than their MIN DOT
+         -- @cLottable03 and @dLottable04 already computed above from the final MIN DOT for this receipt
+         BEGIN TRY
+            UPDATE dbo.ReceiptDetail WITH (ROWLOCK)
+            SET Lottable02 = @cLottable07,
+                Lottable03 = @cLottable03,
+                Lottable04 = @dLottable04
+            WHERE ReceiptKey = @cReceiptKey
+               AND StorerKey = @cStorerKey
+               AND ToID      = @cToID
+               AND SKU       = @cSKUCode
+               AND QtyReceived > 0
+               AND LEN(ISNULL(Lottable02, '')) = 4
+               AND Lottable02 LIKE '[0-9][0-9][0-9][0-9]'
+               AND (
+                     TRY_CAST(RIGHT(@cLottable07, 2) AS INT) < TRY_CAST(RIGHT(Lottable02, 2) AS INT)
+                     OR (
+                         TRY_CAST(RIGHT(@cLottable07, 2) AS INT) = TRY_CAST(RIGHT(Lottable02, 2) AS INT)
+                         AND TRY_CAST(LEFT(@cLottable07, 2) AS INT) < TRY_CAST(LEFT(Lottable02, 2) AS INT)
+                     )
+                   )
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 270601
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+            GOTO Quit
+         END CATCH
+
+         BEGIN TRY
+            UPDATE la WITH (ROWLOCK)
+            SET la.Lottable02 = @cLottable07,
+                la.Lottable03 = @cLottable03,
+                la.Lottable04 = @dLottable04
+            FROM dbo.LOTATTRIBUTE la
+            INNER JOIN dbo.LOTxLOCxID lxi WITH (NOLOCK) ON la.Lot = lxi.Lot
+            WHERE lxi.StorerKey = @cStorerKey
+              AND lxi.Sku       = @cSKUCode
+              AND lxi.Id        = @cToID
+              AND LEN(ISNULL(la.Lottable02, '')) = 4
+              AND la.Lottable02 LIKE '[0-9][0-9][0-9][0-9]'
+              AND (
+                    TRY_CAST(RIGHT(@cLottable07, 2) AS INT) < TRY_CAST(RIGHT(la.Lottable02, 2) AS INT)
+                    OR (
+                        TRY_CAST(RIGHT(@cLottable07, 2) AS INT) = TRY_CAST(RIGHT(la.Lottable02, 2) AS INT)
+                        AND TRY_CAST(LEFT(@cLottable07, 2) AS INT) < TRY_CAST(LEFT(la.Lottable02, 2) AS INT)
+                    )
+                  )
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 270602
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+            GOTO Quit
+         END CATCH
+      END
+
+   Quit:
+END
 GO
 
 SET QUOTED_IDENTIFIER OFF

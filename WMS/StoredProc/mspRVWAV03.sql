@@ -29,6 +29,8 @@ GO
 /* 22-Jul-2025 WLC015   1.3   FCR-6612 Update Orderinfo.ReferenceID to   */
 /*                            blank (WL01)                               */
 /* 10-Oct-2025 SSA01    1.4  UWP-42248 -Enhanced session management      */
+/* 03-Aug-2026 AlexK01  1.5   FCR-14898 - Reverse wave is not allowed for*/
+/*                                        Automation.                    */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV03]        
  @c_wavekey      NVARCHAR(10) 
@@ -81,7 +83,21 @@ BEGIN
    FROM WAVEDETAIL WD (NOLOCK)  
    JOIN ORDERS O (NOLOCK) ON (WD.Orderkey = O.Orderkey)  
    WHERE WD.Wavekey = @c_Wavekey    
-  
+   
+   --(AlexK01) S
+   --reject if the wave is automation
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      IF @c_Automation = 'Y'
+      BEGIN
+         SET @n_continue = 3    
+         SET @n_err = 81060    
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Reverse Wave is not allowed for Automation. (mspRVWAV03)'    
+         GoTo RETURN_SP
+      END
+   END
+   --(AlexK01) E
+
    ----reject if wave not yet release        
    IF @n_continue = 1 OR @n_continue = 2  
    BEGIN  

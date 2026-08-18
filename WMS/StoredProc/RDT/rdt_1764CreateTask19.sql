@@ -34,19 +34,16 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE 
-      @cMezzanine       NVARCHAR(10) = 'MEZZANINE',
-      @cMezzFinalLoc    NVARCHAR(20) = '',
-      @cStorerKey       NVARCHAR( 15),
-      @cFacility        NVARCHAR( 5),
-      @cLoseID          NVARCHAR( 1) = '',
-      @nLoopIndex       INT,
-      @nSuccess         INT,
-      @nTranCount       INT
+      @cMezzanineCategory  NVARCHAR(10) = 'AEOMX_MEZ',
+      @cStorerKey          NVARCHAR( 15),
+      @cFacility           NVARCHAR( 5),
+      @nLoopIndex          INT,
+      @nSuccess            INT,
+      @nTranCount          INT
 
    DECLARE 
       @cTaskDetailKey      NVARCHAR( 10),
       @cNewTaskDetailKey   NVARCHAR( 10),
-      @cPickDetailKey      NVARCHAR( 10),
       @cWaveKey            NVARCHAR( 10),
       @cSKU                NVARCHAR( 20),
       @cLOT                NVARCHAR( 10),
@@ -57,43 +54,26 @@ BEGIN
       @cToID               NVARCHAR( 18),
       @cCaseID             NVARCHAR( 20),
       @cFinalLOC           NVARCHAR( 10),
-      @cFinalID            NVARCHAR( 18),
-      @cTransitLOC         NVARCHAR( 10),
       @nTransitCount       INT,
       @cUOM                NVARCHAR( 5),
       @nUOMQty             INT,
       @cPriority           NVARCHAR( 10),
       @cSourcePriority     NVARCHAR( 10),
       @cSourceType         NVARCHAR( 30),
-      @cOrgTaskKey         NVARCHAR( 30),
       @cRefTaskKey         NVARCHAR( 10),
       @cPickMethod         NVARCHAR( 10),
-      @cTaskType           NVARCHAR( 10),
       @cAreaKey            NVARCHAR( 10),
       @cOrderKey           NVARCHAR( 10),
       @cLoadKey            NVARCHAR( 10),
       @cFinalLogicalLoc    NVARCHAR( 18)
+
+   SET @cSourceType = 'rdt_1764CreateTask19'
 
    SELECT 
       @cFacility = Facility, 
       @cStorerKey = StorerKey
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
-
-   SELECT TOP 1 
-      @cMezzFinalLoc = LOC,
-      @cLoseID = LoseID
-   FROM dbo.LOC WITH (NOLOCK)
-   WHERE Facility = @cFacility
-      AND Loc = @cMezzanine
-      AND LocationType IN ('DYNPPICK', 'PICK')
-
-   IF ISNULL(@cMezzFinalLoc, '') = ''
-   BEGIN
-      SET @nErrNo = 270201
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- No Mezzanine Loc
-      GOTO Quit
-   END
 
    DECLARE @tTaskDetails TABLE
    (
@@ -113,7 +93,6 @@ BEGIN
       ToID           NVARCHAR(18),
       CaseID         NVARCHAR(20),
       FinalLOC       NVARCHAR(10),
-      FinalID        NVARCHAR(18),
       TransitCount   INT,
       PickMethod     NVARCHAR(10),
       RefTaskKey     NVARCHAR(10),
@@ -124,11 +103,11 @@ BEGIN
    )
 
    INSERT INTO @tTaskDetails 
-      (  TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, QTY, ToLoc, LogicalToLoc, ToID, CaseID, FinalLoc, FinalID,
+      (  TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, QTY, ToLoc, LogicalToLoc, ToID, CaseID, FinalLoc,
          TransitCount, PickMethod, RefTaskKey, WaveKey, Priority, SourcePriority, SystemQTY, OrderKey, LoadKey
       )
    SELECT 
-      TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, Qty, ToLoc, LogicalToLoc, ToID, CaseID, FinalLoc, FinalID, 
+      TaskDetailKey, Status, StorerKey, SKU, LOT, UOM, UOMQty, Qty, ToLoc, LogicalToLoc, ToID, CaseID, FinalLoc, 
       TransitCount, PickMethod, RefTaskKey, WaveKey, Priority, SourcePriority, SystemQty, OrderKey, LoadKey
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
@@ -156,7 +135,6 @@ BEGIN
          @cToID            = ToID,
          @cCaseID          = CaseID,
          @cFinalLoc        = FinalLoc,
-         @cFinalID         = FinalID,
          @cPickMethod      = PickMethod,
          @cRefTaskKey      = RefTaskKey,
          @cSKU             = SKU,
@@ -168,7 +146,6 @@ BEGIN
          @cPriority        = Priority,
          @cSourcePriority  = SourcePriority,
          @nSystemQTY       = SystemQty,
-         @cSourceType      = 'rdt_1764CreateTask19',
          @cOrderKey        = OrderKey,
          @cLoadKey         = LoadKey,
          @nLoopIndex       = RowRef
@@ -179,11 +156,16 @@ BEGIN
       IF @@ROWCOUNT = 0
          BREAK
 
-      IF @cMezzFinalLoc <> @cFinalLoc
+      IF NOT EXISTS(SELECT 1
+            FROM dbo.LOC WITH (NOLOCK)
+            WHERE Facility = @cFacility
+               AND Loc = @cFinalLoc
+               AND LocationCategory = @cMezzanineCategory
+               AND LocationType IN ('DYNPPICK', 'PICK'))
       BEGIN
-         -- If the final location is not Mezzanine, prompt error
+         -- If the final location is not Mezzanine or PickLocation, prompt error
          SET @nErrNo = 270202
-         SET @cErrMsg = rdt.rdtGetmessage( @nErrNo, @cLangCode,'DSP') -- Taskdetail's final location is not Mezzanine
+         SET @cErrMsg = rdt.rdtGetmessage( @nErrNo, @cLangCode,'DSP') -- Taskdetail's final location is not Mezzanine or Pickable
          GOTO ROLLBACK_TRAN
       END
 
@@ -235,7 +217,7 @@ BEGIN
          VALUES
          (
             @cNewTaskDetailKey, 'ASTRPT', '0', @cUserName, @cToLoc, @cToID, @cFinalLoc, '', @nQTY, @cCaseID, @cAreaKey, @cUOM, @nUOMQty,
-            @cPickMethod, @cStorerKey, @cSKU, @cLOT, '', @nTransitCount + 1, 'rdt_1764CreateTask19', @cTaskDetailKey, @cWaveKey, @cPriority, @cSourcePriority, NULL,
+            @cPickMethod, @cStorerKey, @cSKU, @cLOT, '', @nTransitCount + 1, @cSourceType, @cTaskDetailKey, @cWaveKey, @cPriority, @cSourcePriority, NULL,
             @cRefTaskKey, @nSystemQTY, @cOrderKey, @cLoadKey, @cLogicalToLOC, @cFinalLogicalLoc
          )
       END TRY

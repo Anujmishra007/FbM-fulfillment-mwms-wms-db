@@ -34,6 +34,9 @@
 /* 07-Jan-2026    JWF011   #FCR-10065 - Add SKU to get CCTV configs     */
 /* 29-Jan-2026    Sean03   UWP-47754 - Merge the unified SP             */
 /* 24-Mar-2026    Sean04   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 07-Apr-2026    Sean05   FCR-11940 - TH - Add errcode in message      */
+/* 23-Apr-2026    Sean06   FCR-11940 - TH - Add Debug Para for Sub SP   */
+/* 23-Jun-2026    Sean07    FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU_M](
      @b_Debug           INT            = 0
@@ -420,8 +423,9 @@ BEGIN
    END
 
    SET @b_ValidQtyPacked = 0
-   EXEC [dbo].[isp_Ecom_GetValidQtyPacked]
-         @c_PickSlipNo      = @c_PickSlipNo  
+   EXEC [API].[isp_ECOMP_GetValidQtyPacked] -- Sean05
+         @b_Debug           = @b_Debug -- Sean06
+      ,  @c_PickSlipNo      = @c_PickSlipNo  
       ,  @c_TaskBatchNo     = @c_TaskBatchID 
       ,  @c_Storerkey       = @c_StorerKey   
       ,  @c_Sku             = @c_SKU         
@@ -434,7 +438,7 @@ BEGIN
    BEGIN
       SET @n_Continue = 3 
       SET @n_ErrNo = 51112
-      SET @c_ErrMsg = 'Qty Packed > Qty Picked' 
+      SET @c_ErrMsg =  CONVERT(char(5),@n_ErrNo)+': ' + 'Qty Packed > Qty Picked' -- Sean05
       GOTO QUIT
    END
    
@@ -536,7 +540,9 @@ BEGIN
    END
 
    EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-        @c_PickSlipNo            = @c_PickSlipNo  
+        @c_StorerKey             = @c_StorerKey   --Sean07
+      , @c_Facility              = @c_Facility    --Sean07
+      , @c_PickSlipNo            = @c_PickSlipNo  
       , @c_TaskBatchID           = @c_TaskBatchID 
       , @c_OrderKey              = @c_Orderkey    
       , @c_DropID                = @c_DropID

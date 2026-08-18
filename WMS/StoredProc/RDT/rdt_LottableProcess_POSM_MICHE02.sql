@@ -12,9 +12,8 @@ GO
 /* Purpose: Dynamic lottable with REXLOG and MIN DOT validation               */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
-/* 2026-06-24   Sreeja    1.0.0 FCR-13976                                     */
-/* 2026-06-25   Sreeja    1.1.0 FCR-13976 - Moved validation from ExtVal32    */
-/*                              Added MIN DOT screen update logic             */
+/* 2026-06-24   Sreeja    1.0   FCR-13976                                     */
+/* 2026-08-13   Dennis    1.1   FCR-14211 Update REXLOG COO lookup            */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_POSM_MICHE02]
@@ -86,7 +85,8 @@ BEGIN
        @cRexLogCOO      NVARCHAR(30),
        @cSKU_BUSR5      NVARCHAR(30),
        @nWeekGap        INT,
-       @n8WeekRange     INT
+       @n8WeekRange     INT,
+       @cCarrierName    NVARCHAR( 30)
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
@@ -96,6 +96,39 @@ BEGIN
         -- Handle Lottable07 (PCS DOT)
         IF @nLottableNo = 7
         BEGIN
+
+            -- Preserve current values so screen keeps them if validation fails
+            --SET @cLottable02 = @cLottable02Value   -- MIN DOT
+
+            -- Preserve SubInventory: device sends '' for non-editable, fall back to confirmed lines
+            IF ISNULL(@cLottable03Value, '') <> ''
+                SET @cLottable03 = @cLottable03Value
+            ELSE
+            BEGIN
+                SELECT TOP 1 @cLottable03 = Lottable03
+                FROM dbo.ReceiptDetail WITH (NOLOCK)
+                WHERE ReceiptKey = @cSourceKey
+                  AND StorerKey  = @cStorerKey
+                  AND SKU        = @cSKU
+                  AND QtyReceived > 0
+                  AND ISNULL(Lottable03, '') <> ''
+                ORDER BY ReceiptLineNumber DESC
+            END
+
+            -- Preserve COO: use screen value if passed, else fall back to ReceiptDetail plan data
+            IF ISNULL(@cLottable06Value, '') <> ''
+                SET @cLottable06 = @cLottable06Value
+            ELSE
+            BEGIN
+                SELECT TOP 1 @cLottable06 = Lottable06
+                FROM dbo.ReceiptDetail WITH (NOLOCK)
+                WHERE ReceiptKey = @cSourceKey
+                AND StorerKey  = @cStorerKey
+                AND SKU        = @cSKU
+                AND ISNULL(Lottable06, '') <> ''
+                ORDER BY ReceiptLineNumber
+            END
+
             -- Allow blank value - Required check handled by rdtLottableCode
             IF ISNULL(LTRIM(RTRIM(@cLottable07Value)), '') = ''
                 GOTO Quit
@@ -149,6 +182,29 @@ BEGIN
             SET @nCurrentWkNo = DATEPART(ISO_WEEK, GETDATE())
             SET @nCurrentYY = TRY_CAST(RIGHT(CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)), 2) AS INT)
 
+            -- Get 8-week range from CODELKUP (applies to both REXLOG=YES and NO paths)
+            SELECT @n8WeekRange = TRY_CAST(Short AS INT)
+            FROM dbo.CODELKUP WITH (NOLOCK)
+            WHERE ListName = 'MICDOTWKRG' 
+                AND StorerKey = @cStorerKey 
+                AND Code = 'WEEKRANGE'
+
+            IF @n8WeekRange IS NULL
+            BEGIN
+                SET @nErrNo = 270555
+                SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+                GOTO Quit
+            END
+
+            -- -- If PCS DOT year is in the future, do not assign MIN DOT.
+            -- -- Standard framework validation (238253) will surface the error to the user.
+            IF @nPCSDOT_Year > @nCurrentYY
+            BEGIN
+                SET @nErrNo = 270507
+                SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+                GOTO Quit
+            END
+
             -----------------------------------------------------------------
             -- STEP 1: REXLOG CHECK - ONLY when REXLOG flag = '1' (YES)
             -----------------------------------------------------------------
@@ -172,14 +228,27 @@ BEGIN
                 END
 
                 -- Get REXLOG COO mapping from CODELKUP
-                SELECT @cRexLogCOO = Short 
-                FROM dbo.CODELKUP WITH (NOLOCK)
-                WHERE ListName = 'MICREXLOGCOO' 
-                    AND StorerKey = @cStorerKey 
-                    AND Code = @cLottable06Value
+                SELECT @cCarrierName = CarrierName
+                FROM dbo.Receipt WITH (NOLOCK)
+                WHERE ReceiptKey = @cSourceKey
+                  AND StorerKey  = @cStorerKey
 
-                IF @cRexLogCOO IS NULL
-                    SET @cRexLogCOO = @cLottable06Value
+                IF ISNULL(@cCarrierName, '') = ''
+                BEGIN
+                    SELECT @cRexLogCOO = Short
+                    FROM dbo.CODELKUP WITH (NOLOCK)
+                    WHERE ListName  = 'MICREXCOO'
+                      AND StorerKey = @cStorerKey
+                      AND Code      = @cLottable06Value
+                END
+                ELSE
+                BEGIN
+                    SELECT @cRexLogCOO = Short
+                    FROM dbo.CODELKUP WITH (NOLOCK)
+                    WHERE ListName  = 'MICREXCOO'
+                      AND StorerKey = @cStorerKey
+                      AND Code      = UPPER(@cCarrierName)
+                END
 
                 -- Get SKU.BUSR5 for REXLOG key
                 SELECT @cSKU_BUSR5 = BUSR5 
@@ -218,7 +287,34 @@ BEGIN
                 -----------------------------------------------------------------
                 -- REXLOG passed: Set MIN DOT = PCS DOT (first time) or keep existing
                 -----------------------------------------------------------------
-                IF ISNULL(@cLottable02Value, '') = ''
+                -- REXLOG passed: now apply the same MIN DOT checks as flag='2'
+                IF ISNULL(@cLottable02Value, '') <> '' AND LEN(@cLottable02Value) = 4
+                AND @cLottable02Value LIKE '[0-9][0-9][0-9][0-9]'
+                BEGIN
+                    SET @nMINDOT_Week = TRY_CAST(LEFT(@cLottable02Value, 2) AS INT)
+                    SET @nMINDOT_Year = TRY_CAST(RIGHT(@cLottable02Value, 2) AS INT)
+
+                    IF @nPCSDOT_Year <> @nMINDOT_Year
+                    BEGIN
+                        SET @nErrNo = 270505
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        GOTO Quit
+                    END
+
+                    SET @nWeekGap = @nPCSDOT_Week - @nMINDOT_Week
+                    IF @nWeekGap > @n8WeekRange OR @nWeekGap < -@n8WeekRange
+                    BEGIN
+                        SET @nErrNo = 270506
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                        GOTO Quit
+                    END
+
+                    IF @nPCSDOT_Week < @nMINDOT_Week
+                        SET @cLottable02 = @cLottable07Value
+                    ELSE
+                        SET @cLottable02 = @cLottable02Value   -- success, no update needed
+                END
+                ELSE
                 BEGIN
                     SET @cLottable02 = @cLottable07Value
                 END
@@ -230,16 +326,6 @@ BEGIN
             -----------------------------------------------------------------
             IF @cREXLOGFlag = '2'
             BEGIN
-                -- Get 8-week range from CODELKUP (default to 8 if not found)
-                SELECT @n8WeekRange = TRY_CAST(Short AS INT)
-                FROM dbo.CODELKUP WITH (NOLOCK)
-                WHERE ListName = 'MICDOTWKRG' 
-                    AND StorerKey = @cStorerKey 
-                    AND Code = 'WEEKRANGE'
-
-                IF @n8WeekRange IS NULL
-                    SET @n8WeekRange = 8
-
                 -- Check if MIN DOT (Lottable02) has value
                 IF ISNULL(@cLottable02Value, '') <> '' AND LEN(@cLottable02Value) = 4
                    AND @cLottable02Value LIKE '[0-9][0-9][0-9][0-9]'
@@ -269,10 +355,10 @@ BEGIN
                     -- STEP 5: If PCS DOT is older than MIN DOT, update MIN DOT
                     -- Older = smaller week number in same year
                     IF @nPCSDOT_Week < @nMINDOT_Week
-                    BEGIN
-                        -- PCS DOT is older, set it as new MIN DOT
                         SET @cLottable02 = @cLottable07Value
-                    END
+                    ELSE
+                        SET @cLottable02 = @cLottable02Value   -- success, no update needed
+
                     -- If PCS DOT is newer or equal, keep current MIN DOT (no update needed)
                 END
                 ELSE

@@ -59,11 +59,15 @@ BEGIN
       @cDecodedLottable01 NVARCHAR(18),
       @cPickDetailLot     NVARCHAR(10),
       @cLotAttrLottable01 NVARCHAR(18),
-      @nDelimiterPos      INT
+      @nDelimiterPos      INT,
+      @cPickHeaderOrderKey NVARCHAR(10)
 
    IF @nFunc = 839
    BEGIN
       IF @nStep = 3
+         OR (@nStep = 99 AND EXISTS(
+               SELECT 1 FROM RDT.RDTMobrec WITH(NOLOCK)
+               WHERE Mobile = @nMobile AND Scn = 6774))
       BEGIN
          IF @cBarcode <> ''
          BEGIN
@@ -86,24 +90,48 @@ BEGIN
                GOTO Quit
             END
 
+            SET @cPickHeaderOrderKey = ''
+
             IF NOT EXISTS(
                 SELECT 1
                 FROM dbo.PickDetail WITH(NOLOCK)
                 WHERE PickSlipNo = @cPickSlipNo
-                    AND SKU = @cDecodedSKU
+                    AND SKU      = @cDecodedSKU
                     AND StorerKey = @cStorerKey
             )
             BEGIN
-                SET @nErrNo = 270902
-                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 270902 WrongSKU
-                GOTO Quit
+               -- PickSlipNo not on PickDetail: resolve OrderKey via PickHeader (One Order One PickSlip)
+               SELECT @cPickHeaderOrderKey = OrderKey
+               FROM dbo.PickHeader WITH(NOLOCK)
+               WHERE Pickheaderkey = @cPickSlipNo
+
+               IF NOT EXISTS(
+                  SELECT 1
+                  FROM dbo.PickDetail WITH(NOLOCK)
+                  WHERE OrderKey  = @cPickHeaderOrderKey
+                    AND SKU       = @cDecodedSKU
+                    AND StorerKey = @cStorerKey
+               )
+               BEGIN
+                  SET @nErrNo = 270902
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 270902 WrongSKU
+                  GOTO Quit
+               END
             END
 
+            -- Lot lookup: PickSlipNo path first, fallback to OrderKey if PickSlipNo not on PickDetail
             SELECT TOP 1 @cPickDetailLot = Lot
             FROM dbo.PickDetail WITH(NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
-               AND SKU = @cDecodedSKU
+               AND SKU       = @cDecodedSKU
                AND StorerKey = @cStorerKey
+
+            IF ISNULL(@cPickDetailLot, '') = '' AND @cPickHeaderOrderKey <> ''
+               SELECT TOP 1 @cPickDetailLot = Lot
+               FROM dbo.PickDetail WITH(NOLOCK)
+               WHERE OrderKey  = @cPickHeaderOrderKey
+                 AND SKU       = @cDecodedSKU
+                 AND StorerKey = @cStorerKey
 
             SELECT @cLotAttrLottable01 = Lottable01
             FROM dbo.LotAttribute WITH(NOLOCK)
@@ -123,7 +151,7 @@ BEGIN
 
             GOTO Quit
          END
-      END -- IF @nStep = 3
+      END -- IF @nStep = 3 OR @nStep = 99
    END -- IF @nFunc = 839
 
    Quit:

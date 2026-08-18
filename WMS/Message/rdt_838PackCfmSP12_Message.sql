@@ -25,4 +25,8 @@ execute rdt.rdtAddMsg 262663, 10, '262663^PackQty>PickQty',       'us_english', 
 --UWP-55429
 execute rdt.rdtAddMsg 262664, 10, '262664^UpdPKDFail',            'us_english', 838, 0, '262664: Update PickDetail status failed'
 
+--FCR-13548
+execute rdt.rdtAddMsg 262665, 10, '262665^InsPackDtlKeyFail',     'us_english', 838, 0, '262665: Insert PackDetail key for archiving failed'
+execute rdt.rdtAddMsg 262666, 10, '262666^ArcPackDtlDropIDFail',  'us_english', 838, 0, '262666: Archive PackDetail DropID failed'
+
 select * from rdt.rdtmsg (nolock) where message_id between 262651 and 262700

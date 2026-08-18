@@ -122,7 +122,6 @@ BEGIN
    -- Handling transaction
    SET @nTranCount = @@TRANCOUNT
 
-
    SET @cOrderKey = ''
    SET @cLoadKey = ''
    SET @cZone = ''
@@ -214,6 +213,11 @@ BEGIN
    (
       RowIndex             INT IDENTITY(1,1),
       PickDetailKey        NVARCHAR( 18)
+   )
+
+   DECLARE @tPickedKeys TABLE 
+   (
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
    )
 
    -- Get lottable filter
@@ -371,6 +375,7 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = @cPickConfirmStatus,
+                  Notes = DropID,
                   DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
@@ -465,6 +470,7 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                   Status = @cPickConfirmStatus,
+                  Notes = DropID,
                   DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME()
@@ -600,7 +606,7 @@ BEGIN
                   CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                   UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                   ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, 'SHORT', @cPickDetailKey,
+                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, Notes, @cPickDetailKey,
                   @cNewPickDetailKey,
                   Status,
                   @nQTY_PD - @nPickedQty,
@@ -777,7 +783,7 @@ BEGIN
                         CaseID, PickHeaderKey, OrderKey, OrderLineNumber, @cPieceLot, StorerKey, SKU, AltSku, UOM,
                         UOMQTY, QTYMoved, @cPieceLotUCC, @cPieceLotLoc, @cPieceLotId, PackKey, UpdateSource, CartonGroup,
                         CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, 'Picked', @cPickDetailKey,
+                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, @cPickDetailKey,
                         @cNewPickDetailKey,
                         Status,
                         1,
@@ -790,6 +796,16 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 255610
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
+                     GOTO RollBackTran
+                  END CATCH
+
+                  BEGIN TRY
+                     INSERT INTO @tPickedKeys (PickDetailKey)
+                     VALUES(@cNewPickDetailKey)
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 255647
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Insert into @tPickedKeys failed
                      GOTO RollBackTran
                   END CATCH
                END
@@ -831,10 +847,11 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
+            -- for partil pick UCC, mark it as 6, the ops team discards the UCC box and keeps the material without the UCC
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET 
-                  Status = '5',
+                  Status = '6',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE UCCNo = @cPieceLotUCC
@@ -894,7 +911,7 @@ BEGIN
                   CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                   UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                   ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, 'Unpicked', @cPickDetailKey,
+                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, @cPickDetailKey,
                   @cNewPickDetailKey,
                   Status,
                   QTY - @nIDLotMatchedQty - @nIDLotNotMatchedQty,
@@ -999,12 +1016,14 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET 
-                  Status = CASE WHEN Notes = 'Picked' THEN @cPickConfirmStatus
-                                 ELSE Status
-                              END,
-                  DropID = CASE WHEN Notes = 'Picked' THEN @cPieceLotDropId
-                                 ELSE DropID
-                              END
+                  Status = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPickConfirmStatus 
+                              ELSE Status 
+                           END,
+                  DropID = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPieceLotDropId
+                              ELSE DropID  
+                           END
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH

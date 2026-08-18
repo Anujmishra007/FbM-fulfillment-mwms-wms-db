@@ -21,7 +21,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
-/* 2026-04-27  Wan      1.0   DevOps Combine Script                     */
+/* 2026-05-06  Wan      1.0   DevOps Combine Script                     */
+/* 2026-07-22  Wan01    1.1   FCR-14986 - Scan to Door cut process_add  */
+/*                            to ID                                     */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_MB_LVSUSA_Scan2DoorCut]
    @c_Mbolkey     NVARCHAR(10)
@@ -51,6 +53,7 @@ BEGIN
          , @c_Lot                NVARCHAR(10)   = ''  
          , @c_Loc                NVARCHAR(10)   = ''  
          , @c_ID                 NVARCHAR(18)   = '' 
+         , @c_ToID               NVARCHAR(18)   = ''                                --(Wan01)
          , @c_Palletkey          NVARCHAR(30)   = '' 
          , @c_PalletLineNumber   NVARCHAR(5)    = ''
          , @c_CutCode            NCHAR(5)       = ''
@@ -66,6 +69,7 @@ BEGIN
          , @n_QtyPack            INT            = 0
          , @n_QtyLeftToFulfill   INT            = 0
          
+         , @c_Sourcekey          NVARCHAR(20)   = ''                                                   --(Wan01)
          , @c_SourceType         NVARCHAR(30)   = 'isp_RCM_MB_LVSUSA_Scan2DoorCut'
          
          , @cur_CS               CURSOR
@@ -340,6 +344,7 @@ BEGIN
             FROM #TMP_CL cl
             WHERE cl.LISTNAME = 'LVSCut'
             AND cl.Code = @c_CutCode
+            AND cl.Storerkey = @c_Storerkey                                         --(Wan01))
          END
 
          SET @n_QtyLeftTofulfill = @n_Qty
@@ -464,6 +469,14 @@ BEGIN
 
          IF @n_Continue = 1 AND @c_Move = '1'
          BEGIN
+            SET @c_ToID = @c_ID                                                     --(Wan01) - START
+            SET @c_Sourcekey = ''                                                   
+            IF @c_Palletkey = ''
+            BEGIN
+               SET @c_Sourcekey = @c_Orderkey
+               SET @c_ToID = @c_CaseID
+            END                                                                     --(Wan01) - END
+
             SELECT @c_Packkey = p.Packkey
                   ,@c_PackUOM3= p.PackUOM3
             FROM SKU s (NOLOCK)
@@ -479,7 +492,7 @@ BEGIN
             ,  @c_FromLoc      = @c_Loc 
             ,  @c_FromID       = @c_ID
             ,  @c_ToLoc        = @c_MoveToLoc   
-            ,  @c_ToID         = @c_ID
+            ,  @c_ToID         = @c_ToID
             ,  @c_Status       = '' 
             ,  @c_lottable01   = '' 
             ,  @c_lottable02   = '' 
@@ -505,7 +518,7 @@ BEGIN
             ,  @f_netwgt       = 0 
             ,  @f_otherunit1   = 0 
             ,  @f_otherunit2   = 0 
-            ,  @c_SourceKey    = ''
+            ,  @c_SourceKey    = @c_Sourcekey                                       --(Wan01)
             ,  @c_SourceType   = @c_SourceType 
             ,  @c_PackKey      = @c_Packkey 
             ,  @c_UOM          = @c_PackUOM3 

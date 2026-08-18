@@ -4,14 +4,14 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1868UnpackConfirm                               */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Date         Rev   Author      Purposes                              */
-/* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick      */
-/************************************************************************/
-
+/*********************************************************************************/
+/* Store procedure: rdt_1868UnpackConfirm                                        */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Date         Rev   Author      Purposes                                       */
+/* 2024-11-05   1.0   TLE109      FCR-917 Serial Unpack and Unpick               */
+/* 2026-07-06   1.1   NickT       UWP-60041 Add pickdetail to hold unpicked Qty  */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1868UnpackConfirm (
    @nMobile          INT,
@@ -85,12 +85,12 @@ BEGIN
 -------------------------------------------Standard---------------------------------------------
 
    DECLARE
-   @nCartonNo      INT,
-   @cLabelNo       NVARCHAR( 20),
-   @cLabelLine     NVARCHAR( 10),
-   @cPickDetailKey NVARCHAR( 20),
-   @cSKU           NVARCHAR( 40),
-   @nPackHeaderCompleted    INT
+      @nCartonNo                 INT,
+      @cLabelNo                  NVARCHAR( 20),
+      @cLabelLine                NVARCHAR( 10),
+      @cPickDetailKey            NVARCHAR( 20),
+      @cSKU                      NVARCHAR( 40),
+      @nPackDetailQty            INT
 
 
    -- transaction
@@ -120,105 +120,120 @@ BEGIN
 
    IF EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey AND Status = '9')
    BEGIN
-      UPDATE dbo.PackHeader WITH(ROWLOCK)
-      SET
-         Status = '0',
-         EditDate = GETDATE(),
-         EditWho = SUSER_SNAME()
-      WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey AND Status = '9'
-      SET @nErrNo = @@ERROR
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-         GOTO RollBackTran
-      END
-      SET @nPackHeaderCompleted = 1
-   END
-
-
-   DELETE FROM dbo.PackSerialNo
-   WHERE PickSlipNo = @cPickSlipNo AND SerialNo = @cSerialNo AND StorerKey = @cStorerKey
-   SET @nErrNo = @@ERROR
-   IF @nErrNo <> 0
-   BEGIN
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      EXEC rdt.rdtSetFocusField @nMobile, 1
-      GOTO RollBackTran
-   END
-
-   UPDATE dbo.PackDetail WITH(ROWLOCK)
-   SET 
-      Qty       = Qty-1,
-      EditWho   = SUSER_SNAME(),
-      EditDate  = GETDATE()
-   WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey
-      AND CartonNo = @nCartonNo    AND Qty > 0 AND SKU = @cSKU
-      AND LabelNo = @cLabelNo      AND LabelLine = @cLabelLine
-   SET @nErrNo = @@ERROR
-   IF @nErrNo <> 0
-   BEGIN
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      EXEC rdt.rdtSetFocusField @nMobile, 1
-      GOTO RollBackTran
-   END
-
-   DELETE FROM dbo.PackDetail
-   WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey 
-      AND CartonNo = @nCartonNo    AND Qty=0   AND SKU = @cSKU
-      AND LabelNo = @cLabelNo      AND LabelLine = @cLabelLine
-   SET @nErrNo = @@ERROR
-   IF @nErrNo <> 0
-   BEGIN
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-      EXEC rdt.rdtSetFocusField @nMobile, 1
-      GOTO RollBackTran
-   END
-
-   IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey)
-   BEGIN
-      DELETE FROM dbo.PackHeader
-      WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey
-      SET @nErrNo = @@ERROR
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-         EXEC rdt.rdtSetFocusField @nMobile, 1
-         GOTO RollBackTran
-      END
-   END
-   ELSE
-   BEGIN
-      IF @nPackHeaderCompleted = 1
-      BEGIN
+      BEGIN TRY
          UPDATE dbo.PackHeader WITH(ROWLOCK)
          SET
-            Status = '9',
+            Status = '0',
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
-         WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey AND Status = '0'
-         SET @nErrNo = @@ERROR
-         IF @nErrNo <> 0
-         BEGIN
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-            EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO RollBackTran
-         END
-      END
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND StorerKey = @cStorerKey 
+            AND Status = '9'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 272901
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update PackHeader to 0
+         GOTO RollBackTran
+      END CATCH
    END
 
-   UPDATE dbo.SerialNo WITH(ROWLOCK)
-   SET 
-      Status  = 1,
-      EditWho = SUSER_SNAME(),
-      EditDate = GETDATE()
-   WHERE SerialNo = @cSerialNo AND Storerkey=@cStorerkey
-   SET @nErrNo = @@ERROR
-   IF @nErrNo <> 0
-   BEGIN
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+   BEGIN TRY
+      DELETE FROM dbo.PackSerialNo
+      WHERE PickSlipNo = @cPickSlipNo 
+         AND SerialNo = @cSerialNo 
+         AND StorerKey = @cStorerKey
+   END TRY
+   BEGIN CATCH
       EXEC rdt.rdtSetFocusField @nMobile, 1
+      SET @nErrNo = 272902
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to delete PackSerialNo record
       GOTO RollBackTran
+   END CATCH
+
+   BEGIN TRY
+      UPDATE dbo.PackDetail WITH(ROWLOCK)
+      SET 
+         Qty       = Qty-1,
+         EditWho   = SUSER_SNAME(),
+         EditDate  = GETDATE()
+      WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey
+         AND CartonNo = @nCartonNo    AND Qty > 0 AND SKU = @cSKU
+         AND LabelNo = @cLabelNo      AND LabelLine = @cLabelLine
+   END TRY
+   BEGIN CATCH
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+      SET @nErrNo = 272903
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to reduce PackDetail Qty
+      GOTO RollBackTran
+   END CATCH
+
+   BEGIN TRY
+      DELETE FROM dbo.PackDetail
+      WHERE PickSlipNo = @cPickSlipNo AND StorerKey = @cStorerKey 
+         AND CartonNo = @nCartonNo    AND Qty=0   AND SKU = @cSKU
+         AND LabelNo = @cLabelNo      AND LabelLine = @cLabelLine
+   END TRY
+   BEGIN CATCH
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+      SET @nErrNo = 272904
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to delete PackDetail record
+      GOTO RollBackTran
+   END CATCH
+
+   SELECT @nPackDetailQty = COUNT(DISTINCT LabelNo)
+   FROM dbo.PackDetail WITH(NOLOCK)
+   WHERE PickSlipNo = @cPickSlipNo
+      AND StorerKey = @cStorerKey
+
+   SET @nPackDetailQty = ISNULL(@nPackDetailQty, 0)
+
+   IF @nPackDetailQty = 0
+   BEGIN
+      BEGIN TRY
+         DELETE FROM dbo.PackHeader
+         WHERE PickSlipNo = @cPickSlipNo 
+            AND StorerKey = @cStorerKey
+      END TRY
+      BEGIN CATCH
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         SET @nErrNo = 272905
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to delete PackHeader record
+         GOTO RollBackTran
+      END CATCH
    END
+
+   IF @nPackDetailQty > 0
+   BEGIN TRY
+      UPDATE dbo.PackHeader WITH(ROWLOCK)
+      SET 
+         TTLCNTS = @nPackDetailQty,
+         EditWho = SUSER_SNAME(),
+         EditDate = GETDATE()
+      WHERE PickSlipNo = @cPickSlipNo 
+         AND StorerKey = @cStorerKey
+   END TRY
+   BEGIN CATCH
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+      SET @nErrNo = 272907
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update PackHeader TTLCNTS
+      GOTO RollBackTran
+   END CATCH
+   
+   BEGIN TRY
+      UPDATE dbo.SerialNo WITH(ROWLOCK)
+      SET 
+         Status  = 1,
+         EditWho = SUSER_SNAME(),
+         EditDate = GETDATE()
+      WHERE SerialNo = @cSerialNo AND Storerkey=@cStorerkey
+   END TRY
+   BEGIN CATCH
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+      SET @nErrNo = 272906
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail to update SerialNo's status to 1
+      GOTO RollBackTran
+   END CATCH
+
    COMMIT TRAN tran_SerialUnpack
    GOTO Quit
   

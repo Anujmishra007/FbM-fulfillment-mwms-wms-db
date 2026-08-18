@@ -61,12 +61,12 @@ BEGIN
    SET @cWorkOrderKey         = ''
    SET @cWorkOrderLineNumber  = ''
 
-   IF @bIsDiscrete = 1 AND @cLoadKey = ''
+   IF @cOrderKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       VALUES (@cOrderKey)
    END
-   ELSE
+   ELSE IF @cLoadKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       SELECT OrderKey
@@ -650,6 +650,10 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_ResetCarton_Std] TO NSQL
+GO

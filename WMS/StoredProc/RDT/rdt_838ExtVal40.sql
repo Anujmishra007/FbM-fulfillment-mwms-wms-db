@@ -6,6 +6,7 @@
 /*                                                                      */
 /* Date       Rev  Author  Purposes                                     */
 /* 2026-04-13 1.0  JCH507  Created - Validate B2B Order Type only       */
+/* 2026-07-28 1.1  NYE018  FCR-13548 B2C Multi UoM6: only option 2      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtVal40] (
@@ -64,6 +65,25 @@ BEGIN
                   SET @nErrNo = 263951
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
                   GOTO Quit 
+               END
+            END
+
+            -- FCR-13548: B2C-Multi validation - only option 2 allowed
+            IF EXISTS (
+               SELECT 1
+               FROM dbo.PickHeader PH WITH (NOLOCK)
+               INNER JOIN dbo.Orders O WITH (NOLOCK) ON PH.OrderKey = O.OrderKey
+               WHERE PH.PickHeaderKey = @cPickSlipNo
+                  AND O.StorerKey = @cStorerKey
+                  AND O.DocType = 'E'
+                  AND O.ECOM_SINGLE_Flag = 'M'
+            )
+            BEGIN
+               IF @cOption <> '2'
+               BEGIN
+                  SET @nErrNo = 263952
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Only option 2 allowed
+                  GOTO Quit
                END
             END
          END

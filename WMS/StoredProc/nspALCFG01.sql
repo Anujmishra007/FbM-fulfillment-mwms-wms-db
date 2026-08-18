@@ -51,6 +51,7 @@ GO
 /* 14-Oct-2025 WLChooi  2.9  FCR-8009 Fix partial UCC Qty calculation(WL04)*/
 /* 25-May-2026 Wan03    3.0  FCR-8009 FCR-13242 - ID - MICHELIN - Allocation*/
 /* 03-Jun-2026               FULLPALLETBYID and FDOTFOBYMULTIUOM           */
+/* 20-Jul-2026               CR v2.0                                       */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG01]
@@ -136,7 +137,7 @@ BEGIN
        If Short is defined, storer is optional. if key-in storerkey, the setup apply to the same storer and allocationstrategykey
        if key-in allocationstrageykey, the setup apply to the same allocationstrategykey of all storer.
    9.  FULLPALLETBYLOC is only work for Pallet(UOM 1). FullPalletMultiLot(UDF02='Y') is additional for UOM 1 LPN with multiple Lot.
-   10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking.
+   10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking. Setup UDF02=Y for Conso Consignee
    11. For LISTNAME. Only need to provide storerkey and UDF01. This option only can apply to listname 'nspALCFG01'
    12. For SKIPLOTTABLEFILTER, include the lottable need to skip filtering in the list delimited by comman from 01 to 15. e.g. 02,04,08
    13. For FIFOBYMULTIUOM, Must complete pick a batch before proceed to next irregardless different UOM. The sorting must be Lottable05. 
@@ -158,8 +159,8 @@ BEGIN
    Shelflife logic and sequence
    ----------------------------
    1. Order detail shelflife (orderdetail.Minshelflife)  - if Orderinfo4Allocation turn on with discrete allocation
-   2. Consignee+Sku shelflife ((Consingneekey=Storer.MinShelflife/100) * Sku.Shelflife) - if Orderinfo4Allocation turn on with discrete allocation
-   3. Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup) - if Orderinfo4Allocation turn on with discrete allocation
+   2. Consignee+Sku shelflife ((Consingneekey=Storer.MinShelflife/100) * Sku.Shelflife) - if Orderinfo4Allocation turn on with discrete allocation. Allow Conso if UDF02=Y
+   3. Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup) - if Orderinfo4Allocation turn on with discrete allocation. Allow Conso if UDF02=Y
    4. Sku outgoing shelflife (Sku.SUSR2)
    5. Storer+Sku shelflife ((Storer.MinShelflife/100) * Sku.Shelflife)
 */
@@ -200,6 +201,7 @@ BEGIN
            @c_AllocateStrategyKey NVARCHAR(10),
            @c_FullPalletByLocFlag NCHAR(1),
            @c_ShelfLifeFlag       NCHAR(1),
+           @c_ShelfLifeConsoFlag  NCHAR(1) = 'N',                                   --(Wan03)
            @c_FIFOByMultiUOM      NCHAR(1)='N', --NJOW07
            @c_SQL                 NVARCHAR(MAX),
            @n_QtyAvailable     INT,
@@ -235,6 +237,9 @@ BEGIN
          , @c_Loc_Prev                 NVARCHAR(10)= ''     --(Wan03)     
          , @c_ID_Prev                  NVARCHAR(18)= ''     --(Wan03)
          , @b_GetLocID                 BIT         = 0      --(Wan03)
+         , @c_Consigneekey             NVARCHAR(15)= ''     --(Wan03) CR v2.0
+         , @c_ConsigneeOrd             NVARCHAR(20)= ''     --(Wan03) CR v2.0         
+         , @c_OParms                   NVARCHAR(200)= ''    --(Wan03) CR v2.0
             
     SET @c_LocTypeList = ''
     SET @c_LocTypeSort = ''
@@ -303,7 +308,12 @@ BEGIN
       BEGIN
           SELECT @c_Wavekey = LEFT(@c_OtherParms, 10) --Wave conso
       END   
-      --NJOW06 E   
+      --NJOW06 E 
+      
+      IF LEN(@c_OtherParms) > 16                                                                   --(Wan03)
+      BEGIN 
+         SET @c_OParms = RIGHT(@c_OtherParms,LEN(@c_OtherParms)-16)
+      END        
    END
 
    DECLARE  @TMP_CODELKUP TABLE (
@@ -508,6 +518,7 @@ BEGIN
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
 
    SELECT TOP 1 @c_ShelfLifeFlag = ISNULL(UDF01,'')
+            , @c_ShelfLifeConsoflag = ISNULL(UDF02,'')                              --(Wan03)
    FROM @TMP_CODELKUP
    WHERE Code = 'SHELFLIFE' --allocation check shelflife. default is no checking.
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
@@ -721,7 +732,71 @@ BEGIN
       SET @c_ContinueChkShelfLife = 'N'
    END
 
-   IF ISNULL(@c_OrderKey,'') <> '' AND @c_ContinueChkShelfLife = 'Y'
+   IF @c_ContinueChkShelfLife = 'Y' AND @c_ShelfLifeConsoflag = 'Y' AND @c_Orderkey = ''           --(Wan03) - START   
+   BEGIN
+      IF @c_Loadkey > ''
+      BEGIN
+         IF @c_OParms > ''
+         BEGIN 
+            IF EXISTS ( SELECT 1 
+                        FROM dbo.Fnc_GetRight2(@c_Facility, @c_Storerkey, ''
+                                             , 'LoadConsoAllocationOParms') gr2
+                        WHERE gr2.Authority = '1'
+                        AND Option5 = 'ORDERS.Consigneekey'
+                      )
+            BEGIN            
+               SELECT @c_Consigneekey = o.ConsigneeKey
+                     ,@c_ConsigneeOrd = o.Orderkey               
+               FROM LoadPlanDetail lpd (NOLOCK)
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey
+               WHERE lpd.Loadkey = @c_Loadkey
+               AND   o.ConsigneeKey = @c_OParms
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_Consigneekey = MIN(o.ConsigneeKey)
+                  ,@c_ConsigneeOrd = MIN(o.Orderkey)               
+            FROM LoadPlanDetail lpd (NOLOCK)
+            JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey
+            WHERE lpd.Loadkey = @c_Loadkey
+            GROUP BY lpd.LoadKey
+            HAVING COUNT(DISTINCT o.ConsigneeKey) = 1
+         END
+      END
+      ELSE IF @c_Wavekey > ''
+      BEGIN
+         IF @c_OParms > ''
+         BEGIN 
+            IF EXISTS ( SELECT 1 
+                        FROM dbo.Fnc_GetRight2(@c_Facility, @c_Storerkey, ''
+                                             , 'WaveConsoAllocationOParms') gr2
+                        WHERE gr2.Authority = '1'
+                        AND Option5 = 'ORDERS.Consigneekey'
+                        )
+            BEGIN
+               SELECT @c_Consigneekey = o.ConsigneeKey
+                     ,@c_ConsigneeOrd = o.Orderkey               
+               FROM Wavedetail wd (NOLOCK)
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.Orderkey
+               WHERE wd.WaveKey = @c_Wavekey
+               AND   o.ConsigneeKey = @c_OParms
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_Consigneekey = MIN(o.ConsigneeKey)
+                  ,@c_ConsigneeOrd = MIN(o.Orderkey)          
+            FROM Wavedetail wd (NOLOCK)
+            JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.Orderkey
+            WHERE wd.WaveKey = @c_Wavekey
+            GROUP BY wd.Wavekey
+            HAVING COUNT(DISTINCT o.ConsigneeKey) = 1
+         END
+      END
+   END                                                                                             --(Wan03) - END
+
+   IF (ISNULL(@c_OrderKey,'') <> '' OR @c_Consigneekey <> '') AND @c_ContinueChkShelfLife = 'Y'    --(Wan03)  
    BEGIN
       ------Consignee shelflife (Storer.MinShelfLife)
       /*
@@ -737,13 +812,23 @@ BEGIN
       END
       */
       ------Consignee+Sku shelflife (Storer.MinShelflife * Sku.Shelflife)
-      SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
-      FROM ORDERS O (NOLOCK)
-      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
-      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
-      JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
-      WHERE O.Orderkey = @c_Orderkey
-      AND OD.OrderLineNumber = @c_OrderLineNumber
+      IF @c_Orderkey > ''                                                                          --(Wan03) - START
+      BEGIN
+         SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
+         FROM ORDERS O (NOLOCK)
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
+         WHERE O.Orderkey = @c_Orderkey
+         AND OD.OrderLineNumber = @c_OrderLineNumber
+      END
+      ELSE IF @c_Consigneekey > ''
+      BEGIN
+         SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
+         FROM STORER (NOLOCK) 
+         JOIN SKU (NOLOCK) ON SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
+         WHERE STORER.StorerKey = @c_Consigneekey
+      END                                                                                          --(Wan03) - END
 
       IF ISNULL(@n_ConsigneeSkuMinShelfLife,0) > 0
       BEGIN
@@ -764,14 +849,26 @@ BEGIN
       ------Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup)
       IF @c_ContinueChkShelfLife = 'Y'
       BEGIN
-         SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
-         FROM ORDERS O (NOLOCK)
-         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
-         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
-         JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
-         JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup AND SKU.Skugroup = DOCLKUP.Skugroup
-         WHERE O.Orderkey = @c_Orderkey
-         AND OD.OrderLineNumber = @c_OrderLineNumber
+         IF @c_Orderkey > ''                                                                       --(Wan03) - START
+         BEGIN
+            SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
+            FROM ORDERS O (NOLOCK)
+            JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+            JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+            JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
+            JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup AND SKU.Skugroup = DOCLKUP.Skugroup
+            WHERE O.Orderkey = @c_Orderkey
+            AND OD.OrderLineNumber = @c_OrderLineNumber
+         END
+         ELSE IF @c_Consigneekey > ''
+         BEGIN
+            SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
+            FROM SKU (NOLOCK)
+            JOIN STORER (NOLOCK)  ON STORER.StorerKey = @c_Consigneekey
+            JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup 
+                                 AND SKU.Skugroup = DOCLKUP.Skugroup 
+            WHERE SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
+         END                                                                                       --(Wan03) - END
 
          IF ISNULL(@n_ConsigneeSkuGroupMinShelfLife,0) > 0
          BEGIN
@@ -789,6 +886,11 @@ BEGIN
             SET @c_ContinueChkShelfLife = 'N'
          END
       END
+      
+      IF @c_ContinueChkShelfLife = 'N' AND @c_Consigneekey > ''
+      BEGIN
+         SET @c_Orderkey = @c_ConsigneeOrd
+      END      
    END
 
    ------Sku outgoing shelflife (Sku.SUSR2)
@@ -1004,7 +1106,7 @@ BEGIN
 
    IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y') 
       OR (@c_FIFOByMultiUOM = 'Y')  --NJOW07
-      OR (@c_FDTFOByMultiUOM = 'Y')                                                                --(Wan03)             OR (@c_FDTFOByMultiUOM = 'Y'   )                                                             --(Wan03) 
+      OR (@c_FDTFOByMultiUOM = 'Y'   )                                                             --(Wan03) 
       OR (@c_AllocateByUCCFlag = 'Y')   --WL02
    BEGIN
       SET @c_SQL = ''
@@ -1221,6 +1323,7 @@ BEGIN
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
           +',@c_ID NVARCHAR(18)'
           +',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'
+          +',@c_OParms NVARCHAR(200)'                                                              --(Wan03)
       --(Wan01) - END
  
       EXEC sp_executesql @c_SQLStatement, @c_SQLParms,   --(Wan01)
@@ -1261,7 +1364,7 @@ BEGIN
         ,@c_UDF03                                        --(Wan01)
         ,@c_UDF04                                        --(Wan01)
         ,@c_UDF05                                        --(Wan01)
-
+        ,@c_OParms                                       --(Wan03)
       --EXEC sp_ExecuteSQL @c_SQLStatement
 
       OPEN CURSOR_AVAILABLECFG
@@ -1618,6 +1721,7 @@ BEGIN
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
           +',@c_ID NVARCHAR(18)'
           +',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'
+          +',@c_OParms NVARCHAR(200)'                                                              --(Wan03)
       --(Wan01) - END
  
       EXEC sp_executesql @c_SQLStatement, @c_SQLParms,   --(Wan01)
@@ -1658,7 +1762,7 @@ BEGIN
         ,@c_UDF03                                        --(Wan01)
         ,@c_UDF04                                        --(Wan01)
         ,@c_UDF05                                        --(Wan01)
-
+        ,@c_OParms                                       --(Wan03)
       --EXEC sp_ExecuteSQL @c_SQLStatement
    END
    

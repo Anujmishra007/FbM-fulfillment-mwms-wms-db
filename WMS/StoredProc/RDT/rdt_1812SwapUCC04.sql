@@ -559,6 +559,53 @@ BEGIN
       END CATCH
    END
 
+   -- Update PACKDETAIL pre-cartonization
+   IF @cActUCCStatus = '3' AND @cActTaskType = 'FCP'
+   BEGIN
+      -- FCP-FCP swap: exchange DropID between both sides in one atomic UPDATE
+      IF EXISTS (SELECT 1 FROM dbo.PACKDETAIL WITH (NOLOCK)
+                 WHERE StorerKey = @cStorerKey
+                    AND DropID IN (@cTaskUCCNo, @cActUCCNo))
+      BEGIN
+         BEGIN TRY
+            UPDATE dbo.PACKDETAIL WITH (ROWLOCK)
+            SET DropID   = CASE
+                              WHEN DropID = @cTaskUCCNo THEN @cActUCCNo
+                              WHEN DropID = @cActUCCNo  THEN @cTaskUCCNo
+                           END,
+                EditDate = GETDATE(),
+                EditWho  = SUSER_SNAME()
+            WHERE StorerKey = @cStorerKey
+               AND DropID IN (@cTaskUCCNo, @cActUCCNo)
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 262177
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PackDtl Fail
+            GOTO RollBackTran
+         END CATCH
+      END
+   END
+   ELSE
+   BEGIN
+      -- Non-FCP swap: replace OriginalUCC with SwappedUCC
+      IF EXISTS (SELECT 1 FROM dbo.PACKDETAIL WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cTaskUCCNo)
+      BEGIN
+         BEGIN TRY
+            UPDATE dbo.PACKDETAIL WITH (ROWLOCK)
+            SET DropID   = @cActUCCNo,
+                EditDate = GETDATE(),
+                EditWho  = SUSER_SNAME()
+            WHERE StorerKey = @cStorerKey
+               AND DropID   = @cTaskUCCNo
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 262177
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PackDtl Fail
+            GOTO RollBackTran
+         END CATCH
+      END
+   END
+
    SET @cSKU = @cActUCCSKU
    SET @nUCCQTY = @nActUCCQTY
    SET @cUCC = @cActUCCNo

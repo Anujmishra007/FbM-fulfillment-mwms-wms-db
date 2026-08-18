@@ -70,14 +70,16 @@ BEGIN
    (
       RowRef INT IDENTITY(1,1),
       PickDetailKey NVARCHAR(18) PRIMARY KEY,
-      TaskDetailKey NVARCHAR(10) DEFAULT ''
+      TaskDetailKey NVARCHAR(10) DEFAULT '',
+      Qty INT
    )
 
    DECLARE @tPickDetails#2 TABLE 
    (
-      RowRef INT IDENTITY(1,1),
-      PickDetailKey NVARCHAR(18) PRIMARY KEY,
-      TaskDetailKey NVARCHAR(10) DEFAULT ''
+      RowRef         INT IDENTITY(1,1),
+      PickDetailKey  NVARCHAR(18) PRIMARY KEY,
+      TaskDetailKey  NVARCHAR(10) DEFAULT '',
+      Qty            INT
    )
 
     DECLARE @tTaskDetails#2 TABLE 
@@ -276,8 +278,8 @@ BEGIN
       BEGIN
          -- Unallocate task UCC from PickDetail
          DELETE FROM @tPickDetails#1
-         INSERT INTO @tPickDetails#1 (PickDetailKey, TaskDetailKey)
-         SELECT PickDetailKey, TaskDetailKey
+         INSERT INTO @tPickDetails#1 (PickDetailKey, TaskDetailKey, Qty)
+         SELECT PickDetailKey, TaskDetailKey, Qty
          FROM dbo.PickDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND Status = '0'
@@ -402,8 +404,8 @@ BEGIN
       -- replace it with original task UCC, if scanned UCC is allocated for Pick task
       BEGIN
          DELETE FROM @tPickDetails#2
-         INSERT INTO @tPickDetails#2 (PickDetailKey, TaskDetailKey)
-         SELECT PickDetailKey, PD.TaskDetailKey
+         INSERT INTO @tPickDetails#2 (PickDetailKey, TaskDetailKey, Qty)
+         SELECT PickDetailKey, PD.TaskDetailKey, PD.Qty
          FROM dbo.PickDetail PD WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND Status = '0'
@@ -419,8 +421,6 @@ BEGIN
                SET 
                   Qty = 0,
                   DropID = '',
-                  Loc = '',
-                  ID = '',
                   EditDate = GETDATE(),
                   EditWho = @cUserName
                FROM dbo.PickDetail PD
@@ -434,14 +434,14 @@ BEGIN
          END CATCH
 
          SET @cMoveQTYAlloc = '0'
-         -- Allocate original task UCC to PickDetail
+         -- Allocate original task UCC to scanned UCC's PickDetail
          BEGIN TRY
             IF EXISTS(SELECT 1 FROM @tPickDetails#2)
             BEGIN
                SET @cMoveQTYAlloc = '1'
                UPDATE PD WITH (ROWLOCK)
                SET 
-                  Qty = @nOriginalTaskQTY,
+                  Qty = TPD.Qty,
                   DropID = @cOriginalTaskUCC,
                   Loc = @cOriginalTaskFromLoc,
                   ID = @cOriginalTaskFromID,
@@ -505,6 +505,7 @@ BEGIN
                   ,@cErrMsg OUTPUT
                   ,@cSKU = @cOriginalTaskSKU
                   ,@nPutawayQTY = @nOriginalTaskQTY
+                  ,@cUCCNo = @cOriginalTaskUCC
                   ,@cFromLOT = @cOriginalTaskLot
                   ,@cTaskDetailKey = @cTaskdetailKeyTemp
                   ,@nFunc = 0
@@ -554,7 +555,7 @@ BEGIN
             SET @cMoveQTYAlloc = '1'
             UPDATE PD WITH (ROWLOCK)
             SET 
-               Qty = @nScannedUCCQTY,
+               Qty = TPD.Qty,
                DropID = @cScannedUCC,
                Loc = @cScannedUCCLoc,
                ID = @cScannedUCCID,
@@ -563,9 +564,9 @@ BEGIN
             FROM dbo.PickDetail PD
             INNER JOIN @tPickDetails#1 TPD ON PD.PickDetailKey = TPD.PickDetailKey
             WHERE StorerKey = @cStorerKey
-               AND Status = '0'
-               AND Qty = 0
-               AND DropID = ''
+               AND PD.Status = '0'
+               AND PD.Qty = 0
+               AND PD.DropID = ''
          END
       END TRY
       BEGIN CATCH
@@ -611,6 +612,7 @@ BEGIN
                ,@cErrMsg OUTPUT
                ,@cSKU = @cScannedUCCSKU
                ,@nPutawayQTY = @nScannedUCCQTY
+               ,@cUCCNo = @cScannedUCC
                ,@cFromLOT = @cScannedUCCLot
                ,@cTaskDetailKey = @cTaskDetailKey
                ,@nFunc = 0

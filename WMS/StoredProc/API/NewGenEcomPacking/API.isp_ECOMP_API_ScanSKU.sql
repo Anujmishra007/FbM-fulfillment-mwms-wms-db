@@ -25,15 +25,18 @@
 /* 25-Feb-2025    CSC166   #FCR-3165 - Save UserID Into                 */
 /*                         PackHeader.AddWho                            */
 /* 04-Jul-2025    Sean     #FCR-6199 - Packing SKU Decode               */
-/* 23-Jul-2025    Sean01     #UWP-38247 - Compatible with Login User    */
-/* 20-Aug-2025    Jiawen     #UWP-39649 - Add CCTV Configs              */
+/* 23-Jul-2025    Sean01   #UWP-38247 - Compatible with Login User      */
+/* 20-Aug-2025    Jiawen   #UWP-39649 - Add CCTV Configs                */
 /* 15-Sep-2025    JWF011   #UWP-41185 - Update OrderKey for CCTV Config */
 /* 07-Jan-2026    JWF011   #FCR-10065 - Add SKU to get CCTV configs     */
 /* 29-Jan-2026    Sean02   UWP-47754 - Merge the unified SP             */
 /* 24-Mar-2026    Sean03   #UWP-52654 - replace RevertUser with ResetUser*/
-/************************************************************************/    
+/* 07-Apr-2026    Sean04   FCR-11940 - TH - Add errcode in message      */
+/* 23-Apr-2026    Sean05   FCR-11940 - TH - Add Debug Para for Sub SP   */
+/* 23-Jun-2026    Sean06   #FCR-12417 Display UPC instead of SKU        */
+/************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU](
-     @b_Debug           INT            = 0
+     @b_Debug           INT            = 0 
    , @c_Format          VARCHAR(10)    = ''
    , @c_UserID          NVARCHAR(256)  = ''
    , @c_OperationType   NVARCHAR(60)   = ''
@@ -116,6 +119,8 @@ BEGIN
 
          , @c_OrderMode                   NVARCHAR(1)    = ''
          , @b_ScanQRInSKULabel            BIT            = 0         --Alex02
+         , @c_sc_DisplayUPCMode           NVARCHAR(1)    = ''        --Sean06 #FCR-12417
+         , @c_DisplaySKU                 NVARCHAR(500)  = ''        --Sean06 #FCR-12417
 
    DECLARE @c_EPACKConfigJSON             NVARCHAR(4000) = ''
    DECLARE @n_OrderCount                  INT            = 0
@@ -297,8 +302,9 @@ BEGIN
    END
 
    SET @b_ValidQtyPacked = 0
-   EXEC [dbo].[isp_Ecom_GetValidQtyPacked]
-         @c_PickSlipNo      = @c_PickSlipNo  
+   EXEC [API].[isp_ECOMP_GetValidQtyPacked]    -- Sean04
+         @b_Debug           = @b_Debug    -- Sean05
+      ,  @c_PickSlipNo      = @c_PickSlipNo  
       ,  @c_TaskBatchNo     = @c_TaskBatchID 
       ,  @c_Storerkey       = @c_StorerKey   
       ,  @c_Sku             = @c_SKU         
@@ -311,7 +317,7 @@ BEGIN
    BEGIN
       SET @n_Continue = 3 
       SET @n_ErrNo = 51105
-      SET @c_ErrMsg = 'Qty Packed > Qty Picked' 
+      SET @c_ErrMsg =  CONVERT(char(5),@n_ErrNo)+': ' + 'Qty Packed > Qty Picked' --Sean04
       GOTO QUIT
    END
 
@@ -503,12 +509,45 @@ BEGIN
       ,  @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
    --CCTV Configs End
 
+   SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode') -- Sean06 #FCR-12417
+
+   IF @b_Debug = 1
+   BEGIN
+      PRINT '--------------'
+      PRINT 'EPACKDisplayUPCMode ' + @c_sc_DisplayUPCMode
+      PRINT '@c_StorerKey ' + @c_StorerKey
+      PRINT '@c_SKU ' + @c_SKU
+   END
+
+   IF @c_sc_DisplayUPCMode = '1' -- Sean06 #FCR-12417
+   BEGIN
+      SET @c_DisplaySKU = ISNULL(
+            (SELECT TOP 1 RTRIM(U.UPC)
+             FROM dbo.UPC U WITH (NOLOCK)
+             INNER JOIN dbo.PACK P WITH (NOLOCK)
+                ON P.PackKey = U.PackKey
+               AND U.UOM     = P.PackUOM3
+             WHERE U.StorerKey = @c_StorerKey
+               AND U.SKU       = @c_SKU),
+            '')
+   END
+   ELSE
+   BEGIN
+      SET @c_DisplaySKU = @c_SKU
+   END
+
+   IF @b_Debug = 1
+   BEGIN
+      PRINT '--------------'
+      PRINT '@c_DisplaySKU ' + @c_DisplaySKU
+   END
+
    --when qr code display?
-   SET @c_ResponseString = ISNULL(( 
+   SET @c_ResponseString = ISNULL((
                               SELECT TOP 1
                                      @c_PickSlipNo             As 'PackTask.PickSlipNo'
                                     ,'0'                       As 'PackTask.PackStatus'
-                                    ,@c_SKU                    As 'PackTask.SKU'
+                                    ,@c_DisplaySKU             As 'PackTask.SKU'    -- Sean06 #FCR-12417
                                     ,@c_SerialNo               As 'PackTask.SerialNumber'
                                     ,@b_ScanQRInSKULabel       As 'PackTask.ScanQRInSKULabel'
                                     ,@n_PackingQty             As 'PackTask.PackingQTY'
@@ -521,18 +560,21 @@ BEGIN
                                        FROM @t_PackingRules
                                        FOR JSON PATH
                                      ) AS 'PackTask.PackingRules'
-                                    ,( 
-                                       SELECT PD.SKU                 As 'SKU'
+                                    ,(
+                                       SELECT CASE WHEN @c_sc_DisplayUPCMode = '1'  -- Sean06 #FCR-12417
+                                                   THEN ISNULL(RTRIM(PD.UPC), '')
+                                                   ELSE PD.SKU
+                                              END                    As 'SKU'
                                              ,PD.QTY                 As 'QTY'
                                              ,PD.LOTTABLEVALUE       As 'LottableValue'
                                              ,S.STDGROSSWGT          As 'STDGrossWeight'
                                        FROM [dbo].[PackDetail] PD WITH (NOLOCK)
-                                       JOIN [dbo].[SKU] S WITH (NOLOCK) 
-                                       ON (PD.PickSlipNo = @c_PickSlipNo 
+                                       JOIN [dbo].[SKU] S WITH (NOLOCK)
+                                       ON (PD.PickSlipNo = @c_PickSlipNo
                                           AND S.StorerKey = PD.StorerKey
                                           AND S.SKU = PD.SKU )
                                        WHERE PickSlipNo = @c_PickSlipNo
-                                       FOR JSON PATH 
+                                       FOR JSON PATH
                                      ) AS 'PackTask.CartonPackedSKU'
                                     ,(
                                        JSON_QUERY(@c_EPACKConfigJSON)

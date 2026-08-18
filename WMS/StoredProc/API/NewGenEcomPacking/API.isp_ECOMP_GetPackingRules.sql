@@ -22,8 +22,10 @@
 /* 02-APR-2023    Alex02   #JIRA PAC-182 Display SKU Images             */
 /* 12-AUG-2024    Alex03   #JIRA PAC-351 Regular exp to validate Serial#*/
 /* 14-NOV-2024    Alex04   #JIRA PAC-363 New Rules for IsSysSuggCtnType */
-/* 09-JAN-2026    CSC166   #FCR9149 									*/
-/* 13-FEB-2026    CSC166   #FCR9928 									*/
+/* 09-JAN-2026    CSC166   #FCR-9149 									*/
+/* 13-FEB-2026    CSC166   #FCR-9928 									*/
+/* 15-Apr-2026    Sean     #FCR-12417 New Rules for EPACKDisplayUPCMode */
+/* 30-JUN-2026    CSC166   #FCR-13975 New Rules for EPACKScanDropID	    */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackingRules](
      @c_StorerKey                NVARCHAR(15)   = ''
@@ -128,8 +130,10 @@ BEGIN
          , @c_SerialNo_Regex              NVARCHAR(200)  = ''  --Alex03
          , @c_IsSystemSugCartonType       NVARCHAR(1)    = ''  --Alex04
 
-		 , @c_EPACKSummaryPrompt		  NVARCHAR(1)	 = '0' --CSC166
-		 , @c_EPACKValidateCustCTNType	  NVARCHAR(1)	 = '0' --FCR-9928
+         , @c_EPACKSummaryPrompt		  NVARCHAR(1)	 = '0' --CSC166
+         , @c_EPACKValidateCustCTNType	  NVARCHAR(1)	 = '0' --FCR-9928
+         , @c_EPACKDisplayUPCMode	      NVARCHAR(1)	 = '0' --FCR-12417
+         , @c_EPACKScanDropID			  NVARCHAR(1)	 = '0' --FCR-13975
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -538,6 +542,8 @@ BEGIN
 
       SET @c_EPACKValidateCustCTNType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKValidateCustCTNType') -- FCR-9928
 
+      SET @c_EPACKDisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKDisplayUPCMode') -- FCR-12417
+
       SELECT 'IsSerialNoMandatory'     , @c_IsSerialNoMandatory         UNION ALL
       SELECT 'IsPackQRFMandatory'      , @c_IsPackQRFMandatory          UNION ALL
       SELECT 'PackQRF_RegEx'           , @c_PackQRF_RegEx               UNION ALL
@@ -547,6 +553,7 @@ BEGIN
       SELECT 'IsWeightMandatory'       , @c_IsWeightMandatory           UNION ALL
       SELECT 'IsAutoWeightCalc'        , @c_IsAutoWeightCalc            UNION ALL
       SELECT 'IsAutoPackConfirm'       , @c_IsAutoPackConfirm           UNION ALL
+        
       SELECT 'IsCaptureLabelNo'        , @c_IsCaptureLabelNo            UNION ALL
       SELECT 'CaptureLabelNoFunc'      , @c_CaptureLabelNoFunc          UNION ALL
       SELECT 'IsVASMandatory'          , @c_IsVASMandatory              UNION ALL
@@ -559,9 +566,11 @@ BEGIN
       SELECT 'SerialNo_RegEx'          , @c_SerialNo_Regex              UNION ALL      --Alex03 
       SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType       UNION ALL      --Alex04
 	  SELECT 'EPACKSummaryPrompt'      , @c_EPACKSummaryPrompt			UNION ALL
-      SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType			       --FCR-9928
+      SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType	UNION ALL   --FCR-9928
+      SELECT 'EPACKDisplayUPCMode'     , @c_EPACKDisplayUPCMode                     -- FCR-12417
 
    END
+
    IF @c_PackMode = 'M'
    BEGIN
       --PAC-7 Packing Rules for Order level
@@ -893,6 +902,10 @@ BEGIN
 
 		 SET @c_EPACKValidateCustCTNType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKValidateCustCTNType') -- FCR-9928
 
+         SET @c_EPACKDisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKDisplayUPCMode') -- FCR-12417
+
+         SET @c_EPACKScanDropID = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKScanDropID') -- FCR-13975
+
          SELECT 'EpackForceMultiPackByOrd', @c_EpackForceMultiPackByOrd    UNION ALL
          SELECT 'EPACKCloseCartonPrint '  , @c_EPACKCloseCartonPrint       UNION ALL
          SELECT 'EPACKNewCartonSkipPrint' , @c_EPACKNewCartonSkipPrint     UNION ALL
@@ -911,7 +924,9 @@ BEGIN
          SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG                UNION ALL
          SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType       UNION ALL        --Alex04
 		 SELECT 'EPACKSummaryPrompt'	  , @c_EPACKSummaryPrompt		   UNION ALL
-         SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType				        --Alex04
+         SELECT 'EPACKValidateCustCTNType', @c_EPACKValidateCustCTNType	   UNION ALL	-- FCR-9928
+         SELECT 'EPACKDisplayUPCMode'     , @c_EPACKDisplayUPCMode         UNION ALL    -- FCR-12417
+         SELECT 'EPACKScanDropID'		  , @c_EPACKScanDropID							-- FCR-13975
       END
       --PAC-7 Get Packing Rules After SKU Validation
       ELSE

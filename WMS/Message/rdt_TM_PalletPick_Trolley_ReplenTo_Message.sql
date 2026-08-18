@@ -21,4 +21,5 @@ execute rdt.rdtAddMsg 256668, 10, '256668^ClsTaskFail ', 'us_english', 1876, 0, 
 execute rdt.rdtAddMsg 256669, 10, '256669^NoMoreTask', 'us_english', 1876, 0, '256669^NoMoreTask';
 execute rdt.rdtAddMsg 256670, 10, '256670^LockTaskFailed', 'us_english', 1876, 0, '256670^LockTaskFailed';
 execute rdt.rdtAddMsg 256671, 10, '256671^WrongUCC', 'us_english', 1876, 0, '256671^WrongUCC';
+execute rdt.rdtAddMsg 256672, 10, '256672^UpdUCCLostFail', 'us_english', 1876, 0, '256672^Update UCC lost status fail';
 

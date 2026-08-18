@@ -46,13 +46,21 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            -- Get Lot from current ASTCPK task
-            SELECT @cLot = LOT
-            FROM dbo.TaskDetail WITH (NOLOCK)
-            WHERE TaskDetailKey = @cTaskdetailKey
-               AND StorerKey = @cStorerKey
+            -- Get Lot from current ASTRPT task
+            -- Derive FinalLoc from RPF task via ASTRPT.SourceKey → RPF.TaskDetailKey
+            SELECT
+               @cLot      = T1.Lot,
+               @cFinalLOC = T2.FinalLoc
+            FROM dbo.TaskDetail T1 WITH (NOLOCK)
+            JOIN dbo.TaskDetail T2 WITH (NOLOCK)
+               ON  T2.TaskDetailKey = T1.SourceKey
+               AND T2.TaskType      = 'RPF'
+               AND T2.StorerKey     = T1.StorerKey
+            WHERE T1.TaskDetailKey = @cTaskdetailKey
+              AND T1.TaskType      = 'ASTRPT'
+              AND T1.StorerKey     = @cStorerKey
 
-            -- Release FCP tasks on hold matching ASTRPTTask.ToLoc and Lot
+            -- Release FCP tasks on hold matching RPF.FinalLoc and Lot
             BEGIN TRAN
             SAVE TRAN rdt_1836ExtUpd08
 
@@ -86,6 +94,7 @@ BEGIN
                )
                BEGIN
                   -- TODO: Call SP to trigger release of tasks to LOCUS WCS system
+                  SELECT 1
                END
             END TRY
             BEGIN CATCH

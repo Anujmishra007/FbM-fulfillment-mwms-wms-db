@@ -29,6 +29,11 @@
 /* 25-Sep-2025    JWF011   #UWP-41771 - Add configs for TrackNo         */
 /* 07-Jan-2026    JWF011   #FCR-10065 - Add CCTV API02 UDF Config       */
 /* 24-Feb-2026    JWF011   #FCR-10065 - Fix CCTV API02 UDF Config       */
+/* 10-Apr-2026    JWF011   #FCR-12163 - Add EPACKCCTVEndPreRec and      */
+/*                                      EPACKCCTVHOLDSEC                */
+/* 27-May-2026    Sean     #FCR-12877 - Add EPACKCCTVClickOrderSliceRec */
+/* 16-Jul-2026    Sean     #FCR-13894 - Add EPACKCCTVSingleScanSliceRec, */
+/*                         EPACKCCTVOFFSETSEC3, EPACKCCTVOFFSETSEC4     */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetEPackConfigs](
      @c_StorerKey                      NVARCHAR(15)   = ''
@@ -69,6 +74,14 @@ BEGIN
 
          , @c_CCTVREFRESHTRACKNO       NVARCHAR(1)  = ''
          , @c_CCTVJDONLINE             NVARCHAR(1)  = ''
+
+         , @c_EPACKCCTVEndPreRec               NVARCHAR(1)   = ''
+         , @c_EPACKCCTVHOLDSEC                NVARCHAR(3)   = ''
+         , @c_EPACKCCTVClickOrderSliceRec     NVARCHAR(1)   = ''
+
+         , @c_EPACKCCTVSingleScanSliceRec     NVARCHAR(1)   = ''
+         , @c_EPACKCCTVOFFSETSEC3             NVARCHAR(3)   = ''
+         , @c_EPACKCCTVOFFSETSEC4             NVARCHAR(3)   = ''
 
          , @b_sp_Success               INT
          , @n_sp_err                   INT
@@ -248,6 +261,10 @@ BEGIN
       END
       -- FCR-10065 CCTV API02 UDF (End)
 
+      -- FCR-12163 - Add EPACKCCTVEndPreRec and EPACKCCTVHOLDSEC
+      SET @c_EPACKCCTVEndPreRec = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec')
+      SET @c_EPACKCCTVHOLDSEC = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVHOLDSEC')
+
       INSERT INTO @t_EPACKConfig (ConfigName, [Value]) 
       SELECT 'EPACKCCTVWMTYPE'     , @c_EPACKCCTVWMTYPE    
       UNION ALL 
@@ -256,7 +273,7 @@ BEGIN
       SELECT 'EPACKCCTVOFFSETSEC1' , @c_EPACKCCTVOFFSETSEC1
       UNION ALL 
       SELECT 'EPACKCCTVOFFSETSEC2' , @c_EPACKCCTVOFFSETSEC2
-      UNION ALL 
+      UNION ALL
       SELECT 'EPACKCCTVWM_CTNNO'   , @c_EPACKCCTVWM_CTNNO  
       UNION ALL 
       SELECT 'EPACKCCTVWM_SKU'     , @c_EPACKCCTVWM_SKU    
@@ -282,6 +299,10 @@ BEGIN
       SELECT 'CCTV_API02_UDF03'    , @c_CCTV_API02_UDF03
       UNION ALL
       SELECT 'CCTV_API02_UDF04'    , @c_CCTV_API02_UDF04
+      UNION ALL
+      SELECT 'EPACKCCTVEndPreRec'  , @c_EPACKCCTVEndPreRec
+      UNION ALL
+      SELECT 'EPACKCCTVHOLDSEC'    , @c_EPACKCCTVHOLDSEC
 
       IF @c_PackMode = 'M'
       BEGIN
@@ -292,6 +313,23 @@ BEGIN
          SET @c_EPACKCCTVEXSCAN = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEXSCAN')
 
          INSERT INTO @t_EPACKConfig (ConfigName, [Value]) VALUES ('EPACKCCTVEXSCAN', IIF(ISNULL(RTRIM(@c_EPACKCCTVEXSCAN), '') = '', '0', @c_EPACKCCTVEXSCAN))
+
+         -- FCR-12877
+         SET @c_EPACKCCTVClickOrderSliceRec = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVClickOrderSliceRec')
+
+         INSERT INTO @t_EPACKConfig (ConfigName, [Value]) VALUES ('EPACKCCTVClickOrderSliceRec', IIF(ISNULL(RTRIM(@c_EPACKCCTVClickOrderSliceRec), '') = '', '0', @c_EPACKCCTVClickOrderSliceRec))
+      END
+
+      IF @c_PackMode = 'S'
+      BEGIN
+         -- FCR-13894
+         SET @c_EPACKCCTVSingleScanSliceRec = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVSingleScanSliceRec')
+         SET @c_EPACKCCTVOFFSETSEC3        = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVOFFSETSEC3')
+         SET @c_EPACKCCTVOFFSETSEC4        = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVOFFSETSEC4')
+
+         INSERT INTO @t_EPACKConfig (ConfigName, [Value]) VALUES ('EPACKCCTVSingleScanSliceRec', IIF(ISNULL(RTRIM(@c_EPACKCCTVSingleScanSliceRec), '') = '', '0', @c_EPACKCCTVSingleScanSliceRec))
+         INSERT INTO @t_EPACKConfig (ConfigName, [Value]) VALUES ('EPACKCCTVOFFSETSEC3', @c_EPACKCCTVOFFSETSEC3)
+         INSERT INTO @t_EPACKConfig (ConfigName, [Value]) VALUES ('EPACKCCTVOFFSETSEC4', @c_EPACKCCTVOFFSETSEC4)
       END
    END
    --EPACK CCTV Config - End

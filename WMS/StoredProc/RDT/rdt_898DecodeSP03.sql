@@ -12,7 +12,8 @@ GO
 /*                                                                            */
 /* Date        Author   Ver.  Purposes                                        */
 /* 2025-10-27  Dennis   1.0   FCR-8472 Created                                */
-/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */ 
+/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */
+/* 2026-08-07  Dennis   1.2   UWP-63386  Decode Traceability Code (UserDef01) */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898DecodeSP03] (
    @nMobile             INT,
@@ -77,8 +78,10 @@ BEGIN
       ,@cMonthChar  NVARCHAR(10)
       ,@cDateChar   NVARCHAR(10)
       ,@nMOBRECScn  INT
+      ,@cUCCNo      NVARCHAR( 20)
 
-      SELECT @nMOBRECScn = Scn
+      SELECT @nMOBRECScn = Scn,
+             @cUCCNo     = V_UCC
       FROM rdt.RDTMOBREC WITH (NOLOCK)
       WHERE Mobile = @nMobile
 
@@ -293,7 +296,27 @@ BEGIN
                AND @cMfgDateRaw NOT LIKE '%[^0-9]%'
                AND TRY_CONVERT(INT, @cMfgDateRaw) IS NOT NULL
             BEGIN
-               SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
+               SET @cLottable03 = '20' + @cMfgDateRaw
+            END
+
+            -- Decode Traceability Code: Value after (240), update UCC.Userdefined01
+            IF CHARINDEX('(240)', @cBarcode) > 0 AND ISNULL(@cUCCNo, '') <> ''
+            BEGIN
+               SET @cUserDefine01 = LEFT(SUBSTRING(@cBarcode, CHARINDEX('(240)', @cBarcode) + 5, LEN(@cBarcode)), 15)
+
+               BEGIN TRY
+               UPDATE dbo.UCC WITH (ROWLOCK)
+                  SET Userdefined01 = @cUserDefine01,
+                      EditDate      = GETDATE(),
+                      EditWho       = SUSER_SNAME()
+                  WHERE UCCNo     = @cUCCNo
+                  AND   StorerKey = @cStorerKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo  = 263854
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UCCUpdateFail
+                  GOTO Quit
+               END CATCH
             END
          END
          -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs

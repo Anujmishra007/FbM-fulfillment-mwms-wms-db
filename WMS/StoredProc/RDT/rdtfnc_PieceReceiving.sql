@@ -167,10 +167,11 @@ GO
 /* 2024-07-31 11.0 JHU151     FCR-550 Scan SN on sku screen              */
 /* 2024-12-27 12.0 Dennis     UWP-28649 Fix Capture Pallet Type Bug      */
 /* 2025-03-25 12.1 YeeKung    FCR-3145 Add Out for rdt_serialNo Params   */
-/* 2025-07-14 12.2 Cuize      FCR-990 Chang Errno = -2                    */
-/* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work */
-/* 2026-04-15 12.3 NYE018     FCR-12224 Clear SN field on validation error*/
-/************************************************************************/
+/* 2025-07-14 12.2 Cuize      FCR-5078 Chang Errno = -2                       */
+/* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work*/
+/* 2026-04-15 12.3 NYE018     FCR-12224 Clear SN field on validation error    */
+/* 2026-07-14 12.4 JackC      FCR-12472 Add EnableRdtPrint config (jackc01)   */
+/******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
@@ -316,6 +317,12 @@ DECLARE
    @nMorePage           INT,
    @cMax                NVARCHAR( MAX),
    @nScan               INT,   --(12.1)
+   --(jackc01) start
+   @cEnableRdtPrint     NVARCHAR( 1),
+   @cPrinter_Paper      NVARCHAR( 10),
+   @cPalletLabel        NVARCHAR( 10),
+   @cPostRecv           NVARCHAR( 10),
+   --(jackc01) end
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -376,10 +383,11 @@ SELECT
    @cLangCode   = Lang_code,
    @nMenu       = Menu,
 
-   @cFacility   = Facility,
-   @cStorer     = StorerKey,
-   @cUserName   = UserName,
-   @cPrinter    = Printer,
+   @cFacility      = Facility,
+   @cStorer        = StorerKey,
+   @cUserName      = UserName,
+   @cPrinter       = Printer,
+   @cPrinter_Paper = Printer_Paper,
 
    @cReceiptKey = V_ReceiptKey,
    @cPOKey      = V_POKey,
@@ -465,6 +473,7 @@ SELECT
    @cExtScnSP               = V_String44,  
    @cEnableAllLottables     = V_String45,
    @cLottableCode           = V_String46,
+   @cEnableRdtPrint         = V_String47, --(jackc01)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -583,6 +592,9 @@ BEGIN
    BEGIN
       SET @cExtScnSP = ''
    END
+
+   --(jackc01) start
+   SET @cEnableRdtPrint = rdt.RDTGetConfig( @nFunc, 'EnableRdtPrint', @cStorer)
 
    -- Code lookup
    IF EXISTS( SELECT 1
@@ -2109,44 +2121,53 @@ BEGIN
 
       -- Get SKU label info
       SET @cSKULabel = ''
-      SELECT
-         @cDataWindow = DataWindow,
-         @cTargetDB = TargetDB
-      FROM RDT.RDTReport WITH (NOLOCK)
-      WHERE StorerKey = @cStorer
-      AND   ReportType = 'SKULABEL'
-      AND  (Facility = @cFacility OR Facility = '')   -- (james10)
-      AND  (Function_ID = @nFunc OR Function_ID = 0)
-      ORDER BY Facility DESC, Function_ID DESC
-
-
-      IF @@ROWCOUNT <> 0
+      IF @cEnableRdtPrint = '1' --(jackc01)
       BEGIN
-         -- Check login printer
-         IF @cPrinter = ''
-         BEGIN
-              SET @nErrNo = 64270
-              SET @cErrMsg = rdt.rdtgetmessage( 64270, @cLangCode, 'DSP') --NoLoginPrinter
-              GOTO Step_4_Fail
-         END
+         DECLARE @cSKULabelType NVARCHAR( 10)
+         SET @cSKULabelType = rdt.RDTGetConfig( @nFunc, 'SKULabelType', @cStorer)
+         IF @cSKULabelType <> '0' AND ISNULL(@cSKULabelType, '') <> ''
+            SET @cSKULabel = '1'
+      END
+      ELSE
+      BEGIN
+         SELECT
+            @cDataWindow = DataWindow,
+            @cTargetDB = TargetDB
+         FROM RDT.RDTReport WITH (NOLOCK)
+         WHERE StorerKey = @cStorer
+         AND   ReportType = 'SKULABEL'
+         AND  (Facility = @cFacility OR Facility = '')   -- (james10)
+         AND  (Function_ID = @nFunc OR Function_ID = 0)
+         ORDER BY Facility DESC, Function_ID DESC
 
-         -- Check data window
-         IF ISNULL( @cDataWindow, '') = ''
+         IF @@ROWCOUNT <> 0
          BEGIN
-            SET @nErrNo = 64271
-            SET @cErrMsg = rdt.rdtgetmessage( 64271, @cLangCode, 'DSP') --DWNOTSetup
-            GOTO Step_4_Fail
-         END
+            -- Check login printer
+            IF @cPrinter = ''
+            BEGIN
+                 SET @nErrNo = 64270
+                 SET @cErrMsg = rdt.rdtgetmessage( 64270, @cLangCode, 'DSP') --NoLoginPrinter
+                 GOTO Step_4_Fail
+            END
 
-         -- Check database
-         IF ISNULL( @cTargetDB, '') = ''
-         BEGIN
-            SET @nErrNo = 64272
-            SET @cErrMsg = rdt.rdtgetmessage( 64272, @cLangCode, 'DSP') --TgetDB Not Set
-            GOTO Step_4_Fail
-         END
+            -- Check data window
+            IF ISNULL( @cDataWindow, '') = ''
+            BEGIN
+               SET @nErrNo = 64271
+               SET @cErrMsg = rdt.rdtgetmessage( 64271, @cLangCode, 'DSP') --DWNOTSetup
+               GOTO Step_4_Fail
+            END
 
-         SET @cSKULabel = '1'
+            -- Check database
+            IF ISNULL( @cTargetDB, '') = ''
+            BEGIN
+               SET @nErrNo = 64272
+               SET @cErrMsg = rdt.rdtgetmessage( 64272, @cLangCode, 'DSP') --TgetDB Not Set
+               GOTO Step_4_Fail
+            END
+
+            SET @cSKULabel = '1'
+         END
       END
 
       -- (james09)
@@ -2317,13 +2338,25 @@ BEGIN
 
    IF @nInputKey = 0 -- Esc
    BEGIN
+      IF @cEnableRdtPrint = '1'
+      BEGIN
+         SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorer)
+         IF @cPalletLabel = '0'
+            SET @cPalletLabel = ''
+
+         SET @cPostRecv = rdt.RDTGetConfig( @nFunc, 'PostRecv', @cStorer)
+            IF @cPostRecv = '0'
+               SET @cPostRecv = ''
+      END
+
       -- Check if pallet label setup
-      IF EXISTS( SELECT 1
-         FROM RDT.RDTReport WITH (NOLOCK)
-         WHERE StorerKey = @cStorer
-            AND ReportType IN ('PostRecv', 'PalletLBL')
-            AND Function_ID IN (0, @nFunc)
-            AND Facility IN ('', @cFacility))
+      IF (   @cEnableRdtPrint = '1' AND (@cPostRecv <> '' OR @cPalletLabel <> ''))--(jackc01)
+         OR (@cEnableRdtPrint <> '1' AND EXISTS( SELECT 1
+               FROM RDT.RDTReport WITH (NOLOCK)
+               WHERE StorerKey = @cStorer
+                  AND ReportType IN ('PostRecv', 'PalletLBL')
+                  AND Function_ID IN (0, @nFunc)
+                  AND Facility IN ('', @cFacility)))
       BEGIN
          -- Retain lottables
          SET @cTempLottable01 = @cOutField01
@@ -4070,93 +4103,163 @@ BEGIN
 
       IF @cOption = '1' -- Yes
       BEGIN
-         -- Check login printer
-         IF @cPrinter = ''
+         IF @cEnableRdtPrint = '1' --(jackc01)
          BEGIN
-              SET @nErrNo = 64290
-              SET @cErrMsg = rdt.rdtgetmessage( 64290, @cLangCode, 'DSP') --NoLoginPrinter
-              GOTO Step_6_Fail
+            DECLARE  @tRdtPrintParam   VariableTable
+            
+            SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'PalletLabel', @cStorer)
+               IF @cPalletLabel = '0'
+                  SET @cPalletLabel = ''
+
+            SET @cPostRecv = rdt.RDTGetConfig( @nFunc, 'PostRecv', @cStorer)
+               IF @cPostRecv = '0'
+                  SET @cPostRecv = ''
+
+               -- Print PostRecv if configured
+            IF @cPostRecv <> ''
+            BEGIN
+               SET @cReceiptLineNumber = ''
+               SELECT TOP 1
+                  @cReceiptLineNumber = ReceiptLineNumber
+               FROM dbo.ReceiptDetail WITH (NOLOCK)
+               WHERE ReceiptKey = @cReceiptKey
+                  AND ToID = @cTOID
+
+               DELETE FROM @tRdtPrintParam
+
+               INSERT INTO @tRdtPrintParam (Variable, Value) VALUES
+                  ('@cStorerKey',                @cStorer),
+                  ('@cReceiptKey',               @cReceiptKey),
+                  ('@cReceiptLineNumber_Start',  @cReceiptLineNumber),
+                  ('@cReceiptLineNumber_End',    @cReceiptLineNumber),
+                  ('@cToID',                     @cTOID)
+
+               EXEC RDT.rdt_Print
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey,
+                  @cFacility, @cStorer, @cPrinter, @cPrinter_Paper,
+                  @cPostRecv,
+                  @tRdtPrintParam,
+                  'rdtfnc_PieceReceiving',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_6_Fail
+            END
+
+            -- Print PalletLBL if configured
+            IF @cPalletLabel <> ''
+            BEGIN
+               DELETE FROM @tRdtPrintParam
+
+               INSERT INTO @tRdtPrintParam (Variable, Value) VALUES
+                  ('@cStorerKey', @cStorer),
+                  ('@cReceiptKey', @cReceiptKey),
+                  ('@cToID',      @cTOID)
+
+               EXEC RDT.rdt_Print
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey,
+                  @cFacility, @cStorer, @cPrinter, @cPrinter_Paper,
+                  @cPalletLabel,
+                  @tRdtPrintParam,
+                  'rdtfnc_PieceReceiving',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_6_Fail
+            END
          END
+         ELSE -- existing rdt_BuiltPrintJob logic
+         BEGIN
+            -- Check login printer
+            IF @cPrinter = ''
+            BEGIN
+                  SET @nErrNo = 64290
+                  SET @cErrMsg = rdt.rdtgetmessage( 64290, @cLangCode, 'DSP') --NoLoginPrinter
+                  GOTO Step_6_Fail
+            END
 
-         -- Get post receive label info
-         DECLARE @cReporType NVARCHAR( 10)
-         SELECT
-            @cReporType = 'PostRecv',
-            @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
-            @cTargetDB = ISNULL(RTRIM(TargetDB), '')
-         FROM RDT.RDTReport WITH (NOLOCK)
-         WHERE StorerKey = @cStorer
-            AND ReportType = 'PostRecv'
-
-         -- Get pallet label info
-         IF @@ROWCOUNT = 0
+            -- Get post receive label info
+            DECLARE @cReporType NVARCHAR( 10)
             SELECT
-               @cReporType = 'PalletLBL',
+               @cReporType = 'PostRecv',
                @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
                @cTargetDB = ISNULL(RTRIM(TargetDB), '')
             FROM RDT.RDTReport WITH (NOLOCK)
             WHERE StorerKey = @cStorer
-               AND ReportType = 'PalletLBL'
+               AND ReportType = 'PostRecv'
 
-         -- Check data window
-         IF ISNULL( @cDataWindow, '') = ''
-         BEGIN
-            SET @nErrNo = 64291
-            SET @cErrMsg = rdt.rdtgetmessage( 64291, @cLangCode, 'DSP') --DWNOTSetup
-            GOTO Step_6_Fail
+            -- Get pallet label info
+            IF @@ROWCOUNT = 0
+               SELECT
+                  @cReporType = 'PalletLBL',
+                  @cDataWindow = ISNULL(RTRIM(DataWindow), ''),
+                  @cTargetDB = ISNULL(RTRIM(TargetDB), '')
+               FROM RDT.RDTReport WITH (NOLOCK)
+               WHERE StorerKey = @cStorer
+                  AND ReportType = 'PalletLBL'
+
+            -- Check data window
+            IF ISNULL( @cDataWindow, '') = ''
+            BEGIN
+               SET @nErrNo = 64291
+               SET @cErrMsg = rdt.rdtgetmessage( 64291, @cLangCode, 'DSP') --DWNOTSetup
+               GOTO Step_6_Fail
+            END
+
+            -- Check database
+            IF ISNULL( @cTargetDB, '') = ''
+            BEGIN
+               SET @nErrNo = 64292
+               SET @cErrMsg = rdt.rdtgetmessage( 64292, @cLangCode, 'DSP') --TgetDB Not Set
+               GOTO Step_6_Fail
+            END
+
+            -- Print post receive label
+            IF @cReporType = 'PostRecv'
+            BEGIN
+               -- Find receipt detail line
+               SET @cReceiptLineNumber = ''
+               SELECT TOP 1
+                  @cReceiptLineNumber = ReceiptLineNumber
+               FROM ReceiptDetail WITH (NOLOCK)
+               WHERE ReceiptKey = @cReceiptKey
+                  AND ToID = @cTOID
+
+               EXEC RDT.rdt_BuiltPrintJob
+                  @nMobile,
+                  @cStorer,
+                  'PostRecv',       -- ReportType
+                  'PRINT_PostRecv', -- PrintJobName
+                  @cDataWindow,
+                  @cPrinter,
+                  @cTargetDB,
+                  @cLangCode,
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT,
+                  @cReceiptKey,
+                  @cReceiptLineNumber,
+                  @cReceiptLineNumber,
+                  @cToID -- (ChewKP05)
+            END
+
+            -- Print pallet label
+            IF @cReporType = 'PalletLBL'
+               EXEC RDT.rdt_BuiltPrintJob
+                  @nMobile,
+                  @cStorer,
+                  'PalletLBL',       -- ReportType
+                  'PRINT_PalletLBL', -- PrintJobName
+                  @cDataWindow,
+                  @cPrinter,
+                  @cTargetDB,
+                  @cLangCode,
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT,
+                  @cReceiptKey,
+                  @cToID
          END
-
-         -- Check database
-         IF ISNULL( @cTargetDB, '') = ''
-         BEGIN
-            SET @nErrNo = 64292
-            SET @cErrMsg = rdt.rdtgetmessage( 64292, @cLangCode, 'DSP') --TgetDB Not Set
-            GOTO Step_6_Fail
-         END
-
-         -- Print post receive label
-         IF @cReporType = 'PostRecv'
-         BEGIN
-            -- Find receipt detai line
-            SET @cReceiptLineNumber = ''
-            SELECT TOP 1
-               @cReceiptLineNumber = ReceiptLineNumber
-            FROM ReceiptDetail WITH (NOLOCK)
-            WHERE ReceiptKey = @cReceiptKey
-               AND ToID = @cTOID
-
-            EXEC RDT.rdt_BuiltPrintJob
-               @nMobile,
-               @cStorer,
-               'PostRecv',       -- ReportType
-               'PRINT_PostRecv', -- PrintJobName
-               @cDataWindow,
-               @cPrinter,
-               @cTargetDB,
-               @cLangCode,
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT,
-               @cReceiptKey,
-               @cReceiptLineNumber,
-               @cReceiptLineNumber,
-               @cToID -- (ChewKP05)
-         END
-
-         -- Print pallet label
-         IF @cReporType = 'PalletLBL'
-            EXEC RDT.rdt_BuiltPrintJob
-               @nMobile,
-               @cStorer,
-               'PalletLBL',       -- ReportType
-               'PRINT_PalletLBL', -- PrintJobName
-               @cDataWindow,
-               @cPrinter,
-               @cTargetDB,
-               @cLangCode,
-               @nErrNo  OUTPUT,
-               @cErrMsg OUTPUT,
-               @cReceiptKey,
-               @cToID
       END
 
       -- Close pallet
@@ -7338,6 +7441,7 @@ BEGIN
       V_String44   = @cExtScnSP,
       V_String45   = @cEnableAllLottables,
       V_String46   = @cLottableCode,
+      V_String47   = @cEnableRdtPrint,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

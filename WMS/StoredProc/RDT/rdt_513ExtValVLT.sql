@@ -12,6 +12,9 @@ GO
 /* 21/03/2024   1.0   PPA374   Check that LPN will NOT breach max pallet */
 /* 15/07/2024   1.1   PPA374   Check pick, PA AND replen                 */
 /* 18/10/2024   1.2   PPA374   Adding checks for shelf AND cons          */
+/* 28/10/2024   1.3.0 WSE016   UWP-26437                                 */
+/* 27/07/2026   1.4   PPA374   Updating duplicate val to allow some locs */
+/* 30/07/2026   1.5   PPA374   Adding validation control for shelving    */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_513ExtValVLT] (
@@ -163,10 +166,26 @@ BEGIN
             (SELECT 1 FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE id = @cToID AND (qty > 0 OR PendingMoveIN > 0) AND id <> '' AND StorerKey = @cStorerKey 
             AND ((loc <> @cToLoc AND NOT EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE @cToLoc = loc AND Facility = @cFacility AND LoseId = 1 AND LocationType IN ('PICK','CASE'))) 
             OR sku <> @cSKU) AND (SELECT SUM(qty) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE ID = @cToID AND SKU = @cSKU AND StorerKey = @cStorerKey) <> @nQTY)
+			
+		 BEGIN
+		    IF NOT EXISTS
+		    (
+			    SELECT 1 
+			    FROM dbo.LOC WITH (NOLOCK) 
+			    WHERE loc = @cToLoc 
+			       AND Facility = @cFacility 
+				   AND EXISTS (SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQMBSVAL' AND CODE = LocationType AND SHORT = 1)
+		    )
+		    OR 
+		    (
+			   (SELECT ISNULL(SUM(qty), 0) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE ID = @cFromID AND SKU = @cSKU AND StorerKey = @cStorerKey) <> @nQTY
+			   AND @cFromID = @cToID
+		    )
          BEGIN
-            SET @nErrNo = 217906
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateID
-         END
+               SET @nErrNo = 217906
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateID
+            END
+	     END
             
          --If target LPN ID is NOT blank AND target location is NOT pick face AND lot on the target LPN of the SKU that is moved is different, than move
          --is NOT allowed to avoid creating LPNs with multiple lots on it.
@@ -206,6 +225,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218016
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Not SHLV storage loc'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Shelf SKU should NOT be moved to a shelf location NOT assigned to that SKU
@@ -215,6 +241,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218017
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT set for loc'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Non-shelf SKU should NOT be moved to shelf location
@@ -223,6 +256,13 @@ BEGIN
          BEGIN
             SET @nErrNo = 218018
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'SKU NOT shelf type'
+			BEGIN --V1.5 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			END
          END
 
          --Consumable location
@@ -241,7 +281,7 @@ BEGIN
       END
    END
 END
-
+	
 GO
 SET QUOTED_IDENTIFIER OFF
 GO

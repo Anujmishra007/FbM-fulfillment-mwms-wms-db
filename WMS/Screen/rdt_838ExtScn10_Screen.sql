@@ -1,0 +1,36 @@
+-- 6971
+DELETE rdt.RDTScn WHERE Scn = 6971 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6971, 'ENG'
+   ,@cLine01 = 'CartonType Suggested:'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = 'CartonType Scanned:'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = ''
+   ,@cLine06 = 'Confirm The Change?'
+   ,@cLine07 = '1 = YES'
+   ,@cLine08 = '9 = GO BACK'
+   ,@cLine09 = 'Option:%05i03^DT:INT'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["6","7","8"]}'
+   ,@nFunc = 838
+
+--FCR-14763 Add B2C Single logic
+-- 6919 = SKU QTY screen
+DELETE rdt.RDTScn WHERE Scn = 6919 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6919, 'ENG'
+   ,@cLine01 = 'Label No:'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = 'Scanned SKU/UPC:'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%20d04'
+   ,@cLine07 = 'RemainQty: %05d05'
+   ,@cLine08 = ''
+   ,@cLine09 = 'SKU/UPC:'
+   ,@cLine10 = '%2000iV_Barcode'
+   ,@cLine11 = '%07d11 %05d12   %05d13'
+   ,@cLine12 = 'QTY: %07i14^DT:INT %07i08^DT:INT'
+   ,@cLine13 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7"],"2":["9","10","11","12"]}'
+   ,@nFunc = 838

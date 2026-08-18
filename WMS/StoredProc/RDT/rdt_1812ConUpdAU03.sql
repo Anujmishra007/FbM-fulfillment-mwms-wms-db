@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date         Author    Ver.  Purposes                                */
 /* 2026-04-09   NYE018    1.0   FCR-11492 Created                       */
+/* 2026-07-03   NYE018    1.1   FCR-13937 use QC validation also        */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ConUpdAU03]
@@ -111,6 +112,61 @@ BEGIN
    FROM dbo.PackHeader WITH (NOLOCK)
    WHERE OrderKey = @cOrderKey
 
+   -- Get Orders.UserDefine01 early for NOAUTO check
+   DECLARE @cOrderUserDefine01Early NVARCHAR(30) = ''
+   IF @cOrderKey <> ''
+      SELECT @cOrderUserDefine01Early = ISNULL(UserDefine01, '')
+      FROM dbo.Orders WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
+
+   -- NOAUTO: Skip PackHeader/PackDetail insertion entirely
+   IF @cOrderUserDefine01Early IN (SELECT DISTINCT code FROM dbo.CODELKUP (NOLOCK)
+      WHERE LISTNAME = 'CASTAUPP' AND LONG = 'NOAUTO' AND STORERKEY = @cStorerkey)
+   BEGIN
+
+      IF @cPickSlipNo = ''
+      BEGIN
+         SELECT TOP 1 @cPickSlipNo = PickHeaderKey
+         FROM dbo.PICKHEADER WITH (NOLOCK)
+         WHERE OrderKey = @cOrderKey
+      END
+
+      IF @cPickSlipNo = ''
+      BEGIN
+         EXECUTE dbo.nspg_GetKey
+            'PICKSLIP',
+            9,
+            @cPickSlipNo   OUTPUT,
+            @bSuccess      OUTPUT,
+            @nErrNo        OUTPUT,
+            @cErrMsg       OUTPUT
+
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 263602
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetPkSlipFail
+            GOTO Fail
+         END
+
+         SET @cPickSlipNo = 'P' + @cPickSlipNo
+      END
+
+      IF NOT EXISTS (SELECT 1 FROM dbo.PickHeader WITH (NOLOCK) WHERE PickHeaderKey = @cPickSlipNo)
+      BEGIN
+         BEGIN TRY
+            INSERT INTO dbo.PickHeader (PickHeaderKey, OrderKey)
+            VALUES (@cPickSlipNo, @cOrderKey)
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 263609
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPickHdrFail
+            GOTO Fail
+         END CATCH
+        
+      END
+
+      GOTO Quit
+   END
 
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
@@ -163,6 +219,7 @@ BEGIN
      - If ORDERS.UserDefine01 = 'Specialised' and SKU.PickCode = 'CS Only': Create PACKDETAIL per case
    ***********************************************************************************************/
    DECLARE @cOrderUserDefine01  NVARCHAR(30) = ''
+   DECLARE @cOrderUserDefine03  NVARCHAR(30) = ''
    DECLARE @cPickCode           NVARCHAR(10) = ''
    DECLARE @nSpecCaseCnt        INT = 0
    DECLARE @fSKULength          FLOAT = 0
@@ -193,9 +250,10 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- Get Orders.UserDefine01
+   -- Get Orders.UserDefine01 and UserDefine03
    IF @cOrderKey <> ''
-      SELECT @cOrderUserDefine01 = ISNULL(UserDefine01, '')
+      SELECT @cOrderUserDefine01 = ISNULL(UserDefine01, ''),
+             @cOrderUserDefine03 = ISNULL(UserDefine03, '')
       FROM dbo.Orders WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
 
@@ -236,8 +294,8 @@ BEGIN
         AND Code = '3'
         AND StorerKey = @cStorerKey
 
-      -- Scenario 1: Specialised + CS or EA - Split each unit
-      IF @cPickCode = 'CS or EA'
+      -- Scenario 1+3: Specialised + CS or EA, or QC (any PickCode) - Split each unit into unique LabelNo
+      IF (@cPickCode = 'CS or EA' AND @cOrderUserDefine03 <> 'QC') OR (@cOrderUserDefine03 = 'QC')
       BEGIN
          SET @nNumRecords = @nQTY -- Create one record per unit
          SET @cSpecCartonType = 'EACH'
@@ -360,8 +418,8 @@ BEGIN
          -- Skip to Pack Confirm for Specialised orders
          GOTO PACKCFM
       END
-      -- Scenario 2: Specialised + CS Only - Split by case count
-      ELSE IF @cPickCode = 'CS Only'
+      -- Scenario 2: Specialised + CS Only + NOT QC - Split by case count
+      ELSE IF @cPickCode = 'CS Only' AND @cOrderUserDefine03 <> 'QC'
       BEGIN
          -- Calculate number of cases (round up if partial case)
          IF @nSpecCaseCnt > 0
@@ -500,53 +558,109 @@ BEGIN
          -- Skip to Pack Confirm for Specialised orders
          GOTO PACKCFM
       END
+      -- Scenario 3: AUTO + QC - Ignore SKU.PickCode, pack each unit into unique LabelNo
+      -- ELSE IF @cOrderUserDefine03 = 'QC'
+      -- BEGIN
+      --    SET @nNumRecords = @nQTY -- Create one record per unit regardless of PickCode
+      --    SET @cSpecCartonType = 'EACH'
+
+      --    SET @nLoopCnt = 1
+      --    WHILE @nLoopCnt <= @nNumRecords
+      --    BEGIN
+      --       SET @nSpecCartonNo = @nMaxCartonNo + @nLoopCnt
+
+      --       -- Generate new LabelNo
+      --       EXEC isp_GenUCCLabelNo
+      --          @cStorerKey,
+      --          @cSpecLabelNo   OUTPUT,
+      --          @bSuccess       OUTPUT,
+      --          @nErrNo         OUTPUT,
+      --          @cErrMsg        OUTPUT
+      --       IF @nErrNo <> 0
+      --          GOTO RollBackTran
+
+      --       -- Insert PACKDETAIL with Qty = 1
+      --       BEGIN TRY
+      --          INSERT INTO PACKDETAIL (
+      --             PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty,
+      --             DropID, AddWho, AddDate, EditWho, EditDate
+      --          )
+      --          VALUES (
+      --             @cPickSlipNo, @nSpecCartonNo, @cSpecLabelNo, '00001', @cStorerKey, @cSKU, 1,
+      --             @cDropID, @cUserName, GETDATE(), @cUserName, GETDATE()
+      --          )
+      --       END TRY
+      --       BEGIN CATCH
+      --          SET @nErrNo = 263626
+      --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Insert PackDetail Failed (QC)
+      --          GOTO RollBackTran
+      --       END CATCH
+
+      --       -- Update or Insert PACKINFO with SKU dimensions
+      --       BEGIN TRY
+      --          UPDATE PACKINFO
+      --          SET [Length] = @fSKULength,
+      --              Width = @fSKUWidth,
+      --              Height = @fSKUHeight,
+      --              CartonType = @cSpecCartonType,
+      --              Weight = @fSKUStdGrossWgt * 1,
+      --              QTY = 1,
+      --              EditWho = @cUserName,
+      --              EditDate = GETDATE()
+      --          WHERE PickSlipNo = @cPickSlipNo
+      --            AND CartonNo = @nSpecCartonNo
+
+      --          -- If PACKINFO doesn't exist, insert it
+      --          IF @@ROWCOUNT = 0
+      --          BEGIN
+      --             INSERT INTO PACKINFO (
+      --                PickSlipNo, CartonNo, [Length], Width, Height, CartonType, Weight, QTY,
+      --                AddWho, AddDate, EditWho, EditDate
+      --             )
+      --             VALUES (
+      --                @cPickSlipNo, @nSpecCartonNo, @fSKULength, @fSKUWidth, @fSKUHeight, @cSpecCartonType,
+      --                @fSKUStdGrossWgt * 1, 1,
+      --                @cUserName, GETDATE(), @cUserName, GETDATE()
+      --             )
+      --          END
+      --       END TRY
+      --       BEGIN CATCH
+      --          SET @nErrNo = 263627
+      --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PackInfo Failed (QC)
+      --          GOTO RollBackTran
+      --       END CATCH
+
+      --       -- Print SSCC Label for each PACKDETAIL.LabelNo
+      --       IF @cSpecReportType <> '' AND ISNULL(@cLabelPrinter, '') <> ''
+      --       BEGIN
+      --          DECLARE @tSSCCLabelQC AS VariableTable
+      --          DELETE FROM @tSSCCLabelQC
+
+      --          INSERT INTO @tSSCCLabelQC (Variable, Value) VALUES
+      --             ('@cStorerKey', @cStorerKey),
+      --             ('@cLabelNo', @cSpecLabelNo)
+
+      --          EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+      --             @cSpecReportType,
+      --             @tSSCCLabelQC,
+      --             'rdt_1812ConUpdAU03',
+      --             @nErrNo OUTPUT,
+      --             @cErrMsg OUTPUT
+      --          IF @nErrNo <> 0
+      --             GOTO RollBackTran
+      --       END
+
+      --       SET @nLoopCnt = @nLoopCnt + 1
+      --    END
+
+      --    -- Set @nCartonNo for carrier interface call at PACKCFM
+      --    SET @nCartonNo = @nSpecCartonNo
+
+      --    -- Skip to Pack Confirm for QC orders
+      --    GOTO PACKCFM
+      -- END
    END
-   -- Scenario 3: NOT Specialised (NOAUTO) - Print label by TaskDetailKey only
-   ELSE IF @cOrderUserDefine01 IN (SELECT DISTINCT code FROM
-      dbo.CODELKUP (NOLOCK) WHERE LISTNAME = 'CASTAUPP' AND LONG = 'NOAUTO' AND
-      STORERKEY = @cStorerkey
-   )
-   BEGIN
-      -- Get report type from CODELKUP Code = 4 (for TaskDetailKey printing)
-      DECLARE @cReportType4 NVARCHAR(10) = ''
-      SELECT @cReportType4 = ISNULL(Code2, '')
-      FROM CODELKUP WITH (NOLOCK)
-      WHERE ListName = 'RDTLBLRPT'
-        AND Code = '4'
-        AND StorerKey = @cStorerKey
-
-      -- Print label by TaskDetailKey
-      IF @cReportType4 <> '' AND ISNULL(@cLabelPrinter, '') <> ''
-      BEGIN
-         DECLARE @tTaskLabel AS VariableTable
-         DELETE FROM @tTaskLabel
-
-         INSERT INTO @tTaskLabel (Variable, Value) VALUES
-            ('@cStorerKey', @cStorerKey),
-            ('@cTaskDetailKey', @cTaskdetailKey)
-
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            @cReportType4,
-            @tTaskLabel,
-            'rdt_1812ConUpdAU03',
-            @nErrNo OUTPUT,
-            @cErrMsg OUTPUT
-      END
-
-      -- Set @nCartonNo for carrier interface call at PACKCFM (use 0 for NOAUTO path)
-      SET @nCartonNo = 0
-
-      -- Skip to Pack Confirm for non-Specialised orders
-      IF EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo) 
-      BEGIN
-         GOTO PACKCFM
-      END
-      ELSE
-      BEGIN
-         GOTO Quit
-      END
-   END
-   -- End of Specialised Orders Handling
+   -- End of Specialised Orders Handling (NOAUTO handled earlier - exits before PackHeader insertion)
 
    DECLARE @cLabelLine  NVARCHAR(5) = ''
    DECLARE @cNewLine    NVARCHAR(1) = 'N'

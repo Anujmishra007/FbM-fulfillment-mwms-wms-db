@@ -20,6 +20,7 @@
 /* 07-MAY-2025    Alex01   #UWP-33988 Bug fixes                         */
 /* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
+/* 23-Jun-2026    Sean02    FCR-12417 Display UPC instead of SKU        */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_PackConfirm](
      @b_Debug           INT            = 0
@@ -406,7 +407,9 @@ BEGIN
          END
 
          EXEC [API].[isp_ECOMP_GetMultiPackTaskResponse] 
-           @c_PickSlipNo            = @c_NewPickSlipNo
+           @c_StorerKey             = @c_StorerKey   --Sean02
+         , @c_Facility              = @c_Facility    --Sean02
+         , @c_PickSlipNo            = @c_NewPickSlipNo
          , @c_TaskBatchID           = @c_PH_TaskBatchID 
          , @c_OrderKey              = @c_OrderKey
          , @c_DropID                = @c_DropID

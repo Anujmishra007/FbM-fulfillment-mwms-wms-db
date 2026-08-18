@@ -15,6 +15,7 @@ GO
 /* Date        Rev     Author   Purposes                                     */
 /* 2024-10-25  1.0     ShaoAn   FCR-759-1001 saved first 7 char to ID.UDF01  */
 /* 2024-10-25  1.0.1   ShaoAn   Add check before update udf01                */
+/* 2026-08-14  1.1     Dennis   UWP-63442  Reset scanned UCC status 5 -> 1   */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_514ExtUpdSP03] (
@@ -55,13 +56,33 @@ BEGIN
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
+         -- Reset scanned UCCs with status 5 back to 1
+         BEGIN TRY
+            UPDATE U WITH (ROWLOCK)
+            SET    Status   = '1',
+                   EditWho  = SUSER_SNAME(),
+                   EditDate = GETDATE()
+            FROM   dbo.UCC U
+            INNER JOIN rdt.rdtMoveUCCLog L WITH (NOLOCK)
+                ON  L.UCCNo     = U.UCCNo
+                AND L.StorerKey = @cStorerKey
+                AND L.AddWho    = SUSER_SNAME()
+            WHERE  U.StorerKey = @cStorerKey
+              AND  U.Status    = '5'
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 278301
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
+            GOTO Quit
+         END CATCH
+
          IF EXISTS(SELECT 1 FROM dbo.loc where LoseId = '1' AND LOC = @cToLoc)
          BEGIN
             GOTO Quit
          END
 
          SET @cUDF01 = ISNULL(@cUDF01, '')
-         IF @cUDF01 <> '' 
+         IF @cUDF01 <> ''
             UPDATE dbo.ID WITH (ROWLOCK) SET
                   UserDefine01 = @cUDF01
             WHERE Id = @cToID

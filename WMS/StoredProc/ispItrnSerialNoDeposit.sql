@@ -14,6 +14,9 @@ GO
 /* 2024-08-12 1.1  Wan01       LFWM-4446 - RG[GIT] Serial Number Solution     */
 /*                             - Transfer by Serial Number                    */
 /* 2025-10-03 1.2  NJOW01      FCR-8281 update loc to itrnserialno            */
+/* 2026-07-01 1.3  Wan02       UWP-60476 Prod Issue with same storerkey,sku   */
+/*                             trantype, sourcekey for transfer type and fail */
+/*                             ASN finalization                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispITrnSerialNoDeposit (
@@ -65,9 +68,10 @@ CREATE OR ALTER PROCEDURE dbo.ispITrnSerialNoDeposit (
       SELECT @c_ITrnKey = ITrnKey
       FROM ITrn WITH (NOLOCK)
       WHERE TranType = 'DP'
-         AND StorerKey = @c_StorerKey
-         AND SKU = @c_SKU
-         AND SourceKey = @c_SourceKey
+      AND StorerKey = @c_StorerKey
+      AND SKU = @c_SKU
+      AND SourceKey = @c_SourceKey
+      AND SourceType= @c_SourceType                                                 --(Wan02)
       
       IF @@ROWCOUNT <> 1
       BEGIN
