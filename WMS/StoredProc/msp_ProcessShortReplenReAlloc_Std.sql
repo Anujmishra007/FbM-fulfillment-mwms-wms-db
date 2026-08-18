@@ -58,7 +58,7 @@ BEGIN
          , @c_SQL                      NVARCHAR(MAX) = ''
          , @c_SQLParms                 NVARCHAR(MAX) = ''
          , @c_ReplenType               NVARCHAR(10) = 'R'
-         , @c_ReplenFlag               NVARCHAR(1)  = 'N'
+         , @c_ReplenFlag               NVARCHAR(10) = 'N'
          , @c_Zone02                   NVARCHAR(10) = 'ALL'
          , @c_Zone03                   NVARCHAR(10) = ''
          , @c_Zone04                   NVARCHAR(10) = ''
@@ -457,21 +457,21 @@ BEGIN
                           + '                                  , @c_Zone12 = @c_Zone12 ' + CHAR(13)
                           + '                                  , @c_StorerKey = @c_Storerkey '  + CHAR(13)
 
-                  IF EXISTS ( SELECT 1
-                             FROM sys.parameters P (NOLOCK)
-                             WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
-                             AND P.name = '@c_ReplenFlag' )
-                  BEGIN
-                     SET @c_SQL = @c_SQL + '                                  , @c_ReplenFlag = @c_ReplenFlag '
-                  END
+               IF EXISTS ( SELECT 1
+                          FROM sys.parameters P (NOLOCK)
+                          WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
+                          AND P.name = '@c_ReplenFlag' )
+               BEGIN
+                  SET @c_SQL = @c_SQL + '                                  , @c_ReplenFlag = @c_ReplenFlag '
+               END
 
-                  IF EXISTS ( SELECT 1
-                             FROM sys.parameters P (NOLOCK)
-                             WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
-                             AND P.name = '@c_ReplenType' )
-                  BEGIN 
-                     SET @c_SQL = @c_SQL + '                                  , @c_ReplenType = @c_ReplenType '
-                  END
+               IF EXISTS ( SELECT 1
+                          FROM sys.parameters P (NOLOCK)
+                          WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
+                          AND P.name = '@c_ReplenType' )
+               BEGIN 
+                  SET @c_SQL = @c_SQL + '                                  , @c_ReplenType = @c_ReplenType '
+               END
                
                SET @c_SQLParms = '   @c_Storerkey     NVARCHAR(15) ' + CHAR(13)
                                + ' , @c_Facility      NVARCHAR(5)  ' + CHAR(13)
@@ -486,7 +486,7 @@ BEGIN
                                + ' , @c_Zone10        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_Zone11        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_Zone12        NVARCHAR(10) ' + CHAR(13)
-                               + ' , @c_ReplenFlag    NVARCHAR(1)  ' + CHAR(13)
+                               + ' , @c_ReplenFlag    NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_ReplenType    NVARCHAR(10) '
                BEGIN TRY
                   EXEC sp_ExecuteSql @c_SQL
