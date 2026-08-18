@@ -260,9 +260,10 @@ BEGIN
                                   THEN (QTYReplen - @nTaskQty)  
                                   ELSE 0  
                                END  
-            WHERE  LOT = @cLOT  
+            WHERE  LOT      = @cLOT  
               AND StorerKey = @cStorerKey  
-              AND  LOC = @cFromLOC  
+              AND  LOC      = @cFromLOC  
+              AND  ID       = @cFromID
          END TRY  
          BEGIN CATCH  
             SET @nErrNo = 276354  
