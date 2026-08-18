@@ -921,7 +921,7 @@ BEGIN
          END TRY
          BEGIN CATCH
             SET @nErrNo  = 262666
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UpdPackDtlDropIDFail
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --ArcPackDtlDropIDFail
             GOTO RollBackTran
          END CATCH
       END
