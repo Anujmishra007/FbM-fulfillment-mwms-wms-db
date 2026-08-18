@@ -10,7 +10,7 @@ GO
 /*                                                                      */
 /* Purpose: Generic SP for PreFinalizeADJSP                             */
 /*                                                                      */
-/* Called By: ispPreFinalizeADJWrapper                                  */
+/* Called By: isp_FinalizeADJ -> ispPreFinalizeADJWrapper               */
 /*                                                                      */
 /* PVCS Version: 1.0                                                    */
 /*                                                                      */
@@ -26,7 +26,7 @@ CREATE OR ALTER PROC ispPRADJGP
   @c_AdjustmentKey  NVARCHAR(10)
 , @b_Success        INT = 1  OUTPUT
 , @n_err            INT = 0  OUTPUT
-, @c_errmsg         NVARCHAR(215) = '' OUTPUT
+, @c_errmsg         NVARCHAR(255) = '' OUTPUT
 AS
 BEGIN
 /* STORERCONFIG
@@ -39,19 +39,21 @@ BEGIN
    .Code2     =  'ispPRADJGP'
    .Storerkey =  <Storerkey>
 
-   Code          Description       Short(Enable)   Long(Fieldname)   Notes(SQL)
-   SEL_JOIN      Select JOIN       Y/N                               <Join Clause>
-   SEL_WHERE     Select WHERE      Y/N                               <Where Clause>
-   SEL_SORT      Select ORDER BY   Y/N                               <Order By Clause>
-   HDR_JOIN      Header JOIN       Y/N                               <Join Clause>
-   HDR_WHERE     Header WHERE      Y/N                               <Where Clause>
-   HDR_SORT      Header ORDER BY   Y/N                               <Order By Clause>
-   DTL_JOIN      Detail JOIN       Y/N                               <Join Clause>
-   DTL_WHERE     Detail WHERE      Y/N                               <Where Clause>
-   DTL_SORT      Detail ORDER BY   Y/N                               <Order By Clause>
-   UPD_HDR_999   Update Header     Y/N             Field Name        <SQL Expresssion>
-   UPD_DTL_999   Update Detail     Y/N             Field Name        <SQL Expresssion>
-   UPD_VAR_999   Update Variable   Y/N             Var Name          <SQL Expresssion>
+   Code           Description          Short(Enable)   Long(Fieldname)   Notes(SQL)
+   SEL_JOIN       Select JOIN          Y/N                               <Join Clause>
+   SEL_WHERE      Select WHERE         Y/N                               <Where Clause>
+   SEL_SORT       Select ORDER BY      Y/N                               <Order By Clause>
+   HDR_JOIN       Header JOIN          Y/N                               <Join Clause>
+   HDR_WHERE      Header WHERE         Y/N                               <Where Clause>
+   HDR_SORT       Header ORDER BY      Y/N                               <Order By Clause>
+   DTL_JOIN       Detail JOIN          Y/N                               <Join Clause>
+   DTL_WHERE      Detail WHERE         Y/N                               <Where Clause>
+   DTL_SORT       Detail ORDER BY      Y/N                               <Order By Clause>
+   UPD_HDR_999    Update Header        Y/N             Field Name        <SQL Expresssion>
+   UPD_DTL_999    Update Detail        Y/N             Field Name        <SQL Expresssion>
+   UPD_VAR_999    Update Variable      Y/N             Var Name          <SQL Expresssion>
+   USE_TEMPTABLE  Use Temp Table #tVar Y/N             Y/N
+   Debug          Debug mode           Y/N
 
    (For Code UPD_XXX_999 means allow mulit records for mulit Fields update)
 */
@@ -78,6 +80,7 @@ BEGIN
          , @c_DTL_JOIN         NVARCHAR(MAX) = ''
          , @c_DTL_WHERE        NVARCHAR(MAX) = ''
          , @c_DTL_SORT         NVARCHAR(MAX) = ''
+         , @c_Use_TempTable    NVARCHAR(10)  = ''
          , @c_ListName         NVARCHAR(10)  = 'PREADJCFG'
          , @c_Code             NVARCHAR(50)
          , @c_Long             NVARCHAR(500)
@@ -206,7 +209,7 @@ BEGIN
 
    SELECT @c_x_Storerkey = Storerkey
         , @c_x_Facility  = Facility
-   FROM ADJUSTMENT (NOLOCK)
+   FROM dbo.ADJUSTMENT WITH(NOLOCK)
    WHERE AdjustmentKey = @c_AdjustmentKey
 
    -- Extended PreFinalizeADJSP
@@ -257,16 +260,17 @@ BEGIN
       GOTO STEP_2
 
    -- Get PREADJCFG setup
-   SELECT @c_SEL_JOIN  = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_JOIN'  AND Short = 'Y' THEN Notes END)),'')
-        , @c_SEL_WHERE = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_WHERE' AND Short = 'Y' THEN Notes END)),'')
-        , @c_SEL_SORT  = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_SORT'  AND Short = 'Y' THEN Notes END)),'')
-        , @c_HDR_JOIN  = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_JOIN'  AND Short = 'Y' THEN Notes END)),'')
-        , @c_HDR_WHERE = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_WHERE' AND Short = 'Y' THEN Notes END)),'')
-        , @c_HDR_SORT  = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_SORT'  AND Short = 'Y' THEN Notes END)),'')
-        , @c_DTL_JOIN  = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_JOIN'  AND Short = 'Y' THEN Notes END)),'')
-        , @c_DTL_WHERE = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_WHERE' AND Short = 'Y' THEN Notes END)),'')
-        , @c_DTL_SORT  = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_SORT'  AND Short = 'Y' THEN Notes END)),'')
-        , @b_debug     = ISNULL(MAX(CASE WHEN Code = 'Debug' AND Short IN ('1','Y') THEN 1 END),0)
+   SELECT @c_SEL_JOIN      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_JOIN'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_SEL_WHERE     = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_WHERE'     AND Short = 'Y' THEN Notes END)),'')
+        , @c_SEL_SORT      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SEL_SORT'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_HDR_JOIN      = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_JOIN'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_HDR_WHERE     = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_WHERE'     AND Short = 'Y' THEN Notes END)),'')
+        , @c_HDR_SORT      = ISNULL(TRIM(MAX(CASE WHEN Code = 'HDR_SORT'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_DTL_JOIN      = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_JOIN'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_DTL_WHERE     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_WHERE'     AND Short = 'Y' THEN Notes END)),'')
+        , @c_DTL_SORT      = ISNULL(TRIM(MAX(CASE WHEN Code = 'DTL_SORT'      AND Short = 'Y' THEN Notes END)),'')
+        , @c_Use_TempTable = ISNULL(TRIM(MAX(CASE WHEN Code = 'USE_TEMPTABLE' AND Short = 'Y' THEN Long  END)),'')
+        , @b_debug         = ISNULL(MAX(CASE WHEN Code = 'Debug' AND Short IN ('1','Y') THEN 1 END),0)
      FROM dbo.CODELKUP WITH(NOLOCK)
     WHERE ListName = @c_ListName
       AND Code2 = @c_SP_Name
@@ -290,6 +294,17 @@ BEGIN
     , AdjustmentLineNumber NVARCHAR(5)  NOT NULL DEFAULT('')
    )
 
+   IF ISNULL(@c_Use_TempTable,'') IN ('1', 'Y')
+   BEGIN
+      IF OBJECT_ID('tempdb..#tVar') IS NOT NULL
+         DROP TABLE #tVar
+
+      CREATE TABLE #tVar (
+         [Var]       NVARCHAR(50)  NOT NULL PRIMARY KEY
+       , [Value]     NVARCHAR(MAX) NULL
+      )
+   END
+
    ----------------------------------------------
    -- Select Adjustment Detail into Temp Table --
    ----------------------------------------------
@@ -297,8 +312,8 @@ BEGIN
       N'INSERT INTO #TMP_ADJ_LINE (AdjustmentKey, AdjustmentLineNumber)'
      +' SELECT ADJUSTMENTDETAIL.AdjustmentKey'
      +      ', ADJUSTMENTDETAIL.AdjustmentLineNumber'
-     +' FROM ADJUSTMENT WITH(NOLOCK)'
-     +' JOIN ADJUSTMENTDETAIL WITH(NOLOCK) ON ADJUSTMENT.AdjustmentKey=ADJUSTMENTDETAIL.AdjustmentKey'
+     +' FROM dbo.ADJUSTMENT WITH(NOLOCK)'
+     +' JOIN dbo.ADJUSTMENTDETAIL WITH(NOLOCK) ON ADJUSTMENT.AdjustmentKey=ADJUSTMENTDETAIL.AdjustmentKey'
 
    IF ISNULL(@c_SEL_JOIN,'') <> ''
       SET @c_SQL = @c_SQL + ' ' + @c_SEL_JOIN
@@ -482,13 +497,13 @@ BEGIN
      +', @H_Temp08         = <<@H_Temp08>>'
      +', @H_Temp09         = <<@H_Temp09>>'
      +', @H_Temp10         = <<@H_Temp10>>'
-     +' FROM ADJUSTMENT WITH(NOLOCK)'
+     +' FROM dbo.ADJUSTMENT WITH(NOLOCK)'
 
    IF ISNULL(@c_HDR_JOIN,'') <> ''
       SET @c_SQL = @c_SQL + ' ' + @c_HDR_JOIN
 
    SET @c_SQL = @c_SQL
-     + ' WHERE ADJUSTMENT.AdjustmentKey = ''' + ISNULL(REPLACE(@c_AdjustmentKey,'''',''''''),'') + ''''
+     + ' WHERE ADJUSTMENT.AdjustmentKey = N''' + ISNULL(REPLACE(@c_AdjustmentKey,'''',''''''),'') + ''''
 
    IF ISNULL(@c_HDR_WHERE,'') <> ''
       SET @c_SQL = @c_SQL
@@ -657,14 +672,14 @@ BEGIN
         +', @D_Temp08         = <<@D_Temp08>>'
         +', @D_Temp09         = <<@D_Temp09>>'
         +', @D_Temp10         = <<@D_Temp10>>'
-        +' FROM ADJUSTMENTDETAIL WITH(NOLOCK)'
+        +' FROM dbo.ADJUSTMENTDETAIL WITH(NOLOCK)'
 
       IF ISNULL(@c_DTL_JOIN,'') <> ''
          SET @c_SQL = @c_SQL + ' ' + @c_DTL_JOIN
 
       SET @c_SQL = @c_SQL
-        + ' WHERE ADJUSTMENTDETAIL.AdjustmentKey = ''' + ISNULL(REPLACE(@c_AdjKey,'''',''''''),'') + ''''
-        +   ' AND ADJUSTMENTDETAIL.AdjustmentLineNumber = ''' + ISNULL(REPLACE(@c_AdjLineNumber,'''',''''''),'') + ''''
+        + ' WHERE ADJUSTMENTDETAIL.AdjustmentKey = N''' + ISNULL(REPLACE(@c_AdjKey,'''',''''''),'') + ''''
+        +   ' AND ADJUSTMENTDETAIL.AdjustmentLineNumber = N''' + ISNULL(REPLACE(@c_AdjLineNumber,'''',''''''),'') + ''''
 
       IF ISNULL(@c_DTL_WHERE,'') <> ''
          SET @c_SQL = @c_SQL
@@ -863,7 +878,6 @@ BEGIN
            OR LEFT(Code,7) = 'UPD_VAR' AND LEFT(LTRIM(Long),3)='@D_')
          AND Short = 'Y'
          AND ISNULL(Long,'') <> ''
-         AND Long NOT LIKE '%@%'
       ORDER BY Code
 
       OPEN CUR_UPDATE_DET
@@ -885,7 +899,7 @@ BEGIN
          IF @c_DTL_UPD_Fields LIKE '%,'+@c_Long+',%'
          BEGIN
             SET @c_SQL = @c_SQL + ',' + @c_Long + '=@D_' + @c_Long
-            SET @c_SQL2 = @c_SQL2 + IIF(@c_SQL2<>'',' OR ','') + 'ISNULL(' + @c_Long + ','''')<>@D_' + @c_Long
+            SET @c_SQL2 = @c_SQL2 + IIF(@c_SQL2<>'',' OR ','') + 'ISNULL(' + @c_Long + ','''')<>ISNULL(@D_' + @c_Long +','''')'
          END
       END
       CLOSE CUR_UPDATE_DET
@@ -893,10 +907,10 @@ BEGIN
 
       IF ISNULL(@c_SQL,'')<>'' AND ISNULL(@c_SQL2,'')<>''
       BEGIN
-         SET @c_SQL = 'UPDATE ADJUSTMENTDETAIL WITH(ROWLOCK)'
+         SET @c_SQL = 'UPDATE dbo.ADJUSTMENTDETAIL WITH(ROWLOCK)'
            +' SET Trafficcop=NULL' + @c_SQL
-           +' WHERE AdjustmentKey=''' + ISNULL(REPLACE(@c_AdjKey,'''',''''''),'') + ''''
-           +' AND AdjustmentLineNumber=''' + ISNULL(REPLACE(@c_AdjLineNumber,'''',''''''),'') + ''''
+           +' WHERE AdjustmentKey = N''' + ISNULL(REPLACE(@c_AdjKey,'''',''''''),'') + ''''
+           +' AND AdjustmentLineNumber = N''' + ISNULL(REPLACE(@c_AdjLineNumber,'''',''''''),'') + ''''
            +' AND (' + @c_SQL2 + ')'
 
          IF @b_debug = 1
@@ -962,7 +976,7 @@ BEGIN
       IF @c_HDR_UPD_Fields LIKE '%,'+@c_Long+',%'
       BEGIN
          SET @c_SQL = @c_SQL + ',' + @c_Long + '=@H_' + @c_Long
-         SET @c_SQL2 = @c_SQL2 + IIF(@c_SQL2<>'',' OR ','') + 'ISNULL(' + @c_Long + ','''')<>@H_' + @c_Long
+         SET @c_SQL2 = @c_SQL2 + IIF(@c_SQL2<>'',' OR ','') + 'ISNULL(' + @c_Long + ','''')<>ISNULL(@H_' + @c_Long +','''')'
       END
    END
    CLOSE CUR_UPDATE_HDR
@@ -970,9 +984,9 @@ BEGIN
 
    IF ISNULL(@c_SQL,'')<>'' AND ISNULL(@c_SQL2,'')<>''
    BEGIN
-      SET @c_SQL = 'UPDATE ADJUSTMENT WITH(ROWLOCK)'
+      SET @c_SQL = 'UPDATE dbo.ADJUSTMENT WITH(ROWLOCK)'
         +' SET Trafficcop=NULL' + @c_SQL
-        +' WHERE AdjustmentKey=''' + ISNULL(REPLACE(@c_AdjustmentKey,'''',''''''),'') + ''''
+        +' WHERE AdjustmentKey = N''' + ISNULL(REPLACE(@c_AdjustmentKey,'''',''''''),'') + ''''
         +' AND (' + @c_SQL2 + ')'
 
       IF @b_debug = 1
