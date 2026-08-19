@@ -31,6 +31,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2026-08-07  wan      1.0   FCR-14639. Fix Merge..update..delete      */
+/*                            UWP-64396. Remove accmulated LxWxH against*/
+/*                            Loc LxWxH checking                        */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL03
@@ -319,7 +321,6 @@ BEGIN
       SET @n_Qty_ID     = 0
       SET @n_Length_P   = 0.00
       SET @n_Width_P    = 0.00
-      SET @n_Height_P   = 0.00
       SET @n_Height_P   = 0.00
       SET @n_GrossWgt_P = 0.00
 
@@ -637,9 +638,6 @@ BEGIN
          AND   l.Height >= @n_height_P
          AND   l.WeightCapacity >= @n_GrossWgt_P
          AND   l.MaxPallet >= 1
-         AND   l.[Length] >= pl.[Length] + @n_Length_P
-         AND   l.Width  >= pl.Width + @n_Width_P
-         AND   l.Height >= pl.Height+ @n_height_P
          AND   l.WeightCapacity >= pl.GrossWgt + @n_GrossWgt_P
          AND   l.MaxPallet >= pl.NoOfLPN + 1
          ORDER BY lpn.SortIdx
