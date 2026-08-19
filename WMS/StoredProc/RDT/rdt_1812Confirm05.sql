@@ -12,9 +12,10 @@ GO
 /*                                                                                  */
 /* Modifications log:                                                               */
 /*                                                                                  */
-/* Date        Rev  Author    Purposes                                              */
-/* 2026-08-05  1.0  JACKC     FCR-14961 Skip confirm if status = H, ignore FCPLog.  */
-/*                            Delete FCPLog after confirm (from base confirmsp)     */
+/* Date        Rev   Author    Purposes                                             */
+/* 2026-08-05  1.0   JACKC     FCR-14961 Skip confirm if status = H, ignore FCPLog. */
+/*                             Delete FCPLog after confirm (from base confirmsp)    */
+/* 2026-08-19  1.0.1 JACKC     FCR-14961 Update DropID logic for FP pick method.    */
 /************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812Confirm05] (
@@ -39,7 +40,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
+   
    DECLARE @nTranCount     INT
 
    SET @nTranCount = @@TRANCOUNT
@@ -330,7 +331,7 @@ BEGIN
    BEGIN TRY
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
          Status = '5', -- Picked
-         DropID = @cDropID,
+         DropID = CASE WHEN @cPickMethod = 'FP' THEN @cFromID ELSE @cDropID END,
          ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END,
          QTY = @nQTY,
          SystemQTY = @nSystemQTY,
@@ -369,7 +370,7 @@ BEGIN
       BEGIN TRY
          UPDATE dbo.PickDetail WITH (ROWLOCK) SET
             Status   = @cPickConfirmStatus,
-            DropID   = @cDropID, --V1.0. Always set to input dropid
+            DropID   = CASE WHEN @cPickMethod = 'FP' THEN @cFromID ELSE @cDropID END, --V1.0. Always set to input dropid
             EditWho  = SUSER_SNAME(),
             EditDate = GETDATE()
          WHERE PickDetailKey = @cPickDetailKey
