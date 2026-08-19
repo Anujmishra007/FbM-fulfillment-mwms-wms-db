@@ -92,6 +92,8 @@ BEGIN
          , @n_PalletQty                INT 
          , @c_Wave_UDF01               NVARCHAR(20)   = ''
          , @c_TD_CaseID                NVARCHAR(20)   = ''
+         , @c_TD_OrderKey              NVARCHAR(10)   = ''
+         , @n_OrderCount               INT
 
          , @CUR_RPL                    CURSOR
          , @CUR_PICK                   CURSOR
@@ -253,9 +255,13 @@ BEGIN
          SET @c_TD_Sku = ''
          SET @c_TD_Lot = ''
          SET @c_RPF_ToLoc = ''
+         SET @n_OrderCount = 0
+         SET @c_TD_OrderKey = ''
 
          --Get TOP 1 PickDetail.SKU for ToLOC lookup
-         SELECT TOP 1 @c_Top1Sku = PD.Sku
+         SELECT @c_Top1Sku = MAX(PD.Sku)
+               ,@n_OrderCount = COUNT(DISTINCT PD.OrderKey)
+               ,@c_TD_OrderKey  = MAX(PD.OrderKey)
          FROM #PickDetail_WIP PD
          WHERE PickDetailKey IN (
             SELECT RTRIM([Value]) 
@@ -270,8 +276,9 @@ BEGIN
 
          SET @c_TD_Sku = CASE WHEN @n_SkuCount > 1 THEN '' ELSE @c_Top1Sku END
          SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 THEN '' ELSE @c_Lot END
-         --Find RPF ToLoc
+         SET @c_TD_OrderKey = CASE WHEN @n_OrderCount > 1 THEN '' ELSE @c_TD_OrderKey END
 
+         --Find RPF ToLoc
          --1. Check pickface
          SELECT TOP 1 @c_RPF_ToLoc = SL.Loc
          FROM SKUxLOC SL (NOLOCK)
@@ -382,13 +389,14 @@ BEGIN
              ,@c_Priority              = @c_Priority          
              ,@c_SourceType            = @c_SourceType 
              ,@c_SourceKey             = '' 
+             ,@c_Orderkey              = @c_TD_OrderKey
              ,@c_Wavekey               = @c_Wavekey                   
              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
              ,@c_Groupkey              = ''  
              ,@c_CallSource            = 'WAVE' 
              ,@c_Status                = @c_TaskStatus
              ,@n_QtyReplen             = 0  
-             ,@n_PendingMoveIn         = 0  
+             ,@n_PendingMoveIn         = @n_PalletQty  
              ,@b_Success               = @b_Success   OUTPUT  
              ,@n_Err                   = @n_Err       OUTPUT   
              ,@c_Errmsg                = @c_Errmsg    OUTPUT       
@@ -426,6 +434,7 @@ BEGIN
              ,@c_Priority              = @c_Priority          
              ,@c_SourceType            = @c_SourceType 
              ,@c_SourceKey             = '' 
+             ,@c_Orderkey              = @c_TD_OrderKey
              ,@c_Wavekey               = @c_Wavekey                   
              ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
              ,@c_Groupkey              = ''  
@@ -475,7 +484,7 @@ BEGIN
            , PD.Loc                            AS FromLoc
            , PD.ID                             AS FromID
            , PD.UOM
-           , ISNULL(LA.Lottable11, '')         AS CaseID
+           , CASE WHEN UOM = '2' THEN ISNULL(LA.Lottable11, '') ELSE '' END AS CaseID
            , SUM(PD.Qty)                       AS TotalQty
       FROM #PickDetail_WIP PD
       JOIN ORDERS O (NOLOCK) ON O.OrderKey = PD.OrderKey
@@ -492,7 +501,7 @@ BEGIN
              , PD.Loc
              , PD.ID
              , PD.UOM
-             , ISNULL(LA.Lottable11, '')
+             , CASE WHEN UOM = '2' THEN ISNULL(LA.Lottable11, '') ELSE '' END
 
       OPEN @CUR_PICK
       FETCH NEXT FROM @CUR_PICK INTO @c_PickDetailKeys, @c_Lot, @c_FromLoc, @c_FromID, @c_UOM, @c_Lottable11, @n_Qty
@@ -503,7 +512,9 @@ BEGIN
          SET @c_FCP_ToLOC         = ''
          SET @n_SkuCount = 0
          SET @n_LotCount = 0
+         SET @n_OrderCount = 0
          SET @c_Top1Sku = ''
+         SET @c_TD_OrderKey = ''
 
          -- Find ToLoc for FCP task
          IF @c_OrderGroup = 'KITTING'
@@ -534,30 +545,35 @@ BEGIN
             SELECT @n_Continue = 3
             SELECT @n_Err = 83040
             SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': ToLoc for FCP Tasks is not configured.' 
-                             + RTRIM(@c_Sku) + '. (mspRLWAV15)'
+                             + CASE WHEN @c_OrderGroup = 'Kitting' THEN '(UOM=' + @c_UOM + ')' ELSE '' END
+                             + '. (mspRLWAV15)'
             GOTO QUIT_SP
          END
 
-         --Check if Multi-SKUs in ID.
-         SELECT @n_SkuCount = COUNT(DISTINCT Sku) 
+         --Check if Multi-SKUs in PickDetail.
+         SELECT @n_SkuCount = COUNT(DISTINCT Sku)
                ,@n_LotCount = COUNT(DISTINCT Lot)
-         FROM LOTxLOCxID (NOLOCK) 
-         WHERE ID  = @c_FromID
-         AND   Loc = @c_FromLoc 
-         AND   StorerKey = @c_Storerkey
-
-         SELECT TOP 1 @c_Top1Sku = Sku 
-         FROM #PickDetail_WIP 
+         FROM #PickDetail_WIP WITH (NOLOCK)
+         WHERE WaveKey = @c_WaveKey
+          AND ID  = @c_FromID
+          AND Loc = @c_FromLoc
+          
+         SELECT @c_Top1Sku = MAX(PD.Sku)
+               ,@n_OrderCount = COUNT(DISTINCT PD.OrderKey)
+               ,@c_TD_OrderKey  = MAX(PD.OrderKey)
+         FROM #PickDetail_WIP PD
          WHERE PickDetailKey IN (
-            SELECT RTRIM(value) FROM STRING_SPLIT(@c_PickDetailKeys, ',')
+            SELECT RTRIM([Value]) 
+            FROM STRING_SPLIT(@c_PickDetailKeys, ',')
          )
 
          SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 THEN '' ELSE @c_Lot END
          SET @c_TD_Sku = CASE WHEN @n_SkuCount > 1 THEN '' ELSE @c_Top1Sku END
-         SET @c_TD_CaseID  = CASE WHEN @c_UOM = '2' THEN @c_Lottable11 ELSE '' END
 
+         SET @c_TD_CaseID  = CASE WHEN @c_UOM = '2' THEN @c_Lottable11 ELSE '' END
          SET @c_PickMethod = CASE WHEN @c_UOM = '1' THEN 'FP' ELSE 'PP' END
          SET @c_ToID       = CASE WHEN @c_UOM = '1' THEN @c_FromID ELSE '' END
+         SET @c_TD_OrderKey = CASE WHEN @n_OrderCount > 1 THEN '' ELSE @c_TD_OrderKey END
 
          EXEC isp_InsertTaskDetail 
               @c_TaskDetailKey = @c_FCP_TaskDetailKey OUTPUT
@@ -576,6 +592,7 @@ BEGIN
              ,@c_PickMethod    = @c_PickMethod
              ,@c_Priority      = @c_Priority
              ,@c_SourceType    = @c_SourceType
+             ,@c_Orderkey      = @c_TD_OrderKey
              ,@c_Wavekey       = @c_WaveKey
              ,@c_AreaKey       = '?F'
              ,@c_Status        = @c_TaskStatus
