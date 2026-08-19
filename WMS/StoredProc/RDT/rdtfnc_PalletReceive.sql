@@ -20,6 +20,7 @@ GO
 /* 2025-06-18 1.9    CYU027   FCR-4200                                              */
 /* 2025-12-31 2.0    JackC    FCR-9251 Add extscn entry to st22                     */
 /* 2025-12-31 2.0.1  JackC    Add fromScn, toScn,toStep check for extscn04 at st99  */
+/* 2026-08-18 2.1    JackC    FCR-14878 Add No UPD RDTMOBREC at st99                */
 /************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PalletReceive] (
@@ -1203,6 +1204,10 @@ BEGIN
                SET @cPUOM_Desc = @cUDF17
             END
          END
+         
+         --V2.1
+         IF @cUDF01 = 'NO UPD RDTMOBREC'
+            RETURN
 
       END
    END
