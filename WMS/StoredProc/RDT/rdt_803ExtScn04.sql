@@ -14,6 +14,7 @@ GO
 /*                                                                        */
 /* Date       Rev    Author   Purposes                                    */
 /* 2026-07-14 1.0    Cuize    FCR-13139 Created                           */
+/* 2026-08-14 1.1    Cuize    UWP-63852 Fix: Light up slot on first SKU   */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_803ExtScn04] (
@@ -789,12 +790,71 @@ BEGIN
             -- If slot has no SortTote, go to Screen 6920 (3b) first
             IF @cVirtualCartonID IS NOT NULL AND (@cCurrentCartonID IS NULL OR @cCurrentCartonID = '')
             BEGIN
-               -- Get slot LOC for display
-               SELECT TOP 1 @cCurrentSlotLOC = DP.LOC
+               -- Get slot LOC and IP for display and light-up
+               DECLARE @cCurrentIPAddress NVARCHAR(40)
+               SELECT TOP 1 @cCurrentSlotLOC = DP.LOC,
+                            @cCurrentIPAddress = DP.IPAddress
                FROM dbo.DeviceProfile DP WITH (NOLOCK)
                WHERE DP.DeviceID = @cStation
                  AND DP.DevicePosition = @cCurrentPosition
                  AND DP.StorerKey = @cStorerKey
+
+               DECLARE @cLightControl NVARCHAR(10)
+               SET @cLightControl = rdt.RDTGetConfig(@nFunc, 'LightControl', @cStorerKey)
+               -- ========================================================================
+               -- FCR-13139 FIX: Light up the destination slot BEFORE going to Screen 6920
+               -- This ensures the light turns on when SKU is scanned (first SKU flow)
+               -- Call MatrixSP14 directly to reuse all light-up logic (color, qty, model)
+               -- ========================================================================
+               IF @cLightControl = '1'
+               BEGIN
+                  DECLARE @cDisplay_6922 NVARCHAR(5)
+                  DECLARE @cResult01_6922 NVARCHAR(20)
+                  DECLARE @cResult02_6922 NVARCHAR(20)
+                  DECLARE @cResult03_6922 NVARCHAR(20)
+                  DECLARE @cResult04_6922 NVARCHAR(20)
+                  DECLARE @cResult05_6922 NVARCHAR(20)
+                  DECLARE @cResult06_6922 NVARCHAR(20)
+                  DECLARE @cResult07_6922 NVARCHAR(20)
+                  DECLARE @cResult08_6922 NVARCHAR(20)
+                  DECLARE @cResult09_6922 NVARCHAR(20)
+                  DECLARE @cResult10_6922 NVARCHAR(20)
+
+                  EXEC rdt.rdt_803MatrixSP14
+                     @nMobile,
+                     @nFunc,
+                     @cLangCode,
+                     @nCurrentStep,
+                     @nInputKey,
+                     @cFacility,
+                     @cStorerKey,
+                     @cLight,
+                     @cStation,
+                     @cMethod,
+                     @cSKU,
+                     @cCurrentIPAddress,
+                     @cCurrentPosition,
+                     @cDisplay_6922,
+                     @nErrNo OUTPUT,
+                     @cErrMsg OUTPUT,
+                     @cResult01_6922 OUTPUT,
+                     @cResult02_6922 OUTPUT,
+                     @cResult03_6922 OUTPUT,
+                     @cResult04_6922 OUTPUT,
+                     @cResult05_6922 OUTPUT,
+                     @cResult06_6922 OUTPUT,
+                     @cResult07_6922 OUTPUT,
+                     @cResult08_6922 OUTPUT,
+                     @cResult09_6922 OUTPUT,
+                     @cResult10_6922 OUTPUT
+
+                  -- Reset error if light-up fails (non-critical)
+                  IF @nErrNo <> 0
+                  BEGIN
+                     SET @nErrNo = 0
+                     SET @cErrMsg = ''
+                  END
+               END
 
                -- Prepare Screen 6920 (3b)
                SET @cOutField01 = ''                -- TOTE ID input

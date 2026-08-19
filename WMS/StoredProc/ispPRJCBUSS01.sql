@@ -23,7 +23,8 @@ GO
 /* Data Modifications:                                                  */
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
-/* 2026-08-05  Wan01    1.0   Created.                                  */
+/* 2026-08-05  Wan      1.0   Created.                                  */
+/* 2026-08-18  Wan      1.0   UWP-64392 - Fix                           */     
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCBUSS01]  
    @c_OrderKey        NVARCHAR(10)
@@ -81,7 +82,9 @@ BEGIN
          , @n_QtyAvailable          INT = 0
          , @n_LotQtyAvai            INT = 0
          , @n_ExtraQty              INT = 0
-         , @n_QtyLeftToFulfill      INT
+         , @n_QtyLeftToFulfill      INT = 0                                         --UWP-64392 
+         , @n_Qty                   INT = 0                                         --UWP-64392
+         , @n_QtyAllocated          INT = 0                                         --UWP-64392
 
          , @c_PickDetailKey         NVARCHAR(10)   = '' 
          , @c_PackUOM3              NVARCHAR(10)   = ''                                
@@ -92,6 +95,7 @@ BEGIN
          
          , @c_SQL                   NVARCHAR(MAX)  = ''
          , @c_SQLParm               NVARCHAR(MAX)  = ''
+         , @c_ApplyJoin             NVARCHAR(2000) = ''                             --UWP-64392
          , @c_Condition             NVARCHAR(MAX)  = ''         
          , @c_Conditions            NVARCHAR(MAX)  = ''
          , @c_Sorting               NVARCHAR(MAX)  = ''
@@ -100,29 +104,53 @@ BEGIN
 
          , @CUR_ORDER_LINES         CURSOR
          , @CUR_LOT                 CURSOR
-                                    
+         , @CUR_ALC                 CURSOR                                          --UWP-64392 
+                                          
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
    SET @c_UOM     = '1' 
+
+   IF OBJECT_ID('tempdb..#TMP_JCB_ALC') IS NOT NULL                                 --UWP-64392
+   BEGIN
+      DROP TABLE #TMP_JCB_ALC
+   END
    
+   CREATE TABLE #TMP_JCB_ALC 
+   ( 
+      PickDetailKey  NVARCHAR(10)   NOT NULL DEFAULT('')    PRIMARY KEY
+   ,  Orderkey       NVARCHAR(10)   NOT NULL DEFAULT('') 
+   ,  Loc            NVARCHAR(10)   NOT NULL DEFAULT('') 
+   ,  ID             NVARCHAR(10)   NOT NULL DEFAULT('') 
+   ,  Lottable11     NVARCHAR(10)   NOT NULL DEFAULT('') 
+   ,  Qty            INT            NOT NULL DEFAULT(0)       
+   )  
+   
+   CREATE NONCLUSTERED INDEX IX_TMP_JCB_ALC_OrdxID ON #TMP_JCB_ALC(Orderkey,Loc,ID);  
+
+   --UWP-64392
+   SET @c_ApplyJoin  = ' CROSS APPLY 
+                        (SELECT Qty = SUM(lli1.QTY)
+                         FROM LOTxLOCxID lli1 (NOLOCK) 
+                         JOIN LOTAttribute la1 (NOLOCK) ON la1.Lot = lli1.Lot
+                         WHERE lli1.Loc = LOTxLOCxID.Loc 
+                         AND lli1.ID = LOTxLOCxID.ID
+                         AND lli1.QTY > 0
+                         AND lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen = 0
+                         AND la1.Lottable11 = LOTATTRIBUTE.Lottable11
+                         GROUP BY lli1.Loc, lli1.ID
+                         HAVING SUM(lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen) = 0                         
+                        ) ApplyJoin' + CHAR(13)
+                               
    SET @c_Condition  = ' AND LOC.LocationType <> ''PICK'''
                      + ' AND LOTxLOCxID.QtyAllocated + LOTxLOCxID.QtyPicked + LOTxLOCxID.QtyReplen = 0' 
-                     + ' AND NOT EXISTS ( SELECT 1 FROM LOTxLOCxID lli1 (NOLOCK)
-                                          WHERE lli1.ID = LOTxLOCxID.ID
-                                          AND   lli1.Loc= LOTxLOCxID.Loc
-                                          AND   lli1.QtyAllocated + lli1.QtyPicked + lli1.QtyReplen > 0
-                                        )'                       
-   SET @c_OrderBy = ' ORDER BY 
-                       MAX(LOTATTRIBUTE.Lottable05)  
-                       OVER (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID,LOTATTRIBUTE.Lottable11)'
-                  + ', ABS(SUM(LOTxLOCxID.Qty) 
-                           OVER (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID,LOTATTRIBUTE.Lottable11)
-                       - @n_QtyLeftToFulfill)'  
-                  + ', SUM(LOTxLOCxID.Qty) 
-                       OVER (PARTITION BY LOTxLOCxID.LOC,LOTxLOCxID.ID,LOTATTRIBUTE.Lottable11) DESC'  
+                       
+   SET @c_OrderBy = ' ORDER BY LOTATTRIBUTE.Lottable05'                             --UWP-64392
+                  + ', ABS(ApplyJoin.Qty - @n_QtyLeftToFulfill)'  
+                  + ', ApplyJoin.Qty DESC'  
                   + ', LOTxLOCxID.LOC'   
-                  + ', LOTxLOCxID.ID'     
+                  + ', LOTxLOCxID.ID' 
+                  + ', LOTATTRIBUTE.Lottable11'                          
                   + ', LOC.LogicalLocation'                         
    
    SELECT TOP 1 @c_Cond = cl.Notes                                                        
@@ -279,7 +307,7 @@ BEGIN
                
          IF @n_err <> 0
          BEGIN
-            SET @n_continue = 3
+            SET @n_Continue = 3
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
             SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCBUSS01)'
@@ -334,8 +362,9 @@ BEGIN
          JOIN SKUXLOC (NOLOCK) ON LOTxLOCxID.Storerkey = SKUXLOC.Storerkey 
                               AND LOTxLOCxID.Sku = SKUXLOC.Sku 
                               AND LOTxLOCxID.Loc = SKUXLOC.Loc
-         JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = Sku.Storerkey AND LOTxLOCxID.Sku = Sku.Sku
-         WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                 
+         JOIN SKU (NOLOCK) ON LOTxLOCxID.Storerkey = Sku.Storerkey AND LOTxLOCxID.Sku = Sku.Sku'
+      +  CHAR(13) + @c_ApplyJoin                                                    --UWP-64392  
+      + 'WHERE LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'')                 
          AND LOC.Status = ''OK''
          AND LOT.Status = ''OK''
          AND ID.Status = ''OK''
@@ -381,7 +410,13 @@ BEGIN
          BEGIN
             SELECT @c_Loc as loc, @c_ID as id, @n_QtyLeftToFulFill as qtylefttofulfill
          END
-            
+         
+         SET @c_UOM = '1'                                                           --UWP-64392                                                   
+         IF @c_IDLottable11 > '' 
+         BEGIN
+            SET @c_UOM = '2'
+         END   
+                    
          SET @CUR_LOT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
          SELECT lli.Lot
                ,lli.QTY-lli.QTYALLOCATED-lli.QTYPICKED-lli.QtyReplen
@@ -401,7 +436,7 @@ BEGIN
                                                                
          FETCH FROM @CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku, @c_IDLottable03   
                                        
-         WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
+         WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1 AND @n_QtyLeftToFulFill > 0   --UWP-64392
          BEGIN                                                
             SET @n_PickQty = 0
             SET @c_OrderLineNoAlloc = @c_OrderLineNumber                          
@@ -433,7 +468,7 @@ BEGIN
                       
                IF @n_err <> 0
                BEGIN
-                  SET @n_continue = 3
+                  SET @n_Continue = 3
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
                   SET @n_err = 81020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCBUSS01)'
@@ -550,7 +585,7 @@ BEGIN
                      
                   IF @n_err <> 0
                   BEGIN
-                     SET @n_continue = 3
+                     SET @n_Continue = 3
                      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
                      SET @n_err = 81030  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Pickdetail Failed. (ispPRJCBUSS01)'
@@ -560,7 +595,13 @@ BEGIN
                IF @c_IDSku = @c_Sku                                             
                BEGIN
                   SET @n_QtyLeftToFulFill = @n_QtyLeftToFulFill - @n_PickQty 
-               END                                                              
+               END  
+               
+               IF @n_Continue = 1 AND @c_IDLottable11 > ''                         --UWP-64392
+               BEGIN
+                  INSERT INTO #TMP_JCB_ALC (Orderkey, Pickdetailkey, Loc, ID, Lottable11, Qty)
+                  VALUES (@c_Orderkey, @c_Pickdetailkey, @c_Loc, @c_ID, @c_IDLottable11, @n_PickQty)
+               END                                                                          
             END               
                
             FETCH FROM @CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku ,@c_IDLottable03
@@ -578,7 +619,72 @@ BEGIN
    END
    CLOSE @CUR_ORDER_LINES
    DEALLOCATE @CUR_ORDER_LINES
-                              
+   
+   IF @n_Continue = 1                                                               --UWP-64392
+   BEGIN
+      SET @CUR_ALC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT t.Orderkey
+            ,t.Loc
+            ,t.ID
+            ,QtyAllocated = SUM(t.Qty)
+      FROM #TMP_JCB_ALC t
+      GROUP BY t.Orderkey
+            ,  t.Loc
+            ,  t.ID
+
+      OPEN @CUR_ALC
+
+      FETCH NEXT FROM @CUR_ALC INTO @c_Orderkey, @c_Loc, @c_ID, @n_QtyAllocated
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
+      BEGIN
+         SET @n_Qty = 0
+         SELECT @n_Qty = SUM(lli.Qty)
+         FROM LOTxLOCxID lli(NOLOCK)
+         WHERE lli.Loc = @c_Loc
+         AND lli.ID  = @c_ID
+
+         IF @n_Qty = @n_QtyAllocated
+         BEGIN
+            SET @c_PickDetailKey = ''
+            WHILE 1=1
+            BEGIN
+               SELECT TOP 1 @c_PickDetailKey = t.PickdetailKey
+               FROM #TMP_JCB_ALC t
+               WHERE t.Orderkey = @c_Orderkey
+               AND   t.Loc = @c_Loc
+               AND   t.ID  = @c_ID
+               AND t.PickdetailKey > @c_PickDetailKey
+               ORDER BY t.PickdetailKey
+
+               SET @n_RowCount = @@ROWCOUNT
+
+               IF @n_RowCount = 0
+               BEGIN
+                  BREAK
+               END
+
+               UPDATE pd
+                  SET pd.UOM = '1'
+                     ,Trafficcop = NULL
+               FROM PICKDETAIL pd
+               WHERE pd.PickdetailKey = @c_PickDetailKey
+               AND   pd.UOM = '2'
+
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_err = 81040  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Failed. (ispPRJCBUSS01)'
+               END
+            END
+         END
+              
+         FETCH NEXT FROM @CUR_ALC INTO @c_Orderkey, @c_Loc, @c_ID, @n_QtyAllocated
+      END
+      CLOSE @CUR_ALC
+      DEALLOCATE @CUR_ALC
+   END                              
 QUIT:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN

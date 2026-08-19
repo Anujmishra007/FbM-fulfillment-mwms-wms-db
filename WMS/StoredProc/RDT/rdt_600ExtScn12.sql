@@ -84,11 +84,14 @@ BEGIN
 
     SET @cUDF01 = ''
 
-    SELECT @cLOC     = ISNULL(V_Loc, ''),
-           @nMobStep = Step,
-           @nMobScn  = Scn,
-           @cID      = ISNULL(V_ID, ''),
-           @nFromScn = ISNULL(V_FromScn, 0)
+    SELECT @cLOC              = ISNULL(V_Loc, ''),
+           @nMobStep          = Step,
+           @nMobScn           = Scn,
+           @cID               = ISNULL(NULLIF(V_ID, ''), C_String3),
+           @nFromScn          = ISNULL(V_FromScn, 0),
+           @cSKU              = ISNULL(V_SKU, ''),
+           @cReceiptKey       = ISNULL(V_ReceiptKey, ''),
+           @cLottableCodeLocal = ISNULL(V_String3, '')
     FROM rdt.RDTMOBREC WITH (NOLOCK)
     WHERE Mobile = @nMobile
 
@@ -381,18 +384,41 @@ BEGIN
         -- Loop back to Lottable screen with same SKU
         IF @nMobStep = 6 AND @nAfterStep = 3 AND @nInputKey = 1
         BEGIN
-            -- Get session data
-            SELECT @cSKU               = Value FROM @tExtScnData WHERE Variable = '@cSKU'
-            SELECT @cReceiptKey        = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
-            SELECT @cLottableCodeLocal = Value FROM @tExtScnData WHERE Variable = '@cLottableCode'
-            IF ISNULL(@cID, '') = ''
-                SELECT @cID = C_String3 FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
-
             SET @nQTY = 0
             SET @cMax = ''
 
+            -- Reload lottable values from RDTMOBREC before POPULATE reads them
+            SELECT
+                @cLottable01 = V_Lottable01,
+                @dLottable05 = V_Lottable05,
+                @cLottable06 = V_Lottable06,
+                @cLottable07 = '',
+                @cLottable08 = V_Lottable08,
+                @cLottable09 = V_Lottable09,
+                @cLottable10 = V_Lottable10,
+                @cLottable11 = V_Lottable11,
+                @cLottable12 = V_Lottable12,
+                @dLottable13 = V_Lottable13,
+                @dLottable14 = V_Lottable14,
+                @dLottable15 = V_Lottable15
+            FROM rdt.RDTMOBREC WITH (NOLOCK)
+            WHERE Mobile = @nMobile
+
+            -- Refresh Lottable02 (MIN DOT), Lottable03 (SubInventory) and Lottable04 (MfgDate) from latest confirmed line on this pallet
+            SELECT TOP 1
+                @cLottable02 = Lottable02,
+                @cLottable03 = Lottable03,
+                @dLottable04 = Lottable04
+            FROM dbo.ReceiptDetail WITH (NOLOCK)
+            WHERE ReceiptKey  = @cReceiptKey
+              AND StorerKey   = @cStorerKey
+              AND ToID        = @cID
+              AND SKU         = @cSKU
+              AND QtyReceived > 0
+            ORDER BY EditDate DESC
+
             -- Dynamic lottable
-            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, 3990, 1, @cStorerKey, @cSKU, @cLottableCodeLocal, 'CAPTURE', 'POPULATE', 5, 1,
+            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, 1, @cStorerKey, @cSKU, @cLottableCodeLocal, 'CAPTURE', 'POPULATE', 5, 1,
                 @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
                 @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
                 @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,

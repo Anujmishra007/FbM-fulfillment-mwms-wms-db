@@ -35,7 +35,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-       @b_debug      INT
+       @b_debug      INT = 0
       ,@n_starttcnt  INT -- Holds the current transaction count
       ,@n_continue   INT
       ,@b_Success    INT
@@ -66,8 +66,7 @@ BEGIN
       ,@cLastTaskKey       NVARCHAR(10)   
 
    SELECT
-       @b_debug = 0
-      ,@n_starttcnt = @@TRANCOUNT
+      @n_starttcnt = @@TRANCOUNT
       ,@n_continue = 1
       ,@b_success = 0
       ,@n_err = 0
@@ -94,6 +93,9 @@ BEGIN
    FROM dbo.TaskManagerUser TMU WITH (NOLOCK)
    JOIN dbo.EquipmentProfile EP WITH (NOLOCK) ON TMU.EquipmentProfileKey = EP.EquipmentProfileKey
    WHERE TMU.UserKey = @c_UserID
+
+   IF @b_debug = 1
+      SELECT @c_UserID AS c_UserID, @c_AreaKey01 AS c_AreaKey01, @nMaxLevel AS nMaxLevel, @cLastPickMethod AS LastPickMethod
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -423,6 +425,9 @@ RollBackTran:
    ROLLBACK TRAN nspTTMFC11 -- Only rollback change made here
 Fail:
 Quit:
+   IF @b_debug = 1
+      SELECT 'Quit nspTTMFC11', @n_Err AS ErrNo, @c_ErrMsg AS ErrMsg, @c_TaskDetailKey AS TaskDetailKey
+      
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END

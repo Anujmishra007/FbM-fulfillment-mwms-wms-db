@@ -58,6 +58,18 @@ BEGIN
          , @c_SQL                      NVARCHAR(MAX) = ''
          , @c_SQLParms                 NVARCHAR(MAX) = ''
          , @c_ReplenType               NVARCHAR(10) = 'R'
+         , @c_ReplenFlag               NVARCHAR(10) = 'N'
+         , @c_Zone02                   NVARCHAR(10) = 'ALL'
+         , @c_Zone03                   NVARCHAR(10) = ''
+         , @c_Zone04                   NVARCHAR(10) = ''
+         , @c_Zone05                   NVARCHAR(10) = ''
+         , @c_Zone06                   NVARCHAR(10) = ''
+         , @c_Zone07                   NVARCHAR(10) = ''
+         , @c_Zone08                   NVARCHAR(10) = ''
+         , @c_Zone09                   NVARCHAR(10) = ''
+         , @c_Zone10                   NVARCHAR(10) = ''
+         , @c_Zone11                   NVARCHAR(10) = ''
+         , @c_Zone12                   NVARCHAR(10) = ''
          , @c_ReplenSPName             NVARCHAR(50) = ''
          , @c_CLNotes                  NVARCHAR(MAX) = ''
          , @c_ShortPickSP              NVARCHAR(100) = 'msp_ProcessShortPickReAlloc02'
@@ -154,6 +166,18 @@ BEGIN
          SELECT @c_ShortPickSP = dbo.fnc_GetParamValueFromString('@c_ShortPickSP', @c_CLNotes, @c_ShortPickSP)
          SELECT @c_ReplenishStrategy = dbo.fnc_GetParamValueFromString('@c_ReplenishStrategy', @c_CLNotes, @c_ReplenishStrategy)
          SELECT @c_ReplenType = dbo.fnc_GetParamValueFromString('@c_ReplenType', @c_CLNotes, @c_ReplenType)
+         SELECT @c_ReplenFlag = dbo.fnc_GetParamValueFromString('@c_ReplenFlag', @c_CLNotes, @c_ReplenFlag)
+         SELECT @c_Zone02 = dbo.fnc_GetParamValueFromString('@c_Zone02', @c_CLNotes, @c_Zone02)
+         SELECT @c_Zone03 = dbo.fnc_GetParamValueFromString('@c_Zone03', @c_CLNotes, @c_Zone03)
+         SELECT @c_Zone04 = dbo.fnc_GetParamValueFromString('@c_Zone04', @c_CLNotes, @c_Zone04)
+         SELECT @c_Zone05 = dbo.fnc_GetParamValueFromString('@c_Zone05', @c_CLNotes, @c_Zone05)
+         SELECT @c_Zone06 = dbo.fnc_GetParamValueFromString('@c_Zone06', @c_CLNotes, @c_Zone06)
+         SELECT @c_Zone07 = dbo.fnc_GetParamValueFromString('@c_Zone07', @c_CLNotes, @c_Zone07)
+         SELECT @c_Zone08 = dbo.fnc_GetParamValueFromString('@c_Zone08', @c_CLNotes, @c_Zone08)
+         SELECT @c_Zone09 = dbo.fnc_GetParamValueFromString('@c_Zone09', @c_CLNotes, @c_Zone09)
+         SELECT @c_Zone10 = dbo.fnc_GetParamValueFromString('@c_Zone10', @c_CLNotes, @c_Zone10)
+         SELECT @c_Zone11 = dbo.fnc_GetParamValueFromString('@c_Zone11', @c_CLNotes, @c_Zone11)
+         SELECT @c_Zone12 = dbo.fnc_GetParamValueFromString('@c_Zone12', @c_CLNotes, @c_Zone12)
          SELECT @c_PickTaskType = dbo.fnc_GetParamValueFromString('@c_PickTaskType', @c_CLNotes, @c_PickTaskType)
          SELECT @c_PickTaskStatus = dbo.fnc_GetParamValueFromString('@c_PickTaskStatus', @c_CLNotes, @c_PickTaskStatus)
          SELECT @c_DelPickdetail = dbo.fnc_GetParamValueFromString('@c_DelPickdetail', @c_CLNotes, @c_DelPickdetail)
@@ -163,6 +187,12 @@ BEGIN
          
          IF ISNULL(TRIM(@c_ReplenType), '') = ''
             SET @c_ReplenType = 'R'
+
+         IF ISNULL(TRIM(@c_ReplenFlag), '') = ''
+            SET @c_ReplenFlag = 'N'
+
+         IF ISNULL(TRIM(@c_Zone02), '') = ''
+            SET @c_Zone02 = 'ALL'
 
          IF ISNULL(TRIM(@c_PickTaskType), '') = ''
             SET @c_PickTaskType = 'ASTCPK, FCP'
@@ -196,6 +226,16 @@ BEGIN
                SET @c_ReplenSPName = TRIM(SUBSTRING(@c_ReplenishCode, 1, CHARINDEX('@', @c_ReplenishCode, 1) - 1))
             ELSE
                SET @c_ReplenSPName = TRIM(@c_ReplenishCode)
+
+            IF (ISNULL(TRIM(@c_ReplenSPName), '') = '' OR OBJECT_ID(TRIM(@c_ReplenSPName), 'P') IS NULL)
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 65003
+               SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                           + ': Replen SP not found: ' + ISNULL(@c_ReplenSPName, '')
+                           + ' (Strategy: ' + ISNULL(TRIM(@c_ReplenishStrategy), '') + ')'
+                           + ' (msp_ProcessShortReplenReAlloc_Std)'
+            END
          END
       END
    END
@@ -402,39 +442,69 @@ BEGIN
          IF ISNULL(@c_Storerkey, '') <> '' AND ISNULL(@c_Facility, '') <> ''
          BEGIN
             IF @n_Continue = 1
-               AND OBJECT_ID(TRIM(@c_ReplenSPName), 'P') IS NOT NULL
             BEGIN
                SET @c_SQL = ' EXEC ' + TRIM(@c_ReplenSPName) + ' @c_Zone01 = @c_Facility ' + CHAR(13)
-                          + '                                  , @c_Zone02 = N''ALL'' ' + CHAR(13)
-                          + '                                  , @c_Zone03 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone04 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone05 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone06 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone07 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone08 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone09 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone10 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone11 = N'''' ' + CHAR(13)
-                          + '                                  , @c_Zone12 = N'''' ' + CHAR(13)
-                          + '                                  , @c_ReplenFlag = ''N'' ' + CHAR(13)
+                          + '                                  , @c_Zone02 = @c_Zone02 ' + CHAR(13)
+                          + '                                  , @c_Zone03 = @c_Zone03 ' + CHAR(13)
+                          + '                                  , @c_Zone04 = @c_Zone04 ' + CHAR(13)
+                          + '                                  , @c_Zone05 = @c_Zone05 ' + CHAR(13)
+                          + '                                  , @c_Zone06 = @c_Zone06 ' + CHAR(13)
+                          + '                                  , @c_Zone07 = @c_Zone07 ' + CHAR(13)
+                          + '                                  , @c_Zone08 = @c_Zone08 ' + CHAR(13)
+                          + '                                  , @c_Zone09 = @c_Zone09 ' + CHAR(13)
+                          + '                                  , @c_Zone10 = @c_Zone10 ' + CHAR(13)
+                          + '                                  , @c_Zone11 = @c_Zone11 ' + CHAR(13)
+                          + '                                  , @c_Zone12 = @c_Zone12 ' + CHAR(13)
                           + '                                  , @c_StorerKey = @c_Storerkey '  + CHAR(13)
 
-                  IF EXISTS ( SELECT 1
-                             FROM sys.parameters P (NOLOCK)
-                             WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
-                             AND P.name = '@c_ReplenType' )
-                  BEGIN 
-                     SET @c_SQL = @c_SQL + '                                  , @c_ReplenType = @c_ReplenType '
-                  END
+               IF EXISTS ( SELECT 1
+                          FROM sys.parameters P (NOLOCK)
+                          WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
+                          AND P.name = '@c_ReplenFlag' )
+               BEGIN
+                  SET @c_SQL = @c_SQL + '                                  , @c_ReplenFlag = @c_ReplenFlag '
+               END
+
+               IF EXISTS ( SELECT 1
+                          FROM sys.parameters P (NOLOCK)
+                          WHERE P.object_id = OBJECT_ID(TRIM(@c_ReplenSPName))
+                          AND P.name = '@c_ReplenType' )
+               BEGIN 
+                  SET @c_SQL = @c_SQL + '                                  , @c_ReplenType = @c_ReplenType '
+               END
                
                SET @c_SQLParms = '   @c_Storerkey     NVARCHAR(15) ' + CHAR(13)
                                + ' , @c_Facility      NVARCHAR(5)  ' + CHAR(13)
+                               + ' , @c_Zone02        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone03        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone04        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone05        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone06        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone07        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone08        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone09        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone10        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone11        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone12        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_ReplenFlag    NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_ReplenType    NVARCHAR(10) '
                BEGIN TRY
                   EXEC sp_ExecuteSql @c_SQL
                                    , @c_SQLParms
                                    , @c_Storerkey
                                    , @c_Facility
+                                   , @c_Zone02
+                                   , @c_Zone03
+                                   , @c_Zone04
+                                   , @c_Zone05
+                                   , @c_Zone06
+                                   , @c_Zone07
+                                   , @c_Zone08
+                                   , @c_Zone09
+                                   , @c_Zone10
+                                   , @c_Zone11
+                                   , @c_Zone12
+                                   , @c_ReplenFlag
                                    , @c_ReplenType
                END TRY
                BEGIN CATCH
@@ -446,17 +516,17 @@ BEGIN
                BEGIN
                   BEGIN TRY
                      EXEC dbo.ispReleaseReplenTask_Wrapper @c_Facility = @c_Facility
-                                                         , @c_zone02 = N'ALL'
-                                                         , @c_zone03 = N''
-                                                         , @c_zone04 = N''
-                                                         , @c_zone05 = N''
-                                                         , @c_zone06 = N''
-                                                         , @c_zone07 = N''
-                                                         , @c_zone08 = N''
-                                                         , @c_zone09 = N''
-                                                         , @c_zone10 = N''
-                                                         , @c_zone11 = N''
-                                                         , @c_zone12 = N''
+                                                         , @c_zone02 = @c_Zone02
+                                                         , @c_zone03 = @c_Zone03
+                                                         , @c_zone04 = @c_Zone04
+                                                         , @c_zone05 = @c_Zone05
+                                                         , @c_zone06 = @c_Zone06
+                                                         , @c_zone07 = @c_Zone07
+                                                         , @c_zone08 = @c_Zone08
+                                                         , @c_zone09 = @c_Zone09
+                                                         , @c_zone10 = @c_Zone10
+                                                         , @c_zone11 = @c_Zone11
+                                                         , @c_zone12 = @c_Zone12
                                                          , @c_Storerkey = @c_Storerkey
                                                          , @b_success = @b_success OUTPUT -- int
                                                          , @n_err = @n_err OUTPUT -- int
