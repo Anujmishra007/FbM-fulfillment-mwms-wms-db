@@ -6,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_600ExtScn13                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk.                                             */
 /*                                                                      */
 /* Purpose:       For Unilever copied from rdt_600ExtScn01              */
 /*                                                                      */
