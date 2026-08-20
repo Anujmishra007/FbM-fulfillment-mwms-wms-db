@@ -13,7 +13,8 @@
 /*                              pallet.                                       */
 /* 2026-07-03   FRO014    2.0   RITM9054096/UWP-63764                         */
 /*                              Change to the trigger of the Stickering       */
-/*                              process: from Step 4 to Step 6                */
+/*                              process: from Step 4 to Step 6 and  update    */
+/*                                the LOTATTRIBUTE table                        */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_600ExtUpdPGPE]
@@ -58,13 +59,14 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cStickering    NVARCHAR( 20)
+   DECLARE @cStickering        NVARCHAR( 10)
+   DECLARE @cLot             NVARCHAR( 10)
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
       IF @nStep = 6 -- Input QTY  --> Change UWP-63764
       BEGIN
-         -- Logic for applying stickering
+       -- Logic for applying stickering --Start
          SELECT TOP 1 @cSKU = SKU
          FROM dbo.UPC WITH (NOLOCK)
          WHERE (SKU = @cSKU OR UPC = @cSKU)
@@ -75,28 +77,42 @@ BEGIN
          WHERE SKU = ISNULL(@cSKU, '')
             AND StorerKey = @cStorerKey
 
-         IF ISNULL(@cStickering, '') = ''
+        SELECT  TOP 1    @cLot = LLI.Lot
+        FROM    dbo.RECEIPTDETAIL RD WITH (NOLOCK) INNER JOIN
+                dbo.LOTxLOCxID LLI  WITH (NOLOCK) ON
+                RD.ToLoc = LLI.Loc
+        AND     RD.ToId = LLI.ID
+        AND     RD.StorerKey = LLI.StorerKey
+        AND        RD.Sku = LLI.SKU
+        WHERE    RD.ReceiptKey = @cReceiptKey
+        AND        RD.ReceiptLineNumber = @cReceiptLineNumber
+        AND        RD.StorerKey = @cStorerKey
+
+         IF ISNULL(@cStickering, '') <> ''
          BEGIN
-            GOTO Quit
+             BEGIN TRY
+                UPDATE    dbo.RECEIPTDETAIL WITH (ROWLOCK)
+                SET        Lottable11 = 'STICKERING'
+                WHERE    ReceiptKey = @cReceiptKey
+                   AND    ReceiptLineNumber = @cReceiptLineNumber
+                   AND    StorerKey = @cStorerKey
+
+                UPDATE    dbo.LOTATTRIBUTE WITH (ROWLOCK)
+                SET        Lottable11 = 'STICKERING'
+                WHERE    StorerKey = @cStorerKey
+                   AND  SKU = @cSKU
+                   AND  Lot = @cLot
+
+             END TRY
+             BEGIN CATCH
+                SET @nErrNo = 275058
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdStickerFail
+                GOTO Quit
+             END CATCH
          END
+         -- Logic for applying stickering -- end
 
-         BEGIN TRY
-            UPDATE dbo.RECEIPTDETAIL WITH (ROWLOCK)
-            SET Lottable11 = 'STICKERING'
-            WHERE ReceiptKey = @cReceiptKey
-               AND ReceiptLineNumber = @cReceiptLineNumber
-               AND StorerKey = @cStorerKey
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 275058
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UpdStickerFail
-            GOTO Quit
-         END CATCH
-      END
-
-      IF @nStep = 6 -- Input QTY
-      BEGIN
-         -- Report configure
+         -- Report configure - Start
          DECLARE @cPalletLabel  NVARCHAR( 10)
          DECLARE @cPrintedLabel NVARCHAR( 60)
 
@@ -165,6 +181,7 @@ BEGIN
                   GOTO Quit
             END
          END
+         -- Report configure - End
       END
    END
 
