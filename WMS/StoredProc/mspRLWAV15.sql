@@ -567,7 +567,7 @@ BEGIN
             FROM STRING_SPLIT(@c_PickDetailKeys, ',')
          )
 
-         SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 THEN '' ELSE @c_Lot END
+         SET @c_TD_Lot = CASE WHEN @n_LotCount > 1 AND @c_UOM <> '2' THEN '' ELSE @c_Lot END --UOM=2 requires Lot
          SET @c_TD_Sku = CASE WHEN @n_SkuCount > 1 THEN '' ELSE @c_Top1Sku END
 
          SET @c_TD_CaseID  = CASE WHEN @c_UOM = '2' THEN @c_Lottable11 ELSE '' END
