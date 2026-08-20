@@ -31,8 +31,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2026-08-07  wan      1.0   FCR-14639. Fix Merge..update..delete      */
-/*                            UWP-64396. Remove accmulated LxWxH against*/
-/*                            Loc LxWxH checking                        */
+/* 2026-08-20                 UWP-64396. Remove accmulated LxWxH against*/
+/*                            Loc LxWxH checking. NoofLPN at Lotxlocxid */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL03
@@ -609,26 +609,17 @@ BEGIN
                              AND l.HOSTWHCODE IN (g.HostWHCode)
                              AND l.LocationGroup = lpn.LocationGroup
          CROSS APPLY (  SELECT NoOfLPN = COUNT(DISTINCT inv.ID)
-                              ,[Length]= ISNULL(SUM(inv.[Length]),0.00)
-                              ,Width   = ISNULL(SUM(inv.Width),0.00)
-                              ,Height  = ISNULL(SUM(inv.Height),0.00)
                               ,GrossWgt= ISNULL(SUM(inv.GrossWgt),0.00)
                         FROM
                         (
                         SELECT lli.ID 
-                              ,pm.[Length]
-                              ,pm.Width
-                              ,pm.Height
                               ,pm.GrossWgt
                         FROM LOTxLOCxID lli (NOLOCK)
-                        JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID 
+                        LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID --UWP-64396 
                         WHERE lli.Loc = l.Loc
                         AND   lli.ID  > ''
                         AND   lli.Qty + lli.PendingMoveIn > 0
                         GROUP BY lli.ID
-                              ,  pm.[Length]
-                              ,  pm.Width
-                              ,  pm.Height
                               ,  pm.GrossWgt
                        ) inv
                      ) pl
@@ -647,16 +638,12 @@ BEGIN
          BEGIN
             PRINT   '@c_FromID : '+ @c_FromID
                   + ', @c_LocationCategory: '+ @c_LocationCategory
-                  --+ ', @c_LocationRoom: ' + @c_LocationRoom 
-                  --+ ', @c_LocAisle:' + @c_LocAisle 
-                  --+ ', @n_LocLevel: ' + CAST(@n_LocLevel AS NVARCHAR)
                   + ', @c_ToLoc: ' + @c_ToLoc
             PRINT   '  @n_WeightLimit: ' + CAST(@n_WeightLimit AS NVARCHAR) 
                   + ', @n_NoOfLoc: ' + CAST (@n_NoOfLoc AS NVARCHAR)
                   + ', @n_GrossWgt_P : ' + CAST (@n_GrossWgt_P  AS NVARCHAR)
 
             PRINT   '  @c_FinalLoc: '+ @c_FinalLoc
-                  --+ ', @c_LocationCategory_F: ' + @c_LocationCategory_F
          END
       END
  
@@ -687,17 +674,6 @@ BEGIN
          IF @n_Continue = 1
          BEGIN
             SET @c_ToLoc = @c_FinalLoc
-
-            --SET @c_Putawayzone  = ''
-            --SET @c_LocationGroup= ''
-            --SET @c_LocationCategory =  ''
-            
-            --SELECT TOP 1 
-            --       @c_Putawayzone   = l.PutawayZone
-            --      ,@c_LocationGroup = ISNULL(l.LocationGroup,'')                    
-            --      ,@c_LocationCategory = l.LocationCategory
-            --FROM dbo.LOC l (NOLOCK)
-            --WHERE Loc = @c_ToLoc
 
             SET @c_Lot = ''
             SELECT @c_Lot = CASE WHEN COUNT(DISTINCT lli.Lot) > 1 THEN '' ELSE MIN (lli.Lot) END
