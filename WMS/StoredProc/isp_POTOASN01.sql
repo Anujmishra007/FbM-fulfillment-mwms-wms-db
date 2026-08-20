@@ -15,11 +15,15 @@ GO
 /*                                                                       */
 /* Called By: IML (end of PO API message processing)                     */
 /*                                                                       */
-/* Version: 3.2                                                          */
+/* Version: 3.3                                                          */
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author  Ver.  Purposes                                    */
 /* 13-Jul-2026 JH01    1.0   Initial creation (BEL Schneider PO->ASN)    */
+/* 20-Aug-2026 JH02    1.2   FCR v1.3: ReceiptDetail.Lottable02 derived  */
+/*                           from SKU + MarksContainer (MONO / MIX). The  */
+/*                           earlier Lottable02-value rule (MIX / OHU /   */
+/*                           DHU) is removed.                            */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_POTOASN01]
@@ -57,6 +61,7 @@ DECLARE  @n_StartTCnt          INT            /* Holds the current transaction c
       ,  @c_ContainerKeyD      NVARCHAR(18)   /* PO2ASNMAP 0003 */
       ,  @c_ToLocD             NVARCHAR(10)   /* PO2ASNMAP 0004 */
       ,  @c_ConditionCodeD     NVARCHAR(10)   /* PO2ASNMAP 0005 */
+      ,  @c_UserDefine01D      NVARCHAR(30)   /* PO2ASNMAP 0006 */
       ,  @c_MissingCfg         NVARCHAR(200)
 
       ,  @c_DocType            NVARCHAR(1)
@@ -144,11 +149,18 @@ BEGIN
    AND    Code      = '0005'
    AND    Storerkey = @c_StorerKey
 
+   SELECT @c_UserDefine01D = LTRIM(RTRIM(ISNULL(Long,'')))
+   FROM   CODELKUP WITH (NOLOCK)
+   WHERE  ListName  = 'PO2ASNMAP'
+   AND    Code      = '0006'
+   AND    Storerkey = @c_StorerKey
+
    SELECT  @c_ContainerKeyH  = ISNULL(@c_ContainerKeyH,'')
         ,  @c_FacilityH      = ISNULL(@c_FacilityH,'')
         ,  @c_ContainerKeyD  = ISNULL(@c_ContainerKeyD,'')
         ,  @c_ToLocD         = ISNULL(@c_ToLocD,'')
         ,  @c_ConditionCodeD = ISNULL(@c_ConditionCodeD,'')
+        ,  @c_UserDefine01D = ISNULL(@c_UserDefine01D,'')
 
    SET @c_MissingCfg = ''
    IF @c_ContainerKeyH  = '' SET @c_MissingCfg = @c_MissingCfg + '0001,'
@@ -156,6 +168,7 @@ BEGIN
    IF @c_ContainerKeyD  = '' SET @c_MissingCfg = @c_MissingCfg + '0003,'
    IF @c_ToLocD         = '' SET @c_MissingCfg = @c_MissingCfg + '0004,'
    IF @c_ConditionCodeD = '' SET @c_MissingCfg = @c_MissingCfg + '0005,'
+   IF @c_UserDefine01D = '' SET @c_MissingCfg = @c_MissingCfg + '0006,'
 
    IF @c_MissingCfg <> ''
    BEGIN
@@ -442,9 +455,12 @@ SELECT
    ,  @c_ConditionCodeD
    ,  ISNULL(PD.MarksContainer,'')                                                        -- PalletType
    ,  ISNULL(PD.Lottable01,' ')                                                           -- SHIPTO 
-   ,  CASE WHEN ISNULL(PD.Lottable02,'') = 'MIX' THEN 'MIX' 
-           WHEN ISNULL(PD.Lottable02,'') IN ('OHU','DHU') THEN 'MONO' 
-           ELSE '' END
+   ,  CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(PD.Sku,'')))) = 'SEMIX'  AND UPPER(LTRIM(ISNULL(PD.MarksContainer,''))) LIKE 'P%' THEN 'MONO'   -- JH02
+           WHEN UPPER(LTRIM(RTRIM(ISNULL(PD.Sku,'')))) = 'SEMIX'                                                          THEN 'MIX'
+           WHEN UPPER(LTRIM(RTRIM(ISNULL(PD.Sku,'')))) = 'SEFULL' AND UPPER(LTRIM(ISNULL(PD.MarksContainer,''))) LIKE 'S%' THEN 'MIX'
+           WHEN UPPER(LTRIM(RTRIM(ISNULL(PD.Sku,'')))) = 'SEFULL'                                                         THEN 'MONO'
+           WHEN UPPER(LTRIM(RTRIM(ISNULL(PD.Sku,'')))) = 'SEDANG'                                                         THEN 'MONO'
+           ELSE '' END                                                                    -- Lottable02: MIX / MONO (FCR v1.3)
    ,  ISNULL(PD.Lottable03,' ')                                                           -- Overpack LPN or Cartion SSCC depend of Mix/ Mono Flag
    ,  ISNULL(PD.Lottable06,' ')                                                           -- SBK
    ,  @c_ExternPOKey                                                                      -- SBK
@@ -453,7 +469,7 @@ SELECT
    ,  ISNULL(PD.Lottable10,' ')                                                           -- Carton LPN
    ,  ISNULL(PD.Lottable11,' ')                                                           -- Pilot Code
    ,  ISNULL(PD.Lottable12,' ')                                                           -- DG Item No
-   ,  ISNULL(PD.UserDefine01,' ')                                                         -- FRSCHNEIDERCFS (hardcoded)
+   ,  @c_UserDefine01D                                                                    -- FRSCHNEIDERCFS (hardcoded)
    ,  ISNULL(PD.UserDefine02,' ')                                                         -- ReceiptLineNumber / Ext Line Number
    ,  ISNULL(PD.UserDefine04,' ')                                                         -- Ship from
    ,  ISNULL(PD.UserDefine05,' ')                                                         -- SHIPTO-SiteID 
@@ -503,3 +519,6 @@ BEGIN
    END
    RETURN
 END
+GO
+GRANT EXECUTE ON [dbo].[isp_POTOASN01] TO [NSQL]
+GO
