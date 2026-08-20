@@ -16,7 +16,7 @@ GO
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtUpd08]
    @nMobile         INT,          
-   @nFunc           INT,          
+   @nFunc           INT,           
    @cLangCode       NVARCHAR( 3), 
    @nStep           INT,          
    @nInputKey       INT,          
@@ -269,7 +269,7 @@ BEGIN
                INSERT INTO @tPalletLBLParam (Variable, Value) VALUES
                   ( '@cStorerKey',     @cStorerKey),
                   ( '@cFacility',      @cFacility),
-                  ( '@cDropID',        @cSuggID),
+                  ( '@cDropID',        @cDropID),
                   ( '@cTaskdetailKey', @cTaskdetailKey)
 
                IF ISNULL(@cOrderGroup, '') = 'STANDARD'
@@ -278,8 +278,8 @@ BEGIN
                   FROM dbo.LOTxLOCxID lli WITH (NOLOCK)
                   WHERE lli.storerkey = @cStorerKey
                      AND lli.Qty > 0
-                     AND lli.Loc = @cSuggFromLOC
-                     AND lli.Id = @cSuggID
+                     AND lli.Loc = @cToLoc
+                     AND lli.Id = @cDropID
                   GROUP BY lli.Id
 
                   IF @nSKUCountOnID = 1
