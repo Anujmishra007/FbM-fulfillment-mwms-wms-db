@@ -2533,13 +2533,14 @@ BEGIN
                               AND AD.AreaKey = @cToLocAreaKey
                               AND LOC.CommingleSku = '1'
                               AND Loc.PutawayZone = @cToLocPutawayZone
+                              AND LOC.LocLevel <= @nToLocLevel
                               AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
                               AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
                               AND LOC.Status = 'OK'
                               AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
                               AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                               AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
-                                             WHERE LLI.Loc = LOC.Loc AND QTY-QtyPicked+PendingMoveIn > 0
+                                             WHERE LLI.Loc = LOC.Loc AND QTY - QtyPicked + PendingMoveIn > 0
                                              GROUP BY LLI.Loc HAVING COUNT(DISTINCT LLI.Id) >= LOC.MaxPallet)
                            ORDER BY LOC.Loc
                         END
