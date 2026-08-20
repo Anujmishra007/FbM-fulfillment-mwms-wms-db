@@ -247,10 +247,10 @@ BEGIN
                END
 
                --V1.2
-               IF LEFT(@cToID, 1) NOT IN ('A', 'B', 'C', 'M', 'D')
+               IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ToID', @cToID) = 0
                BEGIN
                   SET @nErrNo = 255155
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToID must start with A,B,C,M or D
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID format
                   GOTO Scn_6772_Fail
                END
 
