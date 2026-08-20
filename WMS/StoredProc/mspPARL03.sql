@@ -657,7 +657,8 @@ BEGIN
       
       IF @n_Continue = 1
       BEGIN
-         BEGIN TRAN  
+         BEGIN TRAN 
+         SAVE TRAN SaveLPNPA; 
          EXECUTE nspg_GetKey
            @KeyName     = 'TaskDetailKey'
          , @fieldlength = 10
@@ -694,13 +695,17 @@ BEGIN
             WHERE Loc = @c_FromLoc
             ORDER BY a.AreaKey
 
-            SELECT @n_Continue = 4
-            FROM taskdetail td (NOLOCK)
-            WHERE td.Caseid = ''
-            AND   td.TaskType  = @c_TaskType
-            AND   td.[Status]  = '0'
-            AND   td.Storerkey = @c_Storerkey
-            AND   td.[FromId]  = @c_FromID
+            IF EXISTS ( SELECT 1
+                        FROM taskdetail td (NOLOCK)
+                        WHERE td.Caseid = ''
+                        AND   td.TaskType = @c_TaskType
+                        AND   td.[Status]  = '0'
+                        AND   td.Storerkey = @c_Storerkey
+                        AND   td.[FromId]  = @c_FromID
+                     )
+            BEGIN
+               SET @n_Continue = 4
+            END
          END
 
          IF @n_Continue = 1
@@ -832,16 +837,13 @@ BEGIN
 
             IF @@TRANCOUNT > 0                                                   
             BEGIN
-               ROLLBACK TRAN
+               ROLLBACK TRANSACTION SaveLPNPA;
             END
          END
          ELSE IF @n_Continue = 1 
          BEGIN
             SET @n_NoOfTasks = @n_NoOfTasks + 1                                 
-            WHILE @@TRANCOUNT > 0                                                                                 
-            BEGIN
-               COMMIT TRAN
-            END
+            COMMIT TRAN
          END
       END
       
@@ -858,6 +860,11 @@ BEGIN
    SET @n_Continue = 1
    QUIT_SP:
    
+   IF OBJECT_ID('tempdb..#ReceiptDetail_WIP') IS NOT NULL
+   BEGIN
+      DROP TABLE #ReceiptDetail_WIP;
+   END
+      
    IF OBJECT_ID('tempdb..#TMP_GRP') IS NOT NULL
    BEGIN
       DROP TABLE #TMP_GRP;
@@ -903,7 +910,7 @@ BEGIN
                        
       END
  
-      SELECT @b_success = 1
+      SET @b_Success = 1
       WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
          COMMIT TRAN
