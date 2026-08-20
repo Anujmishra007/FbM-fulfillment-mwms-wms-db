@@ -14,17 +14,6 @@ GO
 /* 02-11-2016  1.1  Ung         Fix recompile due to SET DATEFORMAT                 */
 /* 2026-08-14  1.2  JCH507      UWP-57695 Catch SQL exception from dynamic SP call  */
 /************************************************************************************/
-/************************************************************************/
-/* Store procedure: rdtHandle_SetUser                                   */
-/* Copyright      : LFLogistics                                         */
-/*                                                                      */
-/* Purpose: Dynamic lottable                                            */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 12-11-2014  1.0  Ung         Created                                 */
-/* 02-11-2016  1.1  Ung         Fix recompile due to SET DATEFORMAT     */
-/* 2026-08-14  1.2  JCH507      UWP-57695 Catch SQL exception from dynamic SP call */
-/************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtHandle_SetUser]
    @nMobile          INT, 
