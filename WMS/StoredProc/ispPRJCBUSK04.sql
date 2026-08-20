@@ -120,27 +120,20 @@ BEGIN
    ,  QtyAvailable   INT            NOT NULL DEFAULT(0)    
    )  
 
-   --UWP-64392
-   SET @c_ApplyJoin  = ' CROSS APPLY(SELECT Qty = SUM(lli1.QTY)
-                                     FROM LOTxLOCxID lli1 (NOLOCK) 
-                                     JOIN LOTAttribute la1 (NOLOCK) ON la1.Lot = lli1.Lot
-                                     WHERE lli1.Loc = LOTxLOCxID.Loc 
-                                     AND lli1.ID = LOTxLOCxID.ID
-                                     AND lli1.QTY > 0
-                                     AND lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen = 0
-                                     AND la1.Lottable11 = LOTATTRIBUTE.Lottable11
-                                     GROUP BY lli1.Loc, lli1.ID, la1.Lottable11
-                                     HAVING COUNT(DISTINCT lli1.SKU) = 1
-                                     AND SUM(lli1.QTYALLOCATED+lli1.QTYPICKED+lli1.QtyReplen) = 0
-                                    ) ApplyJoin' + CHAR(13)
-                                    
    SET @c_Condition  = ' AND LOC.LocationType <> ''PICK'''
+                     + ' AND EXISTS (  SELECT 1 
+                                       FROM LOTxLOCxID lli1 (NOLOCK) 
+                                       JOIN LOTAttribute la1 (NOLOCK) ON la1.Lot = lli1.Lot
+                                       WHERE lli1.Loc = LOTxLOCxID.Loc 
+                                       AND lli1.ID = LOTxLOCxID.ID
+                                       AND lli1.QTY > 0
+                                       AND la1.Lottable11 = LOTATTRIBUTE.Lottable11
+                                       GROUP BY lli1.Loc, lli1.ID, la1.Lottable11
+                                       HAVING COUNT(DISTINCT lli1.SKU) = 1
+                                    )'
 
    SET @c_OrderBy = ' ORDER BY LOTATTRIBUTE.Lottable05'                             --UWP-64392
-                  + ', ApplyJoin.Qty'  
-                  + ', LOTxLOCxID.Loc'   
-                  + ', LOTxLOCxID.ID'  
-                  + ', LOTATTRIBUTE.Lottable11'                    
+                  + ', LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked' --UWP-64392 
                   + ', LOC.LogicalLocation'                          
    
    SELECT TOP 1 @c_Cond = cl.Notes                                                        
@@ -337,7 +330,7 @@ BEGIN
          AND LOT.Status = ''OK''
          AND ID.Status = ''OK''
          AND LOC.Facility = @c_Facility
-         AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen > 0
+         AND LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED > 0
          AND LOTxLOCxID.STORERKEY = @c_StorerKey
          AND LOTxLOCxID.SKU = @c_SKU '  
       + CHAR(13) + @c_Conditions 

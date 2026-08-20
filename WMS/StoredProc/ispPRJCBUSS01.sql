@@ -430,13 +430,14 @@ BEGIN
          AND lli.ID  = @c_ID 
          AND lli.QTY-lli.QTYALLOCATED-lli.QTYPICKED-lli.QtyReplen > 0
          AND lot.[Status] = 'OK'
+         AND la.Lottable11 = @c_IDLottable11                                        --UWP-64392
          ORDER BY CASE WHEN LLI.Sku = @c_Sku THEN 1 ELSE 2 END                    
  
          OPEN @CUR_LOT
                                                                
          FETCH FROM @CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku, @c_IDLottable03   
                                        
-         WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1 AND @n_QtyLeftToFulFill > 0   --UWP-64392
+         WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
          BEGIN                                                
             SET @n_PickQty = 0
             SET @c_OrderLineNoAlloc = @c_OrderLineNumber                          
