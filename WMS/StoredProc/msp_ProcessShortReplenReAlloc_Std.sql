@@ -19,7 +19,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
-/* 31-Jul-2026 WLChooi  1.0   Initial Version                            */
+/* 21-Aug-2026 WLChooi  1.0   Initial Version                            */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortReplenReAlloc_Std] (    
        @c_Wavekey          NVARCHAR(10)   = ''
@@ -66,8 +66,8 @@ BEGIN
          , @c_Zone06                   NVARCHAR(10) = ''
          , @c_Zone07                   NVARCHAR(10) = ''
          , @c_Zone08                   NVARCHAR(10) = ''
-         , @c_Zone09                   NVARCHAR(10) = ''
-         , @c_Zone10                   NVARCHAR(10) = ''
+         , @c_Zone09                   NVARCHAR(20) = ''
+         , @c_Zone10                   NVARCHAR(20) = ''
          , @c_Zone11                   NVARCHAR(10) = ''
          , @c_Zone12                   NVARCHAR(10) = ''
          , @c_ReplenSPName             NVARCHAR(50) = ''
@@ -76,6 +76,7 @@ BEGIN
          , @c_PickTaskType             NVARCHAR(100) = ''
          , @c_PickTaskStatus           NVARCHAR(100) = ''
          , @c_DelPickdetail            NVARCHAR(1)   = 'N'
+         , @c_PassSKUToZone            NVARCHAR(1)   = 'N'
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -181,6 +182,7 @@ BEGIN
          SELECT @c_PickTaskType = dbo.fnc_GetParamValueFromString('@c_PickTaskType', @c_CLNotes, @c_PickTaskType)
          SELECT @c_PickTaskStatus = dbo.fnc_GetParamValueFromString('@c_PickTaskStatus', @c_CLNotes, @c_PickTaskStatus)
          SELECT @c_DelPickdetail = dbo.fnc_GetParamValueFromString('@c_DelPickdetail', @c_CLNotes, @c_DelPickdetail)
+         SELECT @c_PassSKUToZone = dbo.fnc_GetParamValueFromString('@c_PassSKUToZone', @c_CLNotes, @c_PassSKUToZone)
          
          IF ISNULL(TRIM(@c_ReplenishStrategy), '') = ''
             SET @c_ReplenishStrategy = 'Gen-UCC'
@@ -202,6 +204,16 @@ BEGIN
 
          IF ISNULL(TRIM(@c_DelPickdetail), '') = ''
             SET @c_DelPickdetail = 'N'
+
+         IF ISNULL(TRIM(@c_PassSKUToZone), '') = ''
+            SET @c_PassSKUToZone = 'N'
+
+         -- Pass SKU into Zone09/10 only when both conditions are met
+         IF @c_ReplenFlag = 'FP+PARM' AND @c_PassSKUToZone = 'Y'
+         BEGIN
+            SET @c_Zone09 = ISNULL(TRIM(@c_SKU), '')
+            SET @c_Zone10 = ISNULL(TRIM(@c_SKU), '')
+         END
 
          SET @n_DynReplen = ISNULL(@n_DynReplen, 0)
 
@@ -482,8 +494,8 @@ BEGIN
                                + ' , @c_Zone06        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_Zone07        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_Zone08        NVARCHAR(10) ' + CHAR(13)
-                               + ' , @c_Zone09        NVARCHAR(10) ' + CHAR(13)
-                               + ' , @c_Zone10        NVARCHAR(10) ' + CHAR(13)
+                               + ' , @c_Zone09        NVARCHAR(20) ' + CHAR(13)
+                               + ' , @c_Zone10        NVARCHAR(20) ' + CHAR(13)
                                + ' , @c_Zone11        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_Zone12        NVARCHAR(10) ' + CHAR(13)
                                + ' , @c_ReplenFlag    NVARCHAR(10) ' + CHAR(13)
