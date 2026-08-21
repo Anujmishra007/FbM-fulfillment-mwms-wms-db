@@ -112,6 +112,7 @@ Look up affected storers from `.github/instructions/data/V2_RDT_Production_Confi
 - **RUNTIME_BUG**: Logic error, SP exists and executes incorrectly
 - **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
+- **STANDARDS_VIOLATION**: New or modified code does not follow mandatory coding standards
 
 ---
 
@@ -375,6 +376,84 @@ Check:
    - Highlight which Storers need to be notified for testing validation
    - If Extension SP not in mapping, flag as "Not Configured" and recommend adding to mapping
 
+### Phase 6.5: Code Standards Compliance Check
+
+**Scope**: Flag violations only in **newly added or modified code**. Legacy untouched code does not need to be flagged even if it violates these standards. All newly added extended screen SPs must strictly conform.
+
+#### Script Format
+- File uses Windows line breaks (CRLF), not Unix (LF)
+- Indentation uses 3 spaces — no TAB characters
+
+#### Must-Follow Rules (new/modified code)
+
+| Rule | Check | Severity if Violated |
+|------|-------|----------------------|
+| `CREATE OR ALTER` in SP scripts | SP header uses `CREATE OR ALTER PROC` / `CREATE OR ALTER PROCEDURE` | MEDIUM |
+| Schema prefix on all table references | Every table reference includes schema (e.g., `rdt.RDTMOBREC`, `dbo.ORDERHDR`) | MEDIUM |
+| Explicit data type conversion | No implicit casts; string→date uses `RDT.rdtConvertToDate`; date→string uses `RDT.rdtFormatDate`; string→numeric uses `RDT.rdtIsValidQty` + `TRY_CAST`; all other conversions use `TRY_CAST` | HIGH |
+| `GRANT EXECUTE TO [NSQL]` at end of SP/function | Grant statement present at end of file | MEDIUM |
+| Unique error numbers; definitions in `[SPName]_message.sql` | Each `@nErrNo` is unique system-wide; corresponding message SQL file exists | MEDIUM |
+| `WITH (NOLOCK)` on all SELECT queries | All `SELECT` statements include `WITH (NOLOCK)` unless there is a documented specific reason | LOW |
+| `GO` after `CREATE PROCEDURE` and `GRANT EXECUTE` | A `GO` statement follows each CREATE PROCEDURE block and each GRANT statement | MEDIUM |
+| `WITH (ROWLOCK)` on UPDATE statements | All `UPDATE` statements include `WITH (ROWLOCK)` | MEDIUM |
+| Primary keys used in UPDATE/DELETE | `WHERE` clause uses primary key columns whenever possible | HIGH |
+| `C_StringXX` fields only set in ExtScn SPs | No `C_String`, `C_Integer`, `C_DateTime` field assignments in Main SPs or non-ExtScn SPs | HIGH |
+| All DML wrapped in `BEGIN TRY...BEGIN CATCH` | Every `INSERT`, `UPDATE`, `DELETE`, `MERGE` is wrapped with TRY/CATCH; CATCH sets `@nErrNo` and `@cErrMsg` | CRITICAL |
+
+#### Cursor Rules (if cursors are present in changed code)
+
+- Cursor declared as a `CURSOR` variable (not inline `DECLARE cursor_name CURSOR FOR`)
+- Set as `LOCAL READ_ONLY FAST_FORWARD` unless there is a specific reason
+- Before explicit close/deallocate, cursor status checked via `CURSOR_STATUS('variable', '@cur')`
+
+```sql
+-- Correct pattern
+DECLARE @cur CURSOR;
+SET @cur = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+    SELECT ... FROM ...;
+
+-- Correct close/deallocate with status check
+DECLARE @curStatus INT = CURSOR_STATUS('variable', '@cur');
+IF @curStatus >= 0
+BEGIN
+    CLOSE @cur;
+    DEALLOCATE @cur;
+END
+ELSE IF @curStatus = -1
+BEGIN
+    DEALLOCATE @cur;
+END
+```
+
+#### Extended Screen SP Rules (for new/modified ExtScn SPs)
+
+- `[RDT].[rdt_ExtScnEntry]` is only called at `Step_99`; the step label must be `Step_99`
+- RDT config key for extended screen must be `ExtScnSP`
+- All steps other than Step_99 must reach the ExtScn via `GOTO Step_99` — no direct `rdt_ExtScnEntry` calls elsewhere
+- A GOTO section must be added at the end of each step; inline GOTO is allowed only immediately after mid-step step-jumping code
+- Extended screen-only values must be stored in `C_StringXX`, `C_IntegerXX`, or `C_DateTimeXX` columns — never in `V_` columns
+- Variable naming convention must be followed:
+
+| Variable | Meaning |
+|----------|---------|
+| `@nMobRecScn` | Screen value currently in RDTMOBREC table |
+| `@nMobRecStep` | Step value currently in RDTMOBREC table |
+| `@nStep` | Step value passed into the ExtScn SP |
+| `@nScn` | Screen value passed into the ExtScn SP |
+| `@nAfterStep` | Next step value returned to the main SP |
+| `@nAfterScn` | Next screen value returned to the main SP |
+| `@nPreStep` | Previous step that called the ExtScn SP |
+| `@nPreScn` | Previous screen that called the ExtScn SP |
+
+#### Transaction Handling Rules (new/modified code containing transactions)
+
+- `@@TRANCOUNT` must be checked to identify whether the transaction is nested or root
+- `XACT_STATE()` must be evaluated before any `ROLLBACK` statement:
+  - `1` → active and committable (force rollback on unexpected error)
+  - `0` → no active transaction (no rollback needed)
+  - `-1` → uncommittable/doomed → full `ROLLBACK TRANSACTION` is mandatory; rolling back to a savepoint is not allowed
+- Commit and rollback must be handled correctly based on transaction type (root vs. nested)
+
 ### Phase 7: Generate Report
 
 **CRITICAL REQUIREMENTS:**
@@ -477,6 +556,7 @@ Check:
 - **RUNTIME_BUG**: Logic error, SP exists and executes
 - **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
+- **STANDARDS_VIOLATION**: New or modified code does not follow mandatory coding standards
 
 ## 7. Extension SP Impact
 
@@ -560,6 +640,32 @@ Check:
 **Conditions for Deployment** (if applicable):
 - {Condition 1}
 - {Condition 2}
+
+## 12. Code Standards Compliance
+
+**Scope**: Violations reported only for newly added or modified code. Legacy untouched code is excluded.
+
+| Rule | Status | Details | Severity |
+|------|--------|---------|---------|
+| `CREATE OR ALTER` in SP scripts | {PASS / FAIL / N/A} | {details} | {severity} |
+| Schema prefix on all table references | {PASS / FAIL / N/A} | {details} | {severity} |
+| Explicit data type conversion (`TRY_CAST` / `rdtConvertToDate` / `rdtFormatDate` / `rdtIsValidQty`) | {PASS / FAIL / N/A} | {details} | {severity} |
+| `GRANT EXECUTE TO [NSQL]` at end of script | {PASS / FAIL / N/A} | {details} | {severity} |
+| Unique error numbers + `[SPName]_message.sql` | {PASS / FAIL / N/A} | {details} | {severity} |
+| `WITH (NOLOCK)` on all SELECT queries | {PASS / FAIL / N/A} | {details} | {severity} |
+| `GO` after `CREATE PROCEDURE` and `GRANT` | {PASS / FAIL / N/A} | {details} | {severity} |
+| Primary keys used in UPDATE / DELETE | {PASS / FAIL / N/A} | {details} | {severity} |
+| `C_StringXX` only set in ExtScn SPs | {PASS / FAIL / N/A} | {details} | {severity} |
+| DML wrapped in `BEGIN TRY...BEGIN CATCH` | {PASS / FAIL / N/A} | {details} | {severity} |
+| Transaction handling (`@@TRANCOUNT` + `XACT_STATE`) | {PASS / FAIL / N/A} | {details} | {severity} |
+| Cursor rules (if cursors used) | {PASS / FAIL / N/A} | {details} | {severity} |
+| ExtScn variable naming + GOTO structure | {PASS / FAIL / N/A} | {details} | {severity} |
+
+### Standards Violations
+
+| Issue ID | Rule Violated | Location | Severity |
+|----------|--------------|----------|---------|
+| {STD-001} | {rule name} | Line {N}: {description} | {CRITICAL/HIGH/MEDIUM/LOW} |
 
 ---
 
@@ -645,6 +751,7 @@ When reviewing a PR, structure the comment like this:
 - **RUNTIME_BUG**: Logic error, SP exists and executes incorrectly
 - **SESSION_BUG**: Affects MOBREC state at Quit (impacts ALL storers)
 - **CONFIG_ISSUE**: SP configured but file missing (pre-existing, LOW)
+- **STANDARDS_VIOLATION**: New or modified code does not follow mandatory coding standards
 
 ## Test Recommendations
 
@@ -667,5 +774,6 @@ When reviewing a PR, structure the comment like this:
 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
+| 1.2 | 2026-08-21 | RDT Team | Added Phase 6.5 (Code Standards Compliance Check) covering script format, must-follow coding rules, cursor rules, ExtScn SP rules, and transaction handling; added Section 12 (Code Standards Compliance) to report template; added STANDARDS_VIOLATION issue type to all legends |
 | 1.1 | 2026-04-29 | RDT Team | Added mandatory PR summary requirements (Severity, Deployment Recommendation, Affected Storers) and example format |
 | 1.0 | 2026-04-29 | RDT Team | Initial PR review instructions based on RDT_SP_Analysis.md v1.7 |
