@@ -105,6 +105,13 @@ BEGIN
 
             IF ISNULL(@cPickMethod, '') = 'FP'
             BEGIN
+               -- Common params (To check)
+               INSERT INTO @tPalletLBLParam (Variable, Value) VALUES
+                  ( '@cStorerKey',     @cStorerKey),
+                  ( '@cFacility',      @cFacility),
+                  ( '@cDropID',        @cSuggID),
+                  ( '@cTaskdetailKey', @cTaskdetailKey)
+
                IF ISNULL(@cOrderGroup, '') = 'STANDARD'
                BEGIN
                   SELECT @nSKUCountOnID = COUNT(DISTINCT(lli.Sku)) 
@@ -114,13 +121,6 @@ BEGIN
                      AND lli.Loc = @cSuggFromLOC
                      AND lli.Id = @cSuggID
                   GROUP BY lli.Id
-
-                  -- Common params (To check)
-                  INSERT INTO @tPalletLBLParam (Variable, Value) VALUES
-                     ( '@cStorerKey',     @cStorerKey),
-                     ( '@cFacility',      @cFacility),
-                     ( '@cDropID',        @cSuggID),
-                     ( '@cTaskdetailKey', @cTaskdetailKey)	
 
                   IF @nSKUCountOnID = 1
                   BEGIN
