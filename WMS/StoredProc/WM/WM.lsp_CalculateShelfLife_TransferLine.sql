@@ -13,13 +13,14 @@ GO
 /* Called By:                                                            */
 /*                                                                       */
 /*                                                                       */
-/* Version: 1.0                                                          */
+/* Version: 1.1                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 2022-09-27  SBA757   1.0   Calculate shelf life for transfer line     */
+/* 2026-08-24  VNI056   1.1   Added toLottable07 Parameter- FCR-14631    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CalculateShelfLife_TransferLine]
    @c_TransferKey          NVARCHAR(4000)= '',
@@ -39,6 +40,7 @@ BEGIN
          , @c_SKU                NVARCHAR(100) = ''
          , @dt_Lottable04        DATETIME
          , @n_Continue           INT           = 1
+         , @c_Lottable07         NVARCHAR(10)              --VNI056
          , @dt_Lottable13        DATETIME
          , @c_ShelfLifeFnc       NVARCHAR(100) = ''
          , @c_ConfigKey          NVARCHAR(20)  = 'ShelfLifeCalcFnc'
@@ -53,6 +55,7 @@ BEGIN
          @c_StorerKey = ToStorerKey,
          @c_SKU = ToSku,
          @dt_Lottable04 = tolottable04,
+         @c_Lottable07 = tolottable07,                  --VNI056
          @dt_Lottable13 = tolottable13
       FROM TRANSFERDETAIL WITH (NOLOCK)
       WHERE
@@ -67,7 +70,7 @@ BEGIN
       IF @dt_Lottable04 IS NOT NULL
          BEGIN
             IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUL'
-               SELECT @c_shelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @dt_Lottable04)
+               SELECT @c_shelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @dt_Lottable04, @c_Lottable07)  --VNI056
             ELSE IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUD'
                SELECT @c_shelfLife =  dbo.fnc_CalcShelfLifeBUD(@c_StorerKey, @c_SKU, @dt_Lottable04, @dt_Lottable13)
          END

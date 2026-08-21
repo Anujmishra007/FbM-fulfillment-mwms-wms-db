@@ -1,11 +1,12 @@
 /***************************************************************************/
-/* Stored Procedure: ispTransferAllocationForFinalize             */
-/* Creation Date: 20-May-2024                                    */
-/* Copyright: Maersk                                            */
-/* Purpose: UWP-18603                                           */
-/* Written by: Ansuman                                          */
-/* Purpose: Transfer Allocation with Auto Finalize              */
-/* Called By: DB Scheduler                                    */
+/* Stored Procedure: ispTransferAllocationForFinalize                      */
+/* Creation Date: 20-May-2024                                              */
+/* Copyright: Maersk                                                       */
+/* Purpose: UWP-18603                                                      */
+/* Written by: Ansuman                                                     */
+/* Purpose: Transfer Allocation with Auto Finalize                         */
+/* Called By: DB Scheduler                                                 */
+/* Revisions: (VNI01)- (FCR-14631) - Preetham NV                           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispTransferAllocationForFinalize](
@@ -187,7 +188,12 @@ BEGIN
 					  AND LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )
 					  AND ID.Status  = 'OK'
 					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) >= 0
-					  AND LA.Lottable07 NOT IN ('ML53', 'ML54')
+                      AND LA.Lottable07 NOT IN (                           --VNI01(Start)
+                        SELECT Code FROM dbo.CODELKUP WITH (NOLOCK)
+                        WHERE ListName = 'SLCODE'
+                           AND UDF03 = 'DMG'
+                           AND Storerkey = @c_FromStorerkey
+                        )                                                --VNI01(End)
 					ORDER BY
 						(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
 
@@ -220,13 +226,22 @@ BEGIN
 							SET @c_TransferStatus = '0'
 							SET @c_UserDefined02 = 'ALLOCATION_DONE'
 							IF @c_UpdateSLOnLottable06Change='fnc_CalcShelfLifeBUL'
-								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLifeBUL(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
+                                SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLifeBUL(@c_ToStorerkey, @c_ToSku, @dt_Lottable04, @c_Lottable07)
 							ELSE IF @c_UpdateSLOnLottable06Change='fnc_CalcShelfLifeBUD'
 								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLifeBUD(@c_ToStorerkey, @c_ToSku, @dt_Lottable04, @dt_Lottable13)
 							ELSE
 								SET @c_ToLottable07 = @c_Lottable07
-							IF @c_ToLottable07 = 'ML51'
+
+                            IF EXISTS (                                --VNI01(Start)
+                                    SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                                    WHERE ListName = 'SLCode'
+                                    AND Storerkey = @c_ToStorerkey
+                                    AND Code = @c_ToLottable07
+                                    AND UDF03 = 'EXP'
+                            )
+                            BEGIN
 								SET @c_ToLottable06 = '1'
+							END                                      --VNI01(End)
 							ELSE
 								SET @c_ToLottable06 = '0'
 							IF(@n_IsFirstRecord = 1)
