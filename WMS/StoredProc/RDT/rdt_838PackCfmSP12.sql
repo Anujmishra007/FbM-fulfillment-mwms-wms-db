@@ -914,10 +914,12 @@ BEGIN
             SET DropID   = LEFT('ARC' + DropID, 20),
                 EditDate = GETDATE(),
                 EditWho  = SUSER_SNAME()
-            WHERE PickSlipNo = @cLoopPackSlipNo
+            WHERE StorerKey = @cStorerKey
+               AND PickSlipNo = @cLoopPackSlipNo
                AND CartonNo  = @nLoopPackCartonNo
                AND LabelNo   = @cLoopPackLabelNo
                AND LabelLine = @cLoopPackLabelLine
+               AND DropID NOT LIKE 'ARC%'
          END TRY
          BEGIN CATCH
             SET @nErrNo  = 262666
