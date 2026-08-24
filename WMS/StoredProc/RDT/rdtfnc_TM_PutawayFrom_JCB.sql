@@ -1539,16 +1539,11 @@ BEGIN
                            AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
                         COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
                      FROM dbo.LOC WITH(NOLOCK)
-                     LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                        ON LLI.Loc = LOC.Loc
-                        AND LLI.Sku = @cSKU
-                        AND LLI.StorerKey = @cStorerKey
                      LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
                         ON RP.StorerKey = @cStorerKey
                         AND LOC.Loc = RP.SuggestedLoc
                         AND RP.ID <> ''
                      WHERE Facility = @cFacility
-                        AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.Qty IS NULL)
                         AND LOC.Loc = @cToLoc
                         AND LOC.Status = 'OK'
                         AND LOC.PutawayZone = @cPutawayZone
