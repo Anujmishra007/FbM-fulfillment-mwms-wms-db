@@ -26,6 +26,7 @@ GO
 /* 2025-07-25  AK01     1.2   FCR-6532 - Add support for time-based job */
 /*                            scheduling using Notes2 config            */
 /* 2026-06-10  VNI01    1.3   FCR-12991 - Time based scheduling update  */
+/* 2026-08-19  Michael  1.4   FCR-15122 - Add Weekly/Monthly Sch (ML01) */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ
    @c_jobname   NVARCHAR(30) = 'BEJ-STD-01'
@@ -71,6 +72,32 @@ BEGIN
 
          , @CUR_JOB           CURSOR
          , @CUR_PARMS         CURSOR
+
+   --ML01-S
+   DECLARE @d_SysDateTime     DATETIME = GETDATE()
+         , @c_ScheduleType    NVARCHAR(50)
+         , @n_DayOfMonth      INT            -- +ve(1..31)=n-th day / -ve(-1..-31)=Last n-th day
+         , @c_Weekdays        NVARCHAR(50)   -- Mon,Tue,Wed,Thu,Fri,Sat,Sun / ALL
+         , @c_TimeInterval    NVARCHAR(50)   -- hh:mm:ss
+         , @c_StartDate       NVARCHAR(50)   -- yyyy-MM-dd
+         , @c_EndDate         NVARCHAR(50)   -- yyyy-MM-dd
+         , @c_StartTime       NVARCHAR(MAX)  -- hh:mm:ss / hh:mm:ss,hh:mm:ss,...
+         , @c_EndTime         NVARCHAR(50)   -- hh:mm:ss
+         , @n_SecondInterval  INT
+         , @d_StartDateTime   DATETIME
+         , @d_EndDateTime     DATETIME
+         , @c_Schdule         NVARCHAR(MAX)
+         , @c_Schdule1        NVARCHAR(MAX)
+         , @c_Schdule2        NVARCHAR(MAX)
+         , @c_Schdule3        NVARCHAR(MAX)
+         , @c_Schdule4        NVARCHAR(MAX)
+         , @c_Schdule5        NVARCHAR(MAX)
+         , @n_I               INT
+         , @d_Temp            DATETIME
+         , @b_JobFire         INT
+
+   DECLARE @t_StartTimeList   TABLE(time_val NVARCHAR(12) NULL)
+   --ML01-E
 
    IF OBJECT_ID('tempdb..#TMP_BEJCL','u') IS NOT NULL         
    BEGIN
@@ -227,6 +254,119 @@ BEGIN
                GOTO NEXT_JOB
             END
          END                                    --VNI01 END
+         --ML01-S
+         ELSE IF @c_IntervalType IN ('WeeklySchedule', 'MonthlySchedule')
+         BEGIN
+            /*
+            @IntervalType = WeeklySchedule / MonthlySchedule
+            @Weekdays     = Mon,Tue,Wed,Thu,Fri,Sat,Sun / ALL                  (Mandatory for Weekly Schedule)
+            @DayOfMonth   = +ve(1..31)=n-th day / -ve(-1..-31)=Last n-th day   (Mandatory for Monthly Schedule)
+            @TimeInterval = hh:mm / hh:mm:ss          (Optional)
+            @StartDate    = yyyy-MM-dd                (Optional)
+            @EndDate      = yyyy-MM-dd                (Optional)
+            @StartTime    = hh:mm / hh:mm,hh:mm,...   (Mandatory)
+            @EndTime      = hh:mm                     (Optional)
+
+            * Max can setup 6 different schedules for Weekly type. For example,
+              @IntervalType = WeeklySchedule
+                          @Weekdays  = Mon,Tue,Wed,Thu,Fri @TimeInterval  = 00:30 @StartTime  = 07:00 @EndTime  = 17:00   <- Schedule 0
+              @Schdule1 = @@Weekdays = Mon,Tue,Wed,Thu,Fri @@TimeInterval = 00:30 @@StartTime = 00:00 @@EndTime = 02:00   <- Schedule 1
+              @Schdule2 = @@Weekdays = Sat,Sun             @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 2
+              @Schdule3 = @@IntervalType = MonthlySchedule @@DayOfMonth = 1 @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 3
+            */
+            SET @c_Schdule1 = dbo.fnc_GetParamValueFromString('@Schdule1', @c_JobSchedConfig, '')
+            SET @c_Schdule2 = dbo.fnc_GetParamValueFromString('@Schdule2', @c_JobSchedConfig, '')
+            SET @c_Schdule3 = dbo.fnc_GetParamValueFromString('@Schdule3', @c_JobSchedConfig, '')
+            SET @c_Schdule4 = dbo.fnc_GetParamValueFromString('@Schdule4', @c_JobSchedConfig, '')
+            SET @c_Schdule5 = dbo.fnc_GetParamValueFromString('@Schdule5', @c_JobSchedConfig, '')
+            SET @n_I = 0
+            SET @b_JobFire = 0
+
+            WHILE @n_I <= 5 AND ISNULL(@b_JobFire,0) <> 1
+            BEGIN
+               SET @c_Schdule = CASE @n_I WHEN 0 THEN @c_JobSchedConfig
+                                          WHEN 1 THEN @c_Schdule1
+                                          WHEN 2 THEN @c_Schdule2
+                                          WHEN 3 THEN @c_Schdule3
+                                          WHEN 4 THEN @c_Schdule4
+                                          WHEN 5 THEN @c_Schdule5
+                                END
+               SET @n_I= @n_I + 1
+
+               IF ISNULL(@c_Schdule,'') <> ''
+               BEGIN
+                  SET @c_ScheduleType  = dbo.fnc_GetParamValueFromString('@IntervalType', @c_Schdule, '')
+                  SET @n_DayOfMonth    = TRY_PARSE(ISNULL(dbo.fnc_GetParamValueFromString('@DayOfMonth'  , @c_Schdule, ''),'') AS INT)
+                  SET @c_Weekdays      = dbo.fnc_GetParamValueFromString('@Weekdays'    , @c_Schdule, '')
+                  SET @c_TimeInterval  = dbo.fnc_GetParamValueFromString('@TimeInterval', @c_Schdule, '')
+                  SET @c_StartDate     = dbo.fnc_GetParamValueFromString('@StartDate'   , @c_Schdule, '')
+                  SET @c_EndDate       = dbo.fnc_GetParamValueFromString('@EndDate'     , @c_Schdule, '')
+                  SET @c_StartTime     = dbo.fnc_GetParamValueFromString('@StartTime'   , @c_Schdule, '')
+                  SET @c_EndTime       = dbo.fnc_GetParamValueFromString('@EndTime'     , @c_Schdule, '')
+
+                  IF ISNULL(@c_ScheduleType,'') = ''
+                     SET @c_ScheduleType = @c_IntervalType
+
+                  DELETE FROM @t_StartTimeList
+
+                  INSERT INTO @t_StartTimeList (time_val)
+                  SELECT DISTINCT LEFT(TRIM(value),12) FROM STRING_SPLIT(@c_StartTime, ',') WHERE value<>'' ORDER BY 1
+
+                  SELECT @c_StartTime = ISNULL(MIN(LEFT(TRIM(ColValue),12)),'') FROM dbo.fnc_DelimSplit(',',@c_StartTime) WHERE SeqNo=1
+
+                  DELETE FROM @t_StartTimeList WHERE time_val = @c_StartTime
+
+                  SET @n_SecondInterval = DATEDIFF(SECOND, '', TRY_CONVERT(DATETIME, @c_TimeInterval))
+                  SET @d_StartDateTime  = TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + @c_StartTime,''))
+                  SET @d_EndDateTime    = DATEADD(SECOND, 30, TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + @c_EndTime  ,'')))
+
+                  IF @c_ScheduleType = 'WeeklySchedule'
+                  BEGIN
+                     IF NOT EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Weekdays,',') WHERE value<>'' AND TRIM(value) IN ('ALL', LEFT(DATENAME(weekday,@d_SysDateTime),3)))   --Weekday not match
+                        CONTINUE
+                  END
+                  ELSE IF @c_ScheduleType = 'MonthlySchedule'
+                  BEGIN
+                     IF @n_DayOfMonth > 0
+                        SET @d_Temp = DATEADD(DAY, @n_DayOfMonth - 1, CONVERT(NVARCHAR(8),@d_SysDateTime,120)+'01')
+                     ELSE IF @n_DayOfMonth < 0
+                        SET @d_Temp = DATEADD(DAY, @n_DayOfMonth, CONVERT(NVARCHAR(8),DATEADD(MONTH,1,@d_SysDateTime),120)+'01')
+                     ELSE
+                        SET @d_Temp = NULL
+
+                     IF @d_Temp IS NULL OR DATEDIFF(DAY, @d_SysDateTime, @d_Temp) <> 0   -- Day of Month not match
+                        CONTINUE
+                  END
+                  ELSE
+                     CONTINUE
+
+                  IF (ISNULL(@c_StartDate,'')<>'' AND DATEDIFF(DAY, TRY_CONVERT(DATE, ISNULL(@c_StartDate,'')), @d_SysDateTime) < 0) OR   -- Out of Date Range
+                     (ISNULL(@c_EndDate  ,'')<>'' AND DATEDIFF(DAY, TRY_CONVERT(DATE, ISNULL(@c_EndDate,'')), @d_SysDateTime) > 0)
+                     CONTINUE
+
+                  IF ISNULL(@c_StartTime,'')<>'' AND @d_SysDateTime >= @d_StartDateTime AND   -- In Time Range
+                    (ISNULL(@c_EndTime  ,'')=''  OR  @d_SysDateTime <= @d_EndDateTime ) AND
+                     DATEADD(SECOND, CASE WHEN @n_SecondInterval > 0 THEN DATEDIFF(SECOND, @d_StartDateTime, @d_SysDateTime) / @n_SecondInterval * @n_SecondInterval ELSE 0 END, @d_StartDateTime) > @dt_LastRunDTime
+                  BEGIN
+                     SET @b_JobFire = 1
+                     BREAK
+                  END
+
+                  IF EXISTS(SELECT TOP 1 1 FROM (
+                        SELECT SchDateTime = TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + time_val,''))
+                        FROM @t_StartTimeList
+                     ) X
+                     WHERE @dt_LastRunDTime < SchDateTime AND SchDateTime <= @d_SysDateTime)   -- In Specific Time
+                  BEGIN
+                     SET @b_JobFire = 1
+                     BREAK
+                  END
+               END
+            END
+            IF ISNULL(@b_JobFire,0) <> 1
+               GOTO NEXT_JOB
+         END
+         --ML01-E
 
          -- Future development notes:
          -- For @IntervalType=SpecificDay: Run if today matches one of the days listed in @Days (e.g., Mon,Wed,Fri).
