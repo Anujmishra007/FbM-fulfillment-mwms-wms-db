@@ -78,11 +78,11 @@ BEGIN
          , @c_ScheduleType    NVARCHAR(50)
          , @n_DayOfMonth      INT            -- +ve(1..31)=n-th day / -ve(-1..-31)=Last n-th day
          , @c_Weekdays        NVARCHAR(50)   -- Mon,Tue,Wed,Thu,Fri,Sat,Sun / ALL
-         , @c_TimeInterval    NVARCHAR(50)   -- hh:mm:ss
+         , @c_TimeInterval    NVARCHAR(50)   -- hh:mm / hh:mm:ss
          , @c_StartDate       NVARCHAR(50)   -- yyyy-MM-dd
          , @c_EndDate         NVARCHAR(50)   -- yyyy-MM-dd
-         , @c_StartTime       NVARCHAR(MAX)  -- hh:mm:ss / hh:mm:ss,hh:mm:ss,...
-         , @c_EndTime         NVARCHAR(50)   -- hh:mm:ss
+         , @c_StartTime       NVARCHAR(MAX)  -- hh:mm / hh:mm,hh:mm,...
+         , @c_EndTime         NVARCHAR(50)   -- hh:mm
          , @n_SecondInterval  INT
          , @d_StartDateTime   DATETIME
          , @d_EndDateTime     DATETIME
