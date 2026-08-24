@@ -264,7 +264,7 @@ BEGIN
             @TimeInterval = hh:mm / hh:mm:ss          (Optional)
             @StartDate    = yyyy-MM-dd                (Optional)
             @EndDate      = yyyy-MM-dd                (Optional)
-            @StartTime    = hh:mm / hh:mm,hh:mm,...   (Mandatory)
+            @StartTime    = hh:mm / hh:mm,hh:mm,...   (Mandatory) (first is start time, others are specific time)
             @EndTime      = hh:mm                     (Optional)
 
             * Max can setup 6 different schedules for Weekly type. For example,
