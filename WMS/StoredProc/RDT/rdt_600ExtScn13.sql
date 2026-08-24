@@ -6,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_600ExtScn13                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk.                                             */
 /*                                                                      */
 /* Purpose:       For Unilever copied from rdt_600ExtScn01              */
 /*                                                                      */
@@ -166,7 +166,7 @@ BEGIN
                IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
                BEGIN
                   SET @cLottable06 = ''
-                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,''), @cFLottable07=ISNULL(RD.lottable07,'') --ASC199  
+                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'')  
                   FROM dbo.Receipt R WITH (NOLOCK)
                      INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
                   WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
@@ -177,12 +177,23 @@ BEGIN
                   BEGIN    
                      SET @cLottable06 = '1'
                   END
-                    --ASC199    
-                   SET @code=''  
-                   SELECT @code= Max(code2) FROM CODELKUP WITH (NOLOCK)  
-                    WHERE LISTNAME = 'SLCODE'  
-                    AND Storerkey=@cStorerKey AND code2=SUBSTRING(isnull(@cFLottable07,''), 1, 2)      
-                   --ASC199  
+
+                  --ASC199      
+                  SELECT @cFLottable07=ISNULL(RD.lottable01,'') --ASC199  
+                     FROM dbo.Receipt R WITH (NOLOCK)  
+                        INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey  
+                     WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey  
+                        AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)  
+                        AND RD.Sku = @cSKU  
+                        AND RD.ReceiptLineNumber = @cReceiptLineNumber  
+                     ORDER BY RD.ReceiptLineNumber  
+                  SET @Code=''  
+                  SELECT @Code= Max(code2) FROM CODELKUP WITH (NOLOCK)  
+                     WHERE LISTNAME = 'SLCODE'  
+                        AND Storerkey=@cStorerKey 
+                        AND code2=SUBSTRING(isnull(@cFLottable07,''), 1, 2)      
+                   --ASC199 
+
                   IF ISNULL(@cLottable12,'') <> '' AND 
                   EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
                               WHERE LISTNAME = 'ASNREASON'
@@ -323,7 +334,7 @@ BEGIN
                      END
                   END TRY
                   BEGIN CATCH
-                     SET @nErrNo = 211714
+                     SET @nErrNo = 277351
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Generate WorkOrder Fail'
                      GOTO Exception
                   END CATCH
@@ -390,7 +401,7 @@ BEGIN
                   END
                END TRY
                BEGIN CATCH
-                  SET @nErrNo = 211714
+                  SET @nErrNo = 277352
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Generate WorkOrder Fail'
                   GOTO Exception
                END CATCH
@@ -423,15 +434,15 @@ BEGIN
 
                   IF @@ROWCOUNT = 0
                   BEGIN
-                     SET @nErrNo = 212601
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212601Pallet Type Not Configured
+                     SET @nErrNo = 277353
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --277353 Pallet Type Not Configured
                      GOTO Quit
                   END
 
                   IF @cPalletTypeInUse != 'Y'
                   BEGIN
-                     SET @nErrNo = 212602
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212602Pallet Type Not In Use
+                     SET @nErrNo = 277354
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --277354 Pallet Type Not In Use
                      GOTO Quit
                   END
 
@@ -456,14 +467,14 @@ BEGIN
                   SET @nRowCount = @@ROWCOUNT
                   IF @nRowCount > 1
                   BEGIN
-                     SET @nErrNo = 212603
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212603Unique location not identified
+                     SET @nErrNo = 277355
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --277355 Unique location not identified
                      GOTO Quit
                   END
                   ELSE IF @nRowCount = 0
                   BEGIN
-                     SET @nErrNo = 212604
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212604Loc Not Found
+                     SET @nErrNo = 277356
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --277356 Loc Not Found
                      GOTO Quit
                   END
                   SET @cLOC = @cActLoc
@@ -495,7 +506,7 @@ BEGIN
                   EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
                   IF @nSQLResult = 0
                   BEGIN
-                     SET @nErrNo = 212605
+                     SET @nErrNo = 277357
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'List not maintained'
                      GOTO Quit
                   END
@@ -507,7 +518,7 @@ BEGIN
                   EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
                   IF @nSQLResult = 0
                   BEGIN
-                     SET @nErrNo = 212606
+                     SET @nErrNo = 277358
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Value'
                      GOTO Quit
                   END
