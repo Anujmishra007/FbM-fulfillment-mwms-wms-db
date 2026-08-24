@@ -9,6 +9,7 @@ GO
 /* Updates:                                                                   */  
 /* Date         Author  Ver.    Purposes                                      */  
 /* 15/07/2026   AGA399  1.0     Check IB NO (cLottable06)                     */  
+/* 24/08/2026.  NYE018  1.1     UWP-64901                                     */
 /******************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScrAD]  
    @nMobile             INT,  
@@ -69,7 +70,7 @@ BEGIN
                     WHERE receiptkey = @cReceiptKey  
                     AND StorerKey = @cStorerKey  
                     AND Sku = @cSKU  
-                    AND ExternPoKey = SUBSTRING(@cInField02, 22, 10)  
+                    AND ExternPoKey = SUBSTRING(@cInField02, 23, 9)    
                     )  
                     BEGIN  
                         SET @nErrNo = 276551  
