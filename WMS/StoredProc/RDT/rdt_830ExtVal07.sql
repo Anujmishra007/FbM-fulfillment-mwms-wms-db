@@ -77,18 +77,36 @@ BEGIN
             END
 
             -- Look up PICKDETAIL and LotxLocxId to validate DropID against ID based on UOM
+            -- PD_TOTAL sums all PICKDETAIL lines for the same pallet (multi-lot per pallet)
+            -- LI sums all LotxLocxId lines for the same pallet (multi-lot in inventory)
             SELECT TOP 1
                @cUOM           = PD.UOM,
                @cPickDetailID  = PD.ID,
-               @nPickDetailQty = PD.Qty,
-               @nLotQty        = ISNULL(LI.Qty, 0),
-               @nLotQtyPicked  = ISNULL(LI.QtyPicked, 0)
+               @nPickDetailQty = ISNULL(PD_TOTAL.TotalPickQty, 0),
+               @nLotQty        = ISNULL(LI.TotalQty, 0),
+               @nLotQtyPicked  = ISNULL(LI.TotalQtyPicked, 0)
             FROM dbo.PICKDETAIL PD (NOLOCK)
-            LEFT JOIN dbo.LotxLocxId LI (NOLOCK)
-               ON  LI.Storerkey = PD.Storerkey
-               AND LI.SKU       = PD.SKU
-               AND LI.Loc       = PD.Loc
-               AND LI.ID        = PD.ID
+            JOIN (
+               SELECT Loc, ID,
+                      SUM(Qty) AS TotalPickQty
+               FROM dbo.PICKDETAIL WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                 AND Storerkey  = @cStorerKey
+                 AND Loc        = @cSuggLOC
+                 AND Status     <> '9'
+               GROUP BY Loc, ID
+            ) PD_TOTAL ON PD_TOTAL.Loc = PD.Loc
+                      AND PD_TOTAL.ID  = PD.ID
+            LEFT JOIN (
+               SELECT Storerkey, SKU, Loc, ID,
+                      SUM(Qty)       AS TotalQty,
+                      SUM(QtyPicked) AS TotalQtyPicked
+               FROM dbo.LotxLocxId WITH (NOLOCK)
+               GROUP BY Storerkey, SKU, Loc, ID
+            ) LI ON  LI.Storerkey = PD.Storerkey
+                 AND LI.SKU       = PD.SKU
+                 AND LI.Loc       = PD.Loc
+                 AND LI.ID        = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
               AND PD.Storerkey  = @cStorerKey
               AND PD.Loc        = @cSuggLOC
@@ -133,7 +151,7 @@ BEGIN
                FROM dbo.PICKDETAIL PD (NOLOCK)
                WHERE PD.Storerkey = @cStorerKey
                  AND PD.DropID    = @cDropID
-                 AND PD.PickSlipNo <> @cPickSlipNo
+                --  AND PD.PickSlipNo <> @cPickSlipNo
                  AND PD.Status    <> '9'
                  AND NOT EXISTS (
                     SELECT 1 FROM dbo.PackHeader PH WITH(NOLOCK)
