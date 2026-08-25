@@ -161,7 +161,7 @@ BEGIN
             GOTO Quit  
    
          -- Guard: EMPTY reason only  
-         IF ISNULL(@cReasonCode, '') <> 'EMPTY'  
+         IF ISNULL(@cReasonCode, '') <> 'EMPTYR'  
             GOTO Quit  
    
          -- DoCycleCount flag: nspRFRSN01 created a CC task when '1'  
