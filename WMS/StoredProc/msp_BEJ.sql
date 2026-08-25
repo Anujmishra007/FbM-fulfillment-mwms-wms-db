@@ -96,7 +96,10 @@ BEGIN
          , @d_Temp            DATETIME
          , @b_JobFire         INT
          , @c_JobLog          NVARCHAR(10)
+         , @c_SQLDb           NVARCHAR(128)
+         , @c_SQLSchema       NVARCHAR(128)
          , @c_LogText         NVARCHAR(MAX)
+         , @n_Duration        INT
          , @d_JobStartTime    DATETIME
          , @d_JobEndTime      DATETIME
 
@@ -465,10 +468,24 @@ BEGIN
            +', Facility='   + CASE WHEN @c_Facility     IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_Facility   ,'''','''''') + '''' END
            +', OtherConfig='+ CASE WHEN @c_OtherConfig  IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_OtherConfig,'''','''''') + '''' END
            +', SQL='        + CASE WHEN @c_SQL          IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_SQL        ,'''','''''') + '''' END
-      
-         INSERT INTO dbo.LogSQL (SQLDb, SQLSchema, SQLProc, SQLText, Duration, SourceKey, RowCnt, SourceTable)
-         VALUES (db_name(), SCHEMA_NAME(), 'msp_BEJ', ISNULL(@c_LogText,''), ISNULL(DATEDIFF(s,@d_JobStartTime,@d_JobEndTime),0), 0, 0, ISNULL(@c_Jobname,''))
-         
+
+         SET @c_SQLDb     = DB_NAME()
+         SET @c_SQLSchema = SCHEMA_NAME()
+         SET @c_LogText   = ISNULL(@c_LogText,'')
+         SET @n_Duration  = ISNULL(DATEDIFF(s,@d_JobStartTime,@d_JobEndTime),0)
+         SET @c_Jobname   = ISNULL(@c_Jobname,'')
+
+         EXEC dbo.ispLogQuery
+              @SQLDb        = @c_SQLDb
+            , @SQLSchema    = @c_SQLSchema
+            , @SQLProc      = 'msp_BEJ'
+            , @SourceKey    = 0
+            , @SQLText      = @c_LogText
+            , @Duration     = @n_Duration
+            , @RowCnt       = 0
+            , @SourceTable  = @c_Jobname
+            , @SQLId        = 0
+
          IF @n_Continue = 3 SET @n_Continue = 2
       END
       --ML01-E
