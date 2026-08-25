@@ -9,7 +9,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author  Purposes                                     */
 /* 2024-10-30 1.0  PYU015  UWP-26527 Created                            */
-/* 2026-06-12 1.1  Cuize   UWP-58798 code review for PMI                 */
+/* 2026-06-12 1.1  Cuize   UWP-58798 code review for PMI                */
+/* 2026-08-25 1.2  Jackc   UWP-64559 Fix wrong step value               */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtValPMI]
@@ -54,7 +55,7 @@ BEGIN
    IF @nFunc = 898 -- UCC receiving
    BEGIN
 
-   IF @nStep = 8
+   IF @nStep = 6
 
       BEGIN
          IF @nInputKey = 1 -- ENTER
