@@ -1493,7 +1493,7 @@ BEGIN
          SET @nAction = 0
       END
 
-      IF @cExtScnSP = 'rdt_839ExtScn06'
+      IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
       BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cPickSlipNo',     @cPickSlipNo),
@@ -6832,7 +6832,7 @@ BEGIN
 
          IF @nErrNo <> 0
          BEGIN
-            IF @cExtScnSP = 'rdt_839ExtScn06'
+            IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
             BEGIN
                IF @cUDF01 = 'No Need Update RDTMOBREC'
                   RETURN
@@ -6937,7 +6937,7 @@ BEGIN
             END
          END
 
-         IF @cExtScnSP = 'rdt_839ExtScn06'
+         IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
          BEGIN
             IF @cUDF01 = 'GOTO STEP5'
             BEGIN
