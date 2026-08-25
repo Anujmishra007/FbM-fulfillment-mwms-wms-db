@@ -120,11 +120,13 @@ BEGIN
             END
 
             -- Lot lookup: PickSlipNo path first, fallback to OrderKey if PickSlipNo not on PickDetail
+            -- Exclude confirmed (5) and short (4) rows so we match the open PickDetail
             SELECT TOP 1 @cPickDetailLot = Lot
             FROM dbo.PickDetail WITH(NOLOCK)
             WHERE PickSlipNo = @cPickSlipNo
                AND SKU       = @cDecodedSKU
                AND StorerKey = @cStorerKey
+               AND Status NOT IN ('4', '5')
 
             IF ISNULL(@cPickDetailLot, '') = '' AND @cPickHeaderOrderKey <> ''
                SELECT TOP 1 @cPickDetailLot = Lot
@@ -132,6 +134,7 @@ BEGIN
                WHERE OrderKey  = @cPickHeaderOrderKey
                  AND SKU       = @cDecodedSKU
                  AND StorerKey = @cStorerKey
+                 AND Status NOT IN ('4', '5')
 
             SELECT @cLotAttrLottable01 = Lottable01
             FROM dbo.LotAttribute WITH(NOLOCK)
