@@ -15,6 +15,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2026-07-06 1.0  Cuize    FCR-13139 Created                                 */
 /* 2026-08-17 1.1  Cuize    UWP-63852 Fix operator count and color lookup     */
+/* 2026-08-20 1.2  Cuize    UWP-64610 Sync color to C_String1 in CHECK step   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID10] (
@@ -143,7 +144,7 @@ BEGIN
 
       -- FCR-13139: Store color in MobRec.C_String1 for screen attribute lookup
       -- This persists color even after rdtPTLPieceLog becomes COMPLETE
-      UPDATE rdt.rdtMobRec
+      UPDATE rdt.rdtMobRec WITH (ROWLOCK)
       SET C_String1 = @cUserColor,
           EditDate = GETDATE()
       WHERE Mobile = @nMobile
@@ -314,29 +315,12 @@ BEGIN
          ORDER BY Code2
       END
 
-      -- FCR-13139: Determine if Full UCC or Unit-Level
-      -- Full UCC: DropID exists in UCC.UCCNo AND maps to exactly 1 CaseID
-      -- Unit Level: DropID maps to multiple CaseIDs (must scan by SKU)
-      -- IMPORTANT: SourceKey is ALWAYS CaseID (VirtualCarton), NOT DropID
-      --   - Multiple Full UCCs can share same CaseID -> same slot
-      --   - Full UCC and Unit-Level items can share same CaseID -> same slot
-      DECLARE @bIsFullUCC_Assign BIT = 0
-      DECLARE @nVirtualCartonCount INT = 0
-
-      IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cDropID)
-      BEGIN
-         -- Count distinct CaseIDs for this DropID
-         -- If > 1 CaseID, UCC must be split and scanned by SKU (Unit-Level)
-         SELECT @nVirtualCartonCount = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cDropID))
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-           AND DropID = @cDropID
-           AND Qty > 0
-
-         -- Full UCC: Only 1 CaseID (can sort entire UCC at once)
-         IF @nVirtualCartonCount <= 1
-            SET @bIsFullUCC_Assign = 1
-      END
+      -- FCR-13139 FIX: Update C_String1 with the final color for screen display
+      -- This ensures color stays in sync between Step 1 and Step 2
+      UPDATE rdt.rdtMobRec WITH (ROWLOCK)
+      SET C_String1 = @cUserColor,
+          EditDate = GETDATE()
+      WHERE Mobile = @nMobile
 
       -- Process each virtual carton (CaseID)
       -- SourceKey = CaseID for BOTH Full UCC and Unit-Level

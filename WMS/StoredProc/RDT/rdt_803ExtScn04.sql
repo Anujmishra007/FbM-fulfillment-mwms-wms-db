@@ -143,21 +143,32 @@ BEGIN
 
          IF @cUserDropID_Step2 IS NOT NULL AND @cUserDropID_Step2 <> ''
          BEGIN
-            -- FCR-13139: Full UCC detection
+            -- UWP-64610: Full UCC detection
             -- Full UCC conditions:
             --   1. DropID exists in UCC.UCCNo
-            --   2. AND only 1 distinct VirtualCartonID (CaseID) under this DropID
+            --   2. Only 1 distinct VirtualCartonID (CaseID) under this DropID
+            --   3. PickDetail total Qty = UCC total Qty (no partial processing)
             -- When Full UCC, CaseID in PickDetail is empty/NULL, VirtualCarton = UCCNo = DropID
-            IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUserDropID_Step2)
+            IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUserDropID_Step2 AND StorerKey = @cStorerKey)
             BEGIN
                DECLARE @nVCCount_Step2 INT = 0
-               SELECT @nVCCount_Step2 = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cUserDropID_Step2))
+               DECLARE @nUCCQty_Step2 INT = 0
+               DECLARE @nPDQty_Step2 INT = 0
+
+               SELECT @nUCCQty_Step2 = ISNULL(SUM(Qty), 0)
+               FROM dbo.UCC WITH (NOLOCK)
+               WHERE UCCNo = @cUserDropID_Step2
+                 AND StorerKey = @cStorerKey
+
+               SELECT @nVCCount_Step2 = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cUserDropID_Step2)),
+                      @nPDQty_Step2 = ISNULL(SUM(Qty), 0)
                FROM dbo.PickDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                  AND DropID = @cUserDropID_Step2
                  AND Qty > 0
 
-               IF @nVCCount_Step2 <= 1
+               -- Full UCC: Only 1 CaseID AND no partial processing
+               IF @nVCCount_Step2 <= 1 AND @nPDQty_Step2 = @nUCCQty_Step2
                   SET @bIsFullUCC = 1
             END
 
@@ -376,16 +387,24 @@ BEGIN
               AND UserDefine02 = 'INPROGRESS'
             ORDER BY EditDate DESC
 
-            IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUserDropID_6920)
-            BEGIN
+            IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUserDropID_6920 AND StorerKey = @cStorerKey)
                DECLARE @nVCCount_6920 INT = 0
-               SELECT @nVCCount_6920 = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cUserDropID_6920))
+               DECLARE @nUCCQty_6920 INT = 0
+               DECLARE @nPDQty_6920 INT = 0
+
+               SELECT @nUCCQty_6920 = ISNULL(SUM(Qty), 0)
+               FROM dbo.UCC WITH (NOLOCK)
+               WHERE UCCNo = @cUserDropID_6920
+
+               SELECT @nVCCount_6920 = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cUserDropID_6920)),
+                      @nPDQty_6920 = ISNULL(SUM(Qty), 0)
                FROM dbo.PickDetail WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
                  AND DropID = @cUserDropID_6920
                  AND Qty > 0
 
-               IF @nVCCount_6920 <= 1
+               -- Full UCC: Only 1 CaseID AND no partial processing
+               IF @nVCCount_6920 <= 1 AND @nPDQty_6920 = @nUCCQty_6920
                   SET @bIsFullUCC_6920 = 1
             END
 
