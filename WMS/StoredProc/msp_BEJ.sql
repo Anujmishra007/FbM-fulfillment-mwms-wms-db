@@ -86,15 +86,22 @@ BEGIN
          , @n_SecondInterval  INT
          , @d_StartDateTime   DATETIME
          , @d_EndDateTime     DATETIME
-         , @c_Schdule         NVARCHAR(MAX)
-         , @c_Schdule1        NVARCHAR(MAX)
-         , @c_Schdule2        NVARCHAR(MAX)
-         , @c_Schdule3        NVARCHAR(MAX)
-         , @c_Schdule4        NVARCHAR(MAX)
-         , @c_Schdule5        NVARCHAR(MAX)
+         , @c_Schedule        NVARCHAR(MAX)
+         , @c_Schedule1       NVARCHAR(MAX)
+         , @c_Schedule2       NVARCHAR(MAX)
+         , @c_Schedule3       NVARCHAR(MAX)
+         , @c_Schedule4       NVARCHAR(MAX)
+         , @c_Schedule5       NVARCHAR(MAX)
          , @n_I               INT
          , @d_Temp            DATETIME
          , @b_JobFire         INT
+         , @c_JobLog          NVARCHAR(10)
+         , @c_SQLDb           NVARCHAR(128)
+         , @c_SQLSchema       NVARCHAR(128)
+         , @c_LogText         NVARCHAR(MAX)
+         , @n_Duration        INT
+         , @d_JobStartTime    DATETIME
+         , @d_JobEndTime      DATETIME
 
    DECLARE @t_StartTimeList   TABLE(time_val NVARCHAR(12) NULL)
    --ML01-E
@@ -184,10 +191,13 @@ BEGIN
       BEGIN
          GOTO NEXT_JOB
       END
+      
+      SET @c_JobLog = ''   --ML01
 
       --AK01 START
       IF @c_JobSchedConfig <> ''
       BEGIN
+         SET @c_JobLog = dbo.fnc_GetParamValueFromString('@JobLog', @c_JobSchedConfig, '')   --ML01
          SET @c_IntervalType = dbo.fnc_GetParamValueFromString('@IntervalType', @c_JobSchedConfig, '')
 
          IF @c_IntervalType = 'SpecificTime'
@@ -270,39 +280,39 @@ BEGIN
             * Max can setup 6 different schedules for Weekly type. For example,
               @IntervalType = WeeklySchedule
                           @Weekdays  = Mon,Tue,Wed,Thu,Fri @TimeInterval  = 00:30 @StartTime  = 07:00 @EndTime  = 17:00   <- Schedule 0
-              @Schdule1 = @@Weekdays = Mon,Tue,Wed,Thu,Fri @@TimeInterval = 00:30 @@StartTime = 00:00 @@EndTime = 02:00   <- Schedule 1
-              @Schdule2 = @@Weekdays = Sat,Sun             @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 2
-              @Schdule3 = @@IntervalType = MonthlySchedule @@DayOfMonth = 1 @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 3
+              @Schedule1 = @@Weekdays = Mon,Tue,Wed,Thu,Fri @@TimeInterval = 00:30 @@StartTime = 00:00 @@EndTime = 02:00   <- Schedule 1
+              @Schedule2 = @@Weekdays = Sat,Sun             @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 2
+              @Schedule3 = @@IntervalType = MonthlySchedule @@DayOfMonth = 1 @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 3
             */
-            SET @c_Schdule1 = dbo.fnc_GetParamValueFromString('@Schdule1', @c_JobSchedConfig, '')
-            SET @c_Schdule2 = dbo.fnc_GetParamValueFromString('@Schdule2', @c_JobSchedConfig, '')
-            SET @c_Schdule3 = dbo.fnc_GetParamValueFromString('@Schdule3', @c_JobSchedConfig, '')
-            SET @c_Schdule4 = dbo.fnc_GetParamValueFromString('@Schdule4', @c_JobSchedConfig, '')
-            SET @c_Schdule5 = dbo.fnc_GetParamValueFromString('@Schdule5', @c_JobSchedConfig, '')
+            SET @c_Schedule1 = dbo.fnc_GetParamValueFromString('@Schedule1', @c_JobSchedConfig, '')
+            SET @c_Schedule2 = dbo.fnc_GetParamValueFromString('@Schedule2', @c_JobSchedConfig, '')
+            SET @c_Schedule3 = dbo.fnc_GetParamValueFromString('@Schedule3', @c_JobSchedConfig, '')
+            SET @c_Schedule4 = dbo.fnc_GetParamValueFromString('@Schedule4', @c_JobSchedConfig, '')
+            SET @c_Schedule5 = dbo.fnc_GetParamValueFromString('@Schedule5', @c_JobSchedConfig, '')
             SET @n_I = 0
             SET @b_JobFire = 0
 
             WHILE @n_I <= 5 AND ISNULL(@b_JobFire,0) <> 1
             BEGIN
-               SET @c_Schdule = CASE @n_I WHEN 0 THEN @c_JobSchedConfig
-                                          WHEN 1 THEN @c_Schdule1
-                                          WHEN 2 THEN @c_Schdule2
-                                          WHEN 3 THEN @c_Schdule3
-                                          WHEN 4 THEN @c_Schdule4
-                                          WHEN 5 THEN @c_Schdule5
+               SET @c_Schedule = CASE @n_I WHEN 0 THEN @c_JobSchedConfig
+                                           WHEN 1 THEN @c_Schedule1
+                                           WHEN 2 THEN @c_Schedule2
+                                           WHEN 3 THEN @c_Schedule3
+                                           WHEN 4 THEN @c_Schedule4
+                                           WHEN 5 THEN @c_Schedule5
                                 END
                SET @n_I= @n_I + 1
 
-               IF ISNULL(@c_Schdule,'') <> ''
+               IF ISNULL(@c_Schedule,'') <> ''
                BEGIN
-                  SET @c_ScheduleType  = dbo.fnc_GetParamValueFromString('@IntervalType', @c_Schdule, '')
-                  SET @n_DayOfMonth    = TRY_PARSE(ISNULL(dbo.fnc_GetParamValueFromString('@DayOfMonth'  , @c_Schdule, ''),'') AS INT)
-                  SET @c_Weekdays      = dbo.fnc_GetParamValueFromString('@Weekdays'    , @c_Schdule, '')
-                  SET @c_TimeInterval  = dbo.fnc_GetParamValueFromString('@TimeInterval', @c_Schdule, '')
-                  SET @c_StartDate     = dbo.fnc_GetParamValueFromString('@StartDate'   , @c_Schdule, '')
-                  SET @c_EndDate       = dbo.fnc_GetParamValueFromString('@EndDate'     , @c_Schdule, '')
-                  SET @c_StartTime     = dbo.fnc_GetParamValueFromString('@StartTime'   , @c_Schdule, '')
-                  SET @c_EndTime       = dbo.fnc_GetParamValueFromString('@EndTime'     , @c_Schdule, '')
+                  SET @c_ScheduleType  = dbo.fnc_GetParamValueFromString('@IntervalType', @c_Schedule, '')
+                  SET @n_DayOfMonth    = TRY_PARSE(ISNULL(dbo.fnc_GetParamValueFromString('@DayOfMonth'  , @c_Schedule, ''),'') AS INT)
+                  SET @c_Weekdays      = dbo.fnc_GetParamValueFromString('@Weekdays'    , @c_Schedule, '')
+                  SET @c_TimeInterval  = dbo.fnc_GetParamValueFromString('@TimeInterval', @c_Schedule, '')
+                  SET @c_StartDate     = dbo.fnc_GetParamValueFromString('@StartDate'   , @c_Schedule, '')
+                  SET @c_EndDate       = dbo.fnc_GetParamValueFromString('@EndDate'     , @c_Schedule, '')
+                  SET @c_StartTime     = dbo.fnc_GetParamValueFromString('@StartTime'   , @c_Schedule, '')
+                  SET @c_EndTime       = dbo.fnc_GetParamValueFromString('@EndTime'     , @c_Schedule, '')
 
                   IF ISNULL(@c_ScheduleType,'') = ''
                      SET @c_ScheduleType = @c_IntervalType
@@ -344,9 +354,10 @@ BEGIN
                      (ISNULL(@c_EndDate  ,'')<>'' AND DATEDIFF(DAY, TRY_CONVERT(DATE, ISNULL(@c_EndDate,'')), @d_SysDateTime) > 0)
                      CONTINUE
 
-                  IF ISNULL(@c_StartTime,'')<>'' AND @d_SysDateTime >= @d_StartDateTime AND   -- In Time Range
+                  IF ISNULL(@c_StartTime,'')<>'' AND @d_SysDateTime >= @d_StartDateTime AND    -- Time Range and Interval
                     (ISNULL(@c_EndTime  ,'')=''  OR  @d_SysDateTime <= @d_EndDateTime ) AND
-                     DATEADD(SECOND, CASE WHEN @n_SecondInterval > 0 THEN DATEDIFF(SECOND, @d_StartDateTime, @d_SysDateTime) / @n_SecondInterval * @n_SecondInterval ELSE 0 END, @d_StartDateTime) > @dt_LastRunDTime
+                     DATEADD(SECOND, CASE WHEN @n_SecondInterval > 0 THEN DATEDIFF(SECOND, @d_StartDateTime, @d_SysDateTime) /
+                             @n_SecondInterval * @n_SecondInterval ELSE 0 END, @d_StartDateTime) > @dt_LastRunDTime
                   BEGIN
                      SET @b_JobFire = 1
                      BREAK
@@ -356,7 +367,7 @@ BEGIN
                         SELECT SchDateTime = TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + time_val,''))
                         FROM @t_StartTimeList
                      ) X
-                     WHERE @dt_LastRunDTime < SchDateTime AND SchDateTime <= @d_SysDateTime)   -- In Specific Time
+                     WHERE @dt_LastRunDTime < SchDateTime AND SchDateTime <= @d_SysDateTime)   -- Specific Time
                   BEGIN
                      SET @b_JobFire = 1
                      BREAK
@@ -373,6 +384,8 @@ BEGIN
          -- For @IntervalType=TimeRange, Run if current time is within @StartTime and @EndTime, and last run time (@UDF04) exceeds the defined interval (@UDF03).
       END
       --AK01 END
+
+      SET @d_JobStartTime = NULL   --ML01
 
       BEGIN TRY
         --SET @c_SQL = 'EXEC '  + @c_StoredProc                                     --(Wan01) - START
@@ -410,6 +423,7 @@ BEGIN
          IF @c_SQL IS NOT NULL
          BEGIN
             SET @c_SQL = 'EXEC '  + @c_StoredProc + ' ' + @c_SQL
+            SET @d_JobStartTime = GETDATE()   --ML01
 
             EXEC sp_ExecuteSQL @c_SQL
                               ,N'@c_Storerkey   NVARCHAR(15)
@@ -442,6 +456,40 @@ BEGIN
       AND   Storerkey= @c_Storerkey
       AND   Code2    = @c_Facility
  
+      --ML01-S
+      IF @c_JobLog IN ('1','Y')
+      BEGIN
+         SET @d_JobEndTime = GETDATE()
+         SET @c_LogText =
+              'StartTime='  + CASE WHEN @d_JobStartTime IS NULL THEN 'NULL' ELSE '''' + CONVERT(NVARCHAR(23),@d_JobStartTime,121) + '''' END
+           +', EndTime='    + CASE WHEN @d_JobEndTime   IS NULL THEN 'NULL' ELSE '''' + CONVERT(NVARCHAR(23),@d_JobEndTime  ,121) + '''' END
+           + CASE WHEN @n_Continue=3 AND @c_ErrMsg<>'' THEN ', ErrMsg=''' + REPLACE(@c_ErrMsg,'''','''''') + '''' ELSE '' END
+           +', Storerkey='  + CASE WHEN @c_Storerkey    IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_Storerkey  ,'''','''''') + '''' END
+           +', Facility='   + CASE WHEN @c_Facility     IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_Facility   ,'''','''''') + '''' END
+           +', OtherConfig='+ CASE WHEN @c_OtherConfig  IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_OtherConfig,'''','''''') + '''' END
+           +', SQL='        + CASE WHEN @c_SQL          IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_SQL        ,'''','''''') + '''' END
+
+         SET @c_SQLDb     = DB_NAME()
+         SET @c_SQLSchema = SCHEMA_NAME()
+         SET @c_LogText   = ISNULL(@c_LogText,'')
+         SET @n_Duration  = ISNULL(DATEDIFF(s,@d_JobStartTime,@d_JobEndTime),0)
+         SET @c_Jobname   = ISNULL(@c_Jobname,'')
+
+         EXEC dbo.ispLogQuery
+              @SQLDb        = @c_SQLDb
+            , @SQLSchema    = @c_SQLSchema
+            , @SQLProc      = 'msp_BEJ'
+            , @SourceKey    = 0
+            , @SQLText      = @c_LogText
+            , @Duration     = @n_Duration
+            , @RowCnt       = 0
+            , @SourceTable  = @c_Jobname
+            , @SQLId        = 0
+
+         IF @n_Continue = 3 SET @n_Continue = 2
+      END
+      --ML01-E
+
       NEXT_JOB:
       FETCH NEXT FROM @CUR_JOB INTO @c_Code, @c_StoredProc
                                  ,  @c_Storerkey, @c_Facility
