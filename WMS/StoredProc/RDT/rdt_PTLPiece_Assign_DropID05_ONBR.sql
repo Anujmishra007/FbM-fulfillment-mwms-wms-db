@@ -442,7 +442,7 @@ BEGIN
          ELSE
          BEGIN
             BEGIN TRY
-               UPDATE rdt.rdtPTLPieceLog
+               UPDATE rdt.rdtPTLPieceLog WITH(ROWLOCK)
                   SET EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME()
                WHERE Station = @cStation
