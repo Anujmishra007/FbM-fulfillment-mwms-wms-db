@@ -457,7 +457,7 @@ BEGIN
       AND   Code2    = @c_Facility
  
       --ML01-S
-      IF @c_JobLog IN ('1','Y') AND OBJECT_ID('dbo.LogSQL') IS NOT NULL
+      IF @c_JobLog IN ('1','Y')
       BEGIN
          SET @d_JobEndTime = GETDATE()
          SET @c_LogText =
