@@ -3080,9 +3080,32 @@ BEGIN
                SET @cOutField12 =''
                SET @cOutField15 =''
 
-               -- Go to Abort screen
-               SET @nAfterScn = 6840
-               SET @nAfterStep = 99
+               -- Go to Short screen
+               IF @nTotalLocPickedQty > 0 
+                  AND (EXISTS( SELECT 1
+                        FROM RDT.rdtPickLog WITH(NOLOCK)
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND Loc = @cSuggLOC
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
+                           AND PickMethod = 'Pick-P')
+                     OR EXISTS( SELECT 1
+                        FROM RDT.rdtPickLog WITH(NOLOCK)
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND Loc = @cSuggLOC
+                           AND (Mobile = @nMobile OR AddWho = @cUserName)
+                           AND PickMethod = 'GetTask-U'
+                           AND Status = '9')
+                  )
+               BEGIN
+                  SET @nAfterScn = 6777
+                  SET @nAfterStep = 99
+               END
+               ELSE-- Go to Abort screen
+               BEGIN
+                  SET @nAfterScn = 6840
+                  SET @nAfterStep = 99
+               END
+               
                GOTO UPD_RDTMOBREC
             END
 
