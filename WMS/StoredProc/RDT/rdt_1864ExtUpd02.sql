@@ -196,8 +196,7 @@ BEGIN
 RollBackTran:
    IF (XACT_STATE()) = -1
    BEGIN
-      IF @nTranCount = 0
-         ROLLBACK TRANSACTION;
+      ROLLBACK TRANSACTION;
    END
    IF (XACT_STATE()) = 1
    BEGIN
