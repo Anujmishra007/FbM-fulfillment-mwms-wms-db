@@ -146,7 +146,7 @@ BEGIN
    ELSE
    BEGIN
       BEGIN TRY
-         UPDATE dbo.PackHeader SET
+         UPDATE dbo.PackHeader WITH (ROWLOCK) SET
             Status = '9'
          WHERE PickSlipNo = @cPickSlipNo
             AND Status <> '9'
