@@ -42,6 +42,8 @@ GO
 /* 10-Oct-2025  SSA01     2.2 UWP-42248 -Enhanced session management      */
 /* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
 /*                            table to avoid deadlock                   */
+/* 27-Aug-2026  DTH163    2.3 UWP-62719 - Updated the SKUxLOC Validation  */
+/*                            if the pick quantity is 0                   */
 /**************************************************************************/
 
 CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -373,8 +375,13 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
          END
      END
      ELSE BEGIN
+        -- (DTH163) Start --
+        IF @n_qty <> 0
+        BEGIN
          SELECT @n_continue = 3 , @n_Err = 61930 --61335
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
+        END
+        -- (DTH163) End --
      END
  END
  IF @n_continue=1 or @n_continue=2
