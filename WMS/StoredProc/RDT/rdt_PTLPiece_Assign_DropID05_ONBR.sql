@@ -10,7 +10,8 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2025-11-27 1.0.0  Cuize    FCR-9003 Created                                */
 /* 2026-02-20 1.0.1  NickT    FCR-9003 unassign the station only on step 4    */
-/* 2026-03-10 1.0.2  Cuize    UWP-49877 unassign Only wave complete           */
+/* 2026-03-10 1.1.0  Cuize    UWP-49877 unassign Only wave complete           */
+/* 2026-08-21 1.2.0  NickT    FCR-14204 Add Hospital logic.                   */
 /******************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID05_ONBR] (
@@ -50,20 +51,25 @@ BEGIN
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE @cDropID           NVARCHAR( 20)
-   DECLARE @nTotalDropID      INT
-   DECLARE @cIPAddress        NVARCHAR( 40)
-   DECLARE @cPosition         NVARCHAR( 10)
-   DECLARE @cOrderKey         NVARCHAR( 10)
-   DECLARE @cWaveKey          NVARCHAR( 10)
-   DECLARE @cAssignedStation  NVARCHAR( 10)
-   DECLARE @cLogicalName      NVARCHAR( 10)
-   DECLARE @cCartID           NVARCHAR( 10)
-   DECLARE @bSuccess          INT
-   DECLARE @cDeviceID         NVARCHAR( 20)
+   DECLARE @cDropID              NVARCHAR( 20)
+   DECLARE @nTotalDropID         INT
+   DECLARE @cIPAddress           NVARCHAR( 40)
+   DECLARE @cPosition            NVARCHAR( 10)
+   DECLARE @cOrderKey            NVARCHAR( 10)
+   DECLARE @cWaveKey             NVARCHAR( 10)
+   DECLARE @cAssignedStation     NVARCHAR( 10)
+   DECLARE @cLogicalName         NVARCHAR( 10)
+   DECLARE @cCartID              NVARCHAR( 10)
+   DECLARE @bSuccess             INT
+   DECLARE @cDeviceID            NVARCHAR( 20)
+   DECLARE @cUserName            NVARCHAR( 128) 
+   DECLARE @cHospLocIdentifier   NVARCHAR( 10)
+   DECLARE @cBulkHospLocPrefix   NVARCHAR( 10)
+   DECLARE @cHSBK                NVARCHAR( 10) = 'HSBK'
 
    SELECT
       @cDeviceID  = DeviceID,
+      @cUserName = UserName,
       @cCartID = V_String42
       FROM rdt.rdtMobRec (NOLOCK)
    WHERE Mobile = @nMobile
@@ -77,8 +83,8 @@ BEGIN
       IF ISNULL(@cDeviceID,'') = ''
       BEGIN
 
-         SET @nErrNo = 252859
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DeviceID Can not be empty
+         SET @nErrNo = 278751
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278751 DeviceID Can not be empty
          GOTO Quit
 
       END
@@ -103,62 +109,81 @@ BEGIN
    IF @cType = 'POPULATE-OUT'
    BEGIN
 
-      IF @nStep = 4 AND @nInputKey = 1 AND @cInField01 = '1'
+      IF @nStep = 99 AND @nScn = 6925 AND @nInputKey = 1 AND @cInField01 = '1'
       BEGIN
 
-         SELECT TOP 1
-            @cWaveKey = WaveKey
-         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
-         WHERE Station = @cStation
-           AND   Method = @cMethod
-           AND   SourceKey <> ''
+         IF @cStation <> 'HOSPITAL'
+         BEGIN
+            SELECT TOP 1
+               @cWaveKey = WaveKey
+            FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+            WHERE Station = @cStation
+            AND   Method = @cMethod
+            AND   SourceKey <> ''
 
-         --Check if there are pickdetails not yet moved to cart slot
-         IF ISNULL(@cWaveKey,'') <> '' -- At least assigned on DropID
-            AND EXISTS(
-               SELECT 1
-               FROM PICKDETAIL AS PD WITH (NOLOCK)
-                       JOIN Orders O WITH (NOLOCK) ON O.orderkey = PD.orderkey
-               WHERE PD.wavekey = @cwavekey
-                 AND PD.DropID NOT LIKE 'CART%'
-                 AND O.UserDefine04 = @cStation
-            )
-            BEGIN
-               SET @nErrNo = 252861
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveNotComplete
+            --Check if there are pickdetails not yet moved to cart slot
+            -- IF ISNULL(@cWaveKey,'') <> '' -- At least assigned on DropID
+            --    AND EXISTS(
+            --       SELECT 1
+            --       FROM PICKDETAIL AS PD WITH (NOLOCK)
+            --               JOIN Orders O WITH (NOLOCK) ON O.orderkey = PD.orderkey
+            --       WHERE PD.wavekey = @cwavekey
+            --         AND PD.DropID NOT LIKE 'CART%'
+            --         AND O.UserDefine04 = @cStation
+            --    )
+            --    BEGIN
+            --       SET @nErrNo = 252861
+            --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveNotComplete
+            --       GOTO Quit
+            --    END
+
+
+            BEGIN TRY
+               UPDATE dbo.DeviceProfile WITH(ROWLOCK)
+               SET 
+                  STATUS = 'IDLE'
+               WHERE DeviceType = 'STATION'
+                  AND DeviceID = @cStation
+                  AND StorerKey = @cStorerKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278764
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Failed to update device status
                GOTO Quit
-            END
+            END CATCH
 
+            -- Off all lights
+            EXEC PTL.isp_PTL_TerminateModule
+               @cStorerKey
+               ,@nFunc
+               ,@cStation
+               ,'STATION'
+               ,@bSuccess    OUTPUT
+               ,@nErrNo       OUTPUT
+               ,@cErrMsg      OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
 
-         UPDATE DeviceProfile SET STATUS = 'IDLE'
-         WHERE DeviceType = 'STATION'
-         AND DeviceID = @cStation
-         AND StorerKey = @cStorerKey
-
-         -- Off all lights
-         EXEC PTL.isp_PTL_TerminateModule
-            @cStorerKey
-            ,@nFunc
-            ,@cStation
-            ,'STATION'
-            ,@bSuccess    OUTPUT
-            ,@nErrNo       OUTPUT
-            ,@cErrMsg      OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
-
-         DELETE FROM PTL.PTLTran
-         WHERE IPAddress = @cIPAddress
-         AND DeviceID = @cStation
-         AND Func = 803
-         AND Status = '1' -- Lighted up
-         AND LightUp= '1'
+            BEGIN TRY
+               DELETE FROM PTL.PTLTran
+               WHERE IPAddress = @cIPAddress
+                  AND DeviceID = @cStation
+                  AND Func = 803
+                  AND Status = '1' -- Lighted up
+                  AND LightUp= '1'
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278765
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Failed to delete PTLTran
+               GOTO Quit
+            END CATCH
+         END
 
          SET @cStation = ''
 
          GOTO Quit
       END
-  -- Go to station screen
+   -- Go to station screen
    END
 
      
@@ -169,12 +194,27 @@ BEGIN
    BEGIN  
       -- Screen mapping  
       SET @cDropID = @cInField01  
-        
-      -- Get total  
-      SELECT @nTotalDropID = COUNT(1) FROM rdt.rdtPTLPieceLog WITH (NOLOCK) WHERE Station = @cStation AND SourceKey <> ''  
-        
+
+      SET @nTotalDropID = 0
+      -- Get total
+      IF @cStation = 'HOSPITAL'
+      BEGIN
+         SELECT @nTotalDropID = COUNT(1) 
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+         WHERE Station = @cStation 
+            AND SourceKey <> ''
+            AND AddWho = @cUserName
+      END
+      ELSE
+      BEGIN
+         SELECT @nTotalDropID = COUNT(1) 
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+         WHERE Station = @cStation 
+            AND SourceKey <> ''  
+      END
+
       -- Check finish assign  
-      IF @cDropID = '' AND @nTotalDropID > 0  
+      IF @cDropID = '' AND @nTotalDropID > 0
       BEGIN  
          GOTO Quit  
       END  
@@ -182,119 +222,249 @@ BEGIN
       -- Check blank  
       IF @cDropID = ''   
       BEGIN  
-         SET @nErrNo = 187951  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need DropID  
+         SET @nErrNo = 278752
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278752 Need DropID
          GOTO Quit  
       END  
      
       -- Check DropID valid  
       IF NOT EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID)  
       BEGIN  
-         SET @nErrNo = 187952  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad DropID  
+         SET @nErrNo = 278753
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278753 Drop ID not found in PickDetail
          SET @cOutField01 = ''  
          GOTO Quit  
-      END  
-     
+      END
+
       -- Check DropID assigned  
-      IF EXISTS(
-         SELECT 1
-         FROM rdt.rdtPTLPieceLog WITH (NOLOCK)   
-         WHERE StorerKey = @cStorerKey  
-            AND Method = @cMethod
-            AND ( station <> @cStation or UserDefine01 <> @cCartID )
-            AND SourceKey = @cDropID)  
-      BEGIN  
-         SET @nErrNo = 187953  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDAssigned  
-         SET @cOutField01 = ''  
-         GOTO Quit  
-      END
-
-      DECLARE @OrderStation NVARCHAR(10)
-      DECLARE @OrderPosition NVARCHAR(10)
-      DECLARE @OrderLoc NVARCHAR(10)
-
-      SELECT TOP 1 @cOrderKey = PD.OrderKey,
-                   @cWaveKey = PD.Wavekey,
-                   @OrderStation = Orders.UserDefine04,
-                   @OrderLoc = Orders.UserDefine05 --logicalPos
-      FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-         JOIN dbo.Orders Orders WITH (NOLOCK)
-            ON PD.orderkey = Orders.Orderkey
-      WHERE PD.Storerkey = @cStorerKey
-         AND   PD.DropID = @cDropID
-         AND   PD.[Status] = '3'
-         AND Orders.UserDefine04 = @cStation -- Order assigned to this station
-      ORDER BY 1
-
-
-      SELECT TOP 1
-         @OrderPosition = DevicePosition,
-         @cIPAddress = IPAddress
-      FROM dbo.DeviceProfile  WITH (NOLOCK)
-         WHERE DeviceType = 'STATION'
-         AND DeviceID = @cStation
-         AND LOC = @OrderLoc
-         AND StorerKey = @cStorerKey
-
-      IF @@ROWCOUNT = 0 OR ISNULL(@OrderPosition,'') = ''
+      IF @cStation = 'HOSPITAL'
       BEGIN
-         SET @nErrNo = 252857
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Can not find station/position
-         SET @cOutField01 = ''
-         GOTO Quit
-      END
-
-
-      IF (@OrderStation <> @cStation)
-      BEGIN
-         SET @nErrNo = 252856
-         SET @cErrMsg = REPLACE (rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@OrderStation)--Tote belongs to station {}
-         SET @cOutField01 = ''
-         GOTO Quit
-      END
-
-
-      IF NOT EXISTS ( SELECT 1
-          FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
-          WHERE Station = @cStation
-          AND Position = @OrderPosition
-          AND Method = @cMethod
-          AND SourceKey = @cDropID)
-      BEGIN
-
-         -- Save assign
-         INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, Method, SourceKey, UserDefine01, StorerKey, Orderkey, Wavekey)
-         VALUES
-         (@cStation, @cIPAddress, @OrderPosition, @cMethod, @cDropID, @cCartID, @cStorerKey, @cOrderKey, @cWaveKey)
-
-         IF @@ERROR <> 0
+         IF EXISTS( SELECT 1
+                  FROM rdt.rdtPTLPieceLog WITH (NOLOCK)   
+                  WHERE StorerKey = @cStorerKey  
+                     AND Method = @cMethod
+                     AND SourceKey = @cDropID)  
          BEGIN
-            SET @nErrNo = 187957
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log fail
+            SET @nErrNo = 278754  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278754 Drop ID already assigned
+            SET @cOutField01 = ''  
+            GOTO Quit  
+         END
+
+         SET @cHospLocIdentifier = rdt.rdtGetConfig(@nFunc, 'HOSPLOCIDENTIFIER', @cStorerKey)
+         IF ISNULL(@cHospLocIdentifier, '') = '' OR @cHospLocIdentifier = '0'
+            SET @cHospLocIdentifier = 'HS'
+
+         SET @cBulkHospLocPrefix = rdt.rdtGetConfig(@nFunc, 'BulkHospLoc', @cStorerKey)
+         IF ISNULL(@cBulkHospLocPrefix, '') = '' OR @cBulkHospLocPrefix = '0'
+            SET @cBulkHospLocPrefix = 'ONBR_HSP'
+
+         SELECT TOP 1 
+            @cOrderKey = PD.OrderKey,
+            @cWaveKey = PD.Wavekey
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         INNER JOIN dbo.Orders ORM WITH (NOLOCK)
+            ON PD.orderkey = ORM.Orderkey
+            AND PD.StorerKey = ORM.StorerKey
+         WHERE PD.Storerkey = @cStorerKey
+            AND PD.DropID = @cDropID
+            AND PD.Status = '3'
+         ORDER BY PD.OrderKey, PD.PickDetailKey
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 278763  
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --  No order found for this DropID
+            SET @cOutField01 = ''
             GOTO Quit
          END
+
+         IF NOT EXISTS(SELECT 1 
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND OrderKey = @cOrderKey
+                        AND Wavekey = @cWaveKey
+                        AND Status = '3'
+                        AND (LEFT(Loc, LEN(@cHospLocIdentifier)) = @cHospLocIdentifier OR LEFT(Loc, LEN(@cBulkHospLocPrefix)) = @cBulkHospLocPrefix)
+                     )
+         BEGIN
+            IF NOT EXISTS( SELECT 1
+               FROM dbo.RFPutaway WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND FromID = @cDropID
+                  AND ID IS NOT NULL
+                  AND (
+                        ( LEFT(SuggestedLoc, LEN(@cHospLocIdentifier)) = @cHospLocIdentifier AND LEFT(ID, LEN(@cHospLocIdentifier)) = @cHospLocIdentifier )
+                        OR 
+                        ( LEFT(SuggestedLoc, LEN(@cBulkHospLocPrefix)) = @cBulkHospLocPrefix  AND LEFT(ID, LEN(@cHSBK)) = @cHSBK )
+                  )
+            )
+            BEGIN
+               SET @nErrNo = 278762
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278762 No order found in hospital location
+               SET @cOutField01 = ''
+               GOTO Quit
+            END
+         END
+
+         IF NOT EXISTS ( SELECT 1
+            FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+            WHERE Station = @cStation
+            AND Method = @cMethod
+            AND SourceKey = @cDropID)
+         BEGIN
+            -- Save assign
+            BEGIN TRY
+               INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, Method, SourceKey, UserDefine01, StorerKey, Orderkey, Wavekey)
+               VALUES
+               (@cStation, '', '', @cMethod, @cDropID, '', @cStorerKey, @cOrderKey, @cWaveKey)
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278755
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278755 Failed to save assignment log
+               GOTO Quit
+            END CATCH
+         END
+         ELSE
+         BEGIN
+            DECLARE @trdtPTLPieceLog TABLE (RowRef INT NOT NULL PRIMARY KEY)
+
+            INSERT INTO @trdtPTLPieceLog (RowRef)
+            SELECT RowRef
+            FROM rdt.rdtPTLPieceLog WITH (ROWLOCK)
+            WHERE Station = @cStation
+               AND Method = @cMethod
+               AND SourceKey = @cDropID
+
+            BEGIN TRY
+               UPDATE RPPL WITH(ROWLOCK)
+               SET 
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME()
+               FROM rdt.rdtPTLPieceLog RPPL
+               INNER JOIN @trdtPTLPieceLog TRPPL
+                  ON RPPL.RowRef = TRPPL.RowRef
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278758
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278758 Failed to update assignment log
+            END CATCH
+         END
+
+         -- Get total  
+         SELECT @nTotalDropID = COUNT( DISTINCT SourceKey) 
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+         WHERE Station = @cStation 
+            AND Method = @cMethod
+            AND OrderKey = @cOrderKey
+            AND SourceKey <> ''  
       END
       ELSE
       BEGIN
-         UPDATE rdt.rdtPTLPieceLog
-            SET EditDate = GETDATE(),
-                EditWho  = SUSER_SNAME()
-         WHERE Station = @cStation
-           AND Position = @OrderPosition
-           AND   Method = @cMethod
-           AND   SourceKey = @cDropID
+         IF EXISTS(
+            SELECT 1
+            FROM rdt.rdtPTLPieceLog WITH (NOLOCK)   
+            WHERE StorerKey = @cStorerKey  
+               AND Method = @cMethod
+               AND ( station <> @cStation or UserDefine01 <> @cCartID )
+               AND SourceKey = @cDropID)
+         BEGIN
+            SET @nErrNo = 278759
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278759 Drop ID already assigned
+            SET @cOutField01 = ''  
+            GOTO Quit  
+         END
+
+         DECLARE @OrderStation NVARCHAR(10)
+         DECLARE @OrderPosition NVARCHAR(10)
+         DECLARE @OrderLoc NVARCHAR(10)
+
+         SELECT TOP 1 @cOrderKey = PD.OrderKey,
+                     @cWaveKey = PD.Wavekey,
+                     @OrderStation = Orders.UserDefine04,
+                     @OrderLoc = Orders.UserDefine05 --logicalPos
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+         INNER JOIN dbo.Orders Orders WITH (NOLOCK)
+            ON PD.orderkey = Orders.Orderkey
+         WHERE PD.Storerkey = @cStorerKey
+            AND   PD.DropID = @cDropID
+            AND   PD.[Status] = '3'
+            AND Orders.UserDefine04 = @cStation -- Order assigned to this station
+         ORDER BY 1
+
+
+         SELECT TOP 1
+            @OrderPosition = DevicePosition,
+            @cIPAddress = IPAddress
+         FROM dbo.DeviceProfile  WITH (NOLOCK)
+            WHERE DeviceType = 'STATION'
+            AND DeviceID = @cStation
+            AND LOC = @OrderLoc
+            AND StorerKey = @cStorerKey
+
+         IF @@ROWCOUNT = 0 OR ISNULL(@OrderPosition,'') = ''
+         BEGIN
+            SET @nErrNo = 278756
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278756 No PTL position found for this Drop ID at current station
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
+
+
+         IF (@OrderStation <> @cStation)
+         BEGIN
+            SET @nErrNo = 278757
+            SET @cErrMsg = REPLACE (rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@OrderStation) --278757 Tote belongs to station {}. Please scan at correct station
+            SET @cOutField01 = ''
+            GOTO Quit
+         END
+
+         IF NOT EXISTS ( SELECT 1
+            FROM rdt.rdtPTLPieceLog WITH (NOLOCK)
+            WHERE Station = @cStation
+            AND Position = @OrderPosition
+            AND Method = @cMethod
+            AND SourceKey = @cDropID)
+         BEGIN
+
+            -- Save assign
+            BEGIN TRY
+               INSERT rdt.rdtPTLPieceLog (Station, IPAddress, Position, Method, SourceKey, UserDefine01, StorerKey, Orderkey, Wavekey)
+               VALUES
+               (@cStation, @cIPAddress, @OrderPosition, @cMethod, @cDropID, @cCartID, @cStorerKey, @cOrderKey, @cWaveKey)
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278760
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278760 Failed to save assignment log
+               GOTO Quit
+            END CATCH
+         END
+         ELSE
+         BEGIN
+            BEGIN TRY
+               UPDATE rdt.rdtPTLPieceLog WITH(ROWLOCK)
+                  SET EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME()
+               WHERE Station = @cStation
+               AND Position = @OrderPosition
+               AND   Method = @cMethod
+               AND   SourceKey = @cDropID
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 278761
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --278761 Failed to update assignment log
+               GOTO Quit
+            END CATCH
+         END
+
+         -- Get total  
+         SELECT @nTotalDropID = COUNT( DISTINCT SourceKey) 
+         FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
+         WHERE Station = @cStation 
+         AND   Method = @cMethod 
+         AND   SourceKey <> ''  
       END
 
-
-      -- Get total  
-      SELECT @nTotalDropID = COUNT( DISTINCT SourceKey) 
-      FROM rdt.rdtPTLPieceLog WITH (NOLOCK) 
-      WHERE Station = @cStation 
-      AND   Method = @cMethod 
-      AND   SourceKey <> ''  
-  
       -- Prepare current screen var  
       SET @cOutField01 = '' -- DropID  
       SET @cOutField02 = CAST( @nTotalDropID AS NVARCHAR(5))  
