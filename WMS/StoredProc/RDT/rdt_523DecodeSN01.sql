@@ -113,18 +113,21 @@ BEGIN
          GOTO Quit
       END
       
-      -- Get session info
       DECLARE @cFromLOC NVARCHAR( 10)
       DECLARE @cFromID  NVARCHAR( 18)
-      SELECT 
-         @cFromLOC = V_LOC, 
-         @cFromID = V_ID
-      FROM rdt.rdtMobRec WITH (NOLOCK)
-      WHERE Mobile = @nMobile
+
+      -- Serial no with LOT, LOC, ID
+      IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'SerialNoUpdateLotLocID') = '1'
+         -- Get session info
+         SELECT 
+            @cFromLOC = V_LOC, 
+            @cFromID = V_ID
+         FROM rdt.rdtMobRec WITH (NOLOCK)
+         WHERE Mobile = @nMobile
       
       SET @cTempSNO = @cSNOP1 + @cSNOP2 + @cSNOP3
       SET @nTempQTY = 1
-      
+
       -- Validate serial no
       EXEC RDT.rdtIsValidSerialNo @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
          @cTempSNO,
