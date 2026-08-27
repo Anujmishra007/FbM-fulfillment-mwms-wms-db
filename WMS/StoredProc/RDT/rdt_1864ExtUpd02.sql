@@ -151,7 +151,7 @@ BEGIN
          @cPickSlipNo,
          DENSE_RANK() OVER (ORDER BY PD.DropID),
          PD.DropID,       -- LabelNo = DropID; no separate license-plate generation
-         '00000',
+         RIGHT('00000' + CAST(DENSE_RANK() OVER (PARTITION BY PD.DropID ORDER BY PD.SKU) - 1 AS NVARCHAR(5)), 5),
          PD.StorerKey,
          PD.SKU,
          SUM(PD.QTY),
