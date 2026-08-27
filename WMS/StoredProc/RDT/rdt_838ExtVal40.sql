@@ -62,8 +62,8 @@ BEGIN
        IF ISNULL(@cPickSlipNo, '' ) <> ''
        BEGIN
          IF EXISTS (SELECT 1 
-                  FROM RDT.rdtPTLPieceLog RPP (NOLOCK) 
-                  INNER JOIN dbo.PICKHEADER PH (NOLOCK) 
+                  FROM RDT.rdtPTLPieceLog RPP WITH(NOLOCK) 
+                  INNER JOIN dbo.PICKHEADER PH WITH(NOLOCK) 
                      ON RPP.WaveKey = PH.WaveKey 
                   WHERE PH.PickHeaderKey = @cPickSlipNo
                      AND PH.StorerKey = @cStorerKey)
