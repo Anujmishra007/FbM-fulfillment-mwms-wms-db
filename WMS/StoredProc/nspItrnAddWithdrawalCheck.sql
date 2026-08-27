@@ -374,14 +374,10 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
-     ELSE BEGIN
-        -- (DTH163) Start --
-        IF @n_qty <> 0
-        BEGIN
+     ELSE IF @n_qty IS NULL OR @n_qty <> 0   -- (DTH163)
+     BEGIN
          SELECT @n_continue = 3 , @n_Err = 61930 --61335
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
-        END
-        -- (DTH163) End --
      END
  END
  IF @n_continue=1 or @n_continue=2
