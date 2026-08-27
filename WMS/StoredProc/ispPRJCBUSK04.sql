@@ -23,7 +23,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
 /* 2026-08-05  Wan01    1.0   Created.                                  */
-/* 2026-08-18  Wan      1.0   UWP-64392 - Fix                           */     
+/* 2026-08-27  Wan      1.0   UWP-64392 - Fix                           */     
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCBUSK04]  
    @c_OrderKey        NVARCHAR(10)
@@ -120,15 +120,15 @@ BEGIN
    ,  QtyAvailable   INT            NOT NULL DEFAULT(0)    
    )  
 
+   --2026-08-27
+   --Since replenish full pallet to pick face, hence cannot allocate mix sku pallet
    SET @c_Condition  = ' AND LOC.LocationType <> ''PICK'''
                      + ' AND EXISTS (  SELECT 1 
                                        FROM LOTxLOCxID lli1 (NOLOCK) 
-                                       JOIN LOTAttribute la1 (NOLOCK) ON la1.Lot = lli1.Lot
                                        WHERE lli1.Loc = LOTxLOCxID.Loc 
                                        AND lli1.ID = LOTxLOCxID.ID
                                        AND lli1.QTY > 0
-                                       AND la1.Lottable11 = LOTATTRIBUTE.Lottable11
-                                       GROUP BY lli1.Loc, lli1.ID, la1.Lottable11
+                                       GROUP BY lli1.Loc, lli1.ID
                                        HAVING COUNT(DISTINCT lli1.SKU) = 1
                                     )'
 
