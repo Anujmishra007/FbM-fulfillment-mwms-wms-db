@@ -37,7 +37,7 @@ GO
 /*                            by Areakey (WL11)                          */
 /* 18-May-2026 WLChooi  2.2   UWP-56880 Consolidate Picking task for same*/
 /*                            caseid, Remove WL08 (WL12)                 */
-/* 22-Jul-2026 WLChooi  2.3   FCR-14782 Do not hold CPK for UOM2 CONVEYOR*/
+/* 22-Jul-2026 WLChooi  2.3   FCR-14634 Do not hold CPK for UOM2 CONVEYOR*/
 /*                            RPF/ASTTPA. Keep hold for UOM6 (WL13)      */
 /* 14-Aug-2026 WLChooi  2.4   UWP-64096 Rem table linkage & add traceinfo*/
 /*                            to identify taskdetailkey mis-stamp (WL14) */
