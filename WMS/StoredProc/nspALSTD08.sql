@@ -181,13 +181,7 @@ BEGIN
       LOTATTRIBUTE.Lottable05, 
       LOC.LogicalLocation, LOC.LOC   
 
-   SELECT TOP 1
-      @c_StorerKey = TPC.STORERKEY,
-      @c_SKU = TPC.SKU
-   FROM #TMP_PREALLOCATE_CURSOR_CANDIDATES TPC
-   WHERE TPC.LOT = @c_lot
-   AND TPC.FACILITY = @c_Facility
-
+   -- NOTE: @c_lot is never initialized in this procedure; removed ineffective lookup by lot.
    SELECT @n_PalletQty = P.Pallet
    FROM SKU (NOLOCK) S
    JOIN PACK (NOLOCK) P ON S.Packkey = P.Packkey
