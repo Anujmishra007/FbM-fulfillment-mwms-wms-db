@@ -1,0 +1,10 @@
+--rdt.rdt_898ExtVal15
+--267301 - 267350
+
+EXECUTE rdt.rdtdropmsg 267301, 267350
+
+EXECUTE rdt.rdtAddMsg 267301, 10, '267301^SKUMisMatch', 'us_english', 898, 0, '267301 SKU not match UCC'
+
+
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 267301 AND 267350 ORDER BY Message_ID
+GO

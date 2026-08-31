@@ -4,15 +4,16 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_605RcvCfm05_GetSuggestLoc                        */
+/* Store procedure: rdt_605RcvCfm05_GetSuggestLoc                       */
 /*                                                                      */
-/* Purpose:       Find suggested putaway location for ASTPA task       */
-/*                based on DAMAGED/OVERSIZE/MIX/MONO scenarios         */
+/* Purpose:       Find suggested putaway location for ASTPA task        */
+/*                based on VAS/DAMAGED/OVERSIZE/MIX/MONO scenarios      */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
-/* 2026-02-27 1.0.0  Jackc    FCR-9673 - Initial version               */
+/* 2026-02-27 1.0.0  Jackc    FCR-9673 - Initial version                */
+/* 2026-07-31 1.1.0  Dennis   FCR-14607 - Add Scenario 5 VAS routing    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_605RcvCfm05_GetSuggestLoc]
@@ -46,6 +47,8 @@ BEGIN
    DECLARE @cUserDefine10     NVARCHAR(30)
    DECLARE @cRPDToLoc         NVARCHAR(10)
    DECLARE @cPutawayZone      NVARCHAR(10)
+   DECLARE @cConsigneeSUSR1   NVARCHAR(10)
+   DECLARE @cConsigneeSUSR5   NVARCHAR(10)
    DECLARE @cDimThreshold01   NVARCHAR(60)
    DECLARE @cDimThreshold02   NVARCHAR(60)
    DECLARE @cDimThreshold03   NVARCHAR(60)
@@ -58,8 +61,8 @@ BEGIN
 
    SELECT
       @cConditionCode = ConditionCode,
-      @cLottable01 = Lottable01,
-      @cLottable02 = Lottable02,
+      @cLottable01 = ISNULL(Lottable01, ''),
+      @cLottable02 = ISNULL(Lottable02, ''),
       @cLottable11 = Lottable11,
       @cUserDefine08 = UserDefine08,
       @cUserDefine09 = UserDefine09,
@@ -83,7 +86,118 @@ BEGIN
 
    -- Step 2: Check scenarios in priority order
 
-   -- SCENARIO 1: DAMAGED/VAS
+   -- SCENARIO 1: VAS routing (Consignee-based)
+   IF @cSuggestLoc = ''
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Scenario: VAS'
+
+      -- Lookup consignee only when Lottable01 is provided
+      IF @cLottable01 <> ''
+      BEGIN
+         SELECT
+            @cConsigneeSUSR1 = SUSR1,
+            @cConsigneeSUSR5 = SUSR5
+         FROM dbo.STORER WITH (NOLOCK)
+         WHERE Type = '2'
+            AND ConsigneeFor = @cStorerKey
+            AND Address1 = @cLottable01
+      END
+
+      -- Route to VAS if: Lottable01 empty, OR consignee not found, OR both SUSR1/SUSR5 empty
+      IF @cLottable01 = ''
+         OR (ISNULL(@cConsigneeSUSR1, '') = '' AND ISNULL(@cConsigneeSUSR5, '') = '')
+      BEGIN
+         -- Get VAS PutawayZone from CODELKUP
+         SELECT @cPutawayZone = Notes
+         FROM dbo.CODELKUP WITH (NOLOCK)
+         WHERE ListName = 'ASTTMZone'
+            AND Code = 'VAS'
+            AND StorerKey = @cStorerKey
+
+         IF @cPutawayZone IS NULL OR @cPutawayZone = ''
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT '260212-VAS: ASTTMZone missing'
+            ELSE
+               EXEC nspLogAlert
+                  @c_modulename = '605-PALRCPT',
+                  @c_AlertMessage = 'PA task creation failed: 260212-VAS: ASTTMZone missing',
+                  @n_Severity = 5,
+                  @b_Success = @bSuccess OUTPUT,
+                  @n_err = @nErrNo OUTPUT,
+                  @c_errmsg = @cErrMsg OUTPUT,
+                  @c_Activity = 'PALRCPT',
+                  @c_Storerkey = @cStorerKey,
+                  @c_SKU = '',
+                  @c_UOM = '',
+                  @c_UOMQty = '',
+                  @c_Qty = '',
+                  @c_Lot = '',
+                  @c_Loc = @cRPDToLoc,
+                  @c_ID = @cToID,
+                  @c_TaskDetailKey = ''
+
+            GOTO Quit
+         END
+
+         -- Find available location: prefer locations with inventory, then empty locations
+         SELECT TOP 1 @cSuggestLoc = LOC.Loc
+         FROM dbo.LOC LOC WITH (NOLOCK)
+         LEFT JOIN (
+            SELECT LLI2.Loc, LLI2.ID
+            FROM dbo.LOTxLOCxID LLI2 WITH (NOLOCK)
+            INNER JOIN dbo.LOC LOC2 WITH (NOLOCK)
+               ON LLI2.Loc = LOC2.Loc
+            WHERE LLI2.StorerKey = @cStorerKey
+              AND LOC2.PutawayZone = @cPutawayZone
+              AND (LLI2.Qty - LLI2.QtyPicked + LLI2.PendingMoveIn) > 0
+            GROUP BY LLI2.Loc, LLI2.ID
+         ) LLI
+         ON LOC.Loc = LLI.Loc
+         WHERE LOC.PutawayZone = @cPutawayZone
+            AND LOC.Facility = @cFacility
+            AND LOC.LocationFlag = 'NONE'
+            AND LOC.Status = 'OK'
+            AND LOC.LoseID = '0'
+         GROUP BY LOC.Loc, LOC.MaxPallet, LOC.LogicalLocation
+         HAVING LOC.MaxPallet = 0 OR ISNULL(COUNT(DISTINCT LLI.ID), 0) < LOC.MaxPallet
+         ORDER BY
+            CASE WHEN ISNULL(COUNT(DISTINCT LLI.ID), 0) > 0 THEN 0 ELSE 1 END,
+            LOC.LogicalLocation,
+            LOC.Loc
+
+         IF @cSuggestLoc IS NULL OR @cSuggestLoc = ''
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT '260213-VAS: No available location'
+            ELSE
+               EXEC nspLogAlert
+                  @c_modulename = '605-PALRCPT',
+                  @c_AlertMessage = 'PA task creation failed: 260213-VAS: No available location',
+                  @n_Severity = 5,
+                  @b_Success = @bSuccess OUTPUT,
+                  @n_err = @nErrNo OUTPUT,
+                  @c_errmsg = @cErrMsg OUTPUT,
+                  @c_Activity = 'PALRCPT',
+                  @c_Storerkey = @cStorerKey,
+                  @c_SKU = '',
+                  @c_UOM = '',
+                  @c_UOMQty = '',
+                  @c_Qty = '',
+                  @c_Lot = '',
+                  @c_Loc = @cRPDToLoc,
+                  @c_ID = @cToID,
+                  @c_TaskDetailKey = ''
+
+            GOTO Quit
+         END
+
+         GOTO Quit
+      END
+   END -- VAS
+
+   -- SCENARIO 2: DAMAGED/VAS
    IF @cConditionCode = 'DAMAGE'
    BEGIN
       IF @nDebugFlag = 1
@@ -176,7 +290,7 @@ BEGIN
       GOTO Quit
    END -- Damage Vas
 
-   -- SCENARIO 2: OVERSIZE
+   -- SCENARIO 3: OVERSIZE
    IF @nDebugFlag = 1
          SELECT 'Checking OVERSIZE'
 
@@ -218,9 +332,9 @@ BEGIN
    END
 
    -- Check if any dimension exceeds threshold (cast to DECIMAL for numeric comparison)
-   IF (ISNULL(TRY_CAST(@cUserDefine08 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold01 AS DECIMAL(5,2)), 0))
-      OR (ISNULL(TRY_CAST(@cUserDefine09 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold02 AS DECIMAL(5,2)), 0))
-      OR (ISNULL(TRY_CAST(@cUserDefine10 AS DECIMAL(5,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold03 AS DECIMAL(5,2)), 0))
+   IF (ISNULL(TRY_CAST(@cUserDefine08 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold01 AS DECIMAL(7,2)), 0))
+      OR (ISNULL(TRY_CAST(@cUserDefine09 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold02 AS DECIMAL(7,2)), 0))
+      OR (ISNULL(TRY_CAST(@cUserDefine10 AS DECIMAL(7,2)), 0) > ISNULL(TRY_CAST(@cDimThreshold03 AS DECIMAL(7,2)), 0))
    BEGIN
       IF @nDebugFlag = 1
          SELECT 'Scenario Oversize'
@@ -280,7 +394,7 @@ BEGIN
       GOTO Quit
    END
 
-   -- SCENARIO 3: MIX
+   -- SCENARIO 4: MIX
    IF @cSuggestLoc = '' AND @cLottable02 = 'MIX'
    BEGIN
       IF @nDebugFlag = 1
@@ -399,7 +513,7 @@ BEGIN
       GOTO Quit
    END -- Mix
 
-   -- SCENARIO 4: MONO
+   -- SCENARIO 5: MONO
    IF @cSuggestLoc = '' AND @cLottable02 = 'MONO'
    BEGIN
       IF @nDebugFlag = 1
@@ -494,6 +608,7 @@ BEGIN
 
       GOTO Quit
    END
+
 
    IF @cSuggestLoc = ''
    BEGIN

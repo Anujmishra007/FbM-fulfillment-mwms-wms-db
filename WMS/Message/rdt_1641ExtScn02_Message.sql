@@ -6,6 +6,6 @@ EXECUTE rdt.rdtAddMsg 258953, 10, '258953 DropIDInUse',     'us_english', 1641, 
 EXECUTE rdt.rdtAddMsg 258954, 10, '258954 PickNotDone',     'us_english', 1641, 0,  '258954 Picking is not completed yet'
 EXECUTE rdt.rdtAddMsg 258955, 10, '258955 DropIDShipped',   'us_english', 1641, 0,  '258955 DropID is shipped'
 EXECUTE rdt.rdtAddMsg 258956, 10, '258956 InvDropID',       'us_english', 1641, 0,  '258956 Invalid DropID'
-EXECUTE rdt.rdtAddMsg 258957, 10, '258957 NoUCCOnDropID',       'us_english', 1641, 0,  ' '
+EXECUTE rdt.rdtAddMsg 258957, 10, '258957 PPSPalletOpen',      'us_english', 1641, 0,  '258957 Pallet ID is still open in PPS'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 258951 AND 259000

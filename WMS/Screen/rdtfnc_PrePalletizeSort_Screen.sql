@@ -140,3 +140,15 @@ EXECUTE rdt.rdtAddScn 5669, 'ENG',
    ,@cLine03 = 'Pallet Is Closed'
    ,@cLine14 = '%e'   
    ,@nFunc = 1841
+
+--WMS-23878
+-- 6310 = Pack info screen
+DELETE rdt.RDTScn WHERE Scn = 6310 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6310, 'ENG'
+   ,@cLine01 = 'CARTON: %10i01'
+   ,@cLine02 = 'WEIGHT: %10i02'
+   ,@cLine03 = 'CUBE:   %10i03'
+   ,@cLine04 = 'REF NO:'
+   ,@cLine05 = '%20i04'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1841

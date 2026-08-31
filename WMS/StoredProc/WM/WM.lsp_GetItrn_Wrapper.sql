@@ -46,7 +46,8 @@ GO
 /*                             and cleanup.                             */
 /* 2026-03-23  USH022   2.0   UWP-47962 -Transactions view only 10000   */
 /*                                  records-Pagination added.           */
-/************************************************************************/
+/* 2026-03-23  USH022   2.1   UWP-13432 -SKU.DESCR Added in the resultset*/
+/*************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX),                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
    @c_SortPreference    NVARCHAR(MAX) = '',            --Only sort column. Multiple Sort Columns are seperated to be , (comma)
@@ -161,7 +162,7 @@ BEGIN
       ,  Channel_ID           BIGINT         NULL
       ,  FromFacility         NVARCHAR(5)    NULL     DEFAULT ('')
       ,  ToFacility           NVARCHAR(5)    NULL     DEFAULT ('')
-      ,  SkuDescr             NVARCHAR(60)   NULL     DEFAULT ('')
+      ,  DESCR                NVARCHAR(MAX)   NULL     DEFAULT ('')                     --(2.1)
       ,  Style                NVARCHAR(20)   NOT NULL DEFAULT ('')
       ,  Color                NVARCHAR(10)   NOT NULL DEFAULT ('')
       ,  Size                 NVARCHAR(10)   NULL     DEFAULT ('')
@@ -226,6 +227,7 @@ BEGIN
                   +', ITRN.SourceType'
                   +', ITRN.StorerKey'
                   +', ITRN.Sku'
+                  +', SKU.DESCR'                        --(2.1)
                   +', ITRN.FromLoc'
                   +', ITRN.FromID'
                   +', ITRN.ToLoc'
@@ -304,6 +306,7 @@ BEGIN
          ,  SourceType
          ,  StorerKey
          ,  Sku
+         ,  DESCR                     --(2.1)
          ,  FromLoc
          ,  FromID
          ,  ToLoc
@@ -352,7 +355,7 @@ BEGIN
    UPDATE ti
       SET ti.FromFacility = ISNULL(l1.Facility,'')
          ,ti.ToFacility = ISNULL(l2.Facility,'')
-         ,ti.SKUDescr = ISNULL(s.DESCR,'')
+         ,ti.DESCR = ISNULL(s.DESCR,'')                                                --(2.1)
          ,ti.Style = ISNULL(s.Style,'')
          ,ti.Color = ISNULL(s.Color,'')
             ,ti.Size = ISNULL(s.Size,'')
@@ -730,7 +733,7 @@ BEGIN
                +', ITRN.Channel_ID'
                +', ITRN.FromFacility'
                +', ITRN.ToFacility'
-               +', ITRN.SkuDescr'
+               +', ITRN.DESCR AS SkuDescr'                                              --(2.1)
                +', ITRN.Style'
                +', ITRN.Color'
                +', ITRN.Size'

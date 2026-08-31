@@ -66,20 +66,28 @@ BEGIN
    IF @c_Lottable01Value <> ''
    BEGIN
       IF LEN( @c_Lottable01Value) - LEN(REPLACE( @c_Lottable01Value, ':', '')) > 1
-         BEGIN
-            SET @n_ErrNo = 237651
-            SET @c_Errmsg = rdt.rdtgetmessage( @n_ErrNo, 'ENG', 'DSP') --Invalid Value
-            GOTO Quit
-         END
+      BEGIN
+         SET @n_ErrNo = 237651
+         SET @c_Errmsg = rdt.rdtgetmessage( @n_ErrNo, 'ENG', 'DSP') --Invalid Value
+         GOTO Quit
+      END
+
+      -- Unwrap braces added by rdt_1580DecodeSP03, e.g. {38B} -> 38B
+      -- Check both leading { AND trailing } with min length 3 to avoid malformed values
+      IF @c_Lottable01Value LIKE '{%}' AND LEN(@c_Lottable01Value) >= 3 AND RIGHT(@c_Lottable01Value, 1) = '}'
+      BEGIN
+         SET @c_Lottable01 = SUBSTRING(@c_Lottable01Value, 2, LEN(@c_Lottable01Value) - 2)
+         GOTO Quit
+      END
 
       IF CHARINDEX( ':', @c_Lottable01Value) = 0
-         BEGIN
-            SET @c_Lottable01 = ''
-         END
+      BEGIN
+         SET @c_Lottable01 = ''
+      END
       ELSE
-         BEGIN
-            SET @c_Lottable01 = SUBSTRING( @c_Lottable01Value,  CHARINDEX( ':', @c_Lottable01Value) + 1, LEN( @c_Lottable01Value))
-         END
+      BEGIN
+         SET @c_Lottable01 = SUBSTRING( @c_Lottable01Value,  CHARINDEX( ':', @c_Lottable01Value) + 1, LEN( @c_Lottable01Value))
+      END
    END   -- @c_Lottable01Value
 
 Quit:

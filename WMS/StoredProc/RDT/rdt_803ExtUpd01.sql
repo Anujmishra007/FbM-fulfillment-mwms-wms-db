@@ -16,6 +16,7 @@ GO
 /*                          LabelPrinterAsStaton                              */
 /*                          PaperPrinterAsStaton                              */
 /* 10-06-2023 1.5  Ung      WMS-22706 Add CheckLightNotPress                  */
+/* 16-03-2026 1.6  Cuize    FCR-11560 Filter SKU                              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_803ExtUpd01 (
@@ -118,7 +119,9 @@ BEGIN
                             ELSE 0 
                        END)
                FROM rdt.rdtPTLPieceLog L WITH (NOLOCK) 
-                  JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = L.OrderKey)
+                  JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = L.OrderKey
+                  AND Pd.SKU = L.SKU
+                     )
                WHERE Station = @cStation
                   AND PD.QTY > 0
                   AND PD.Status <> '4'

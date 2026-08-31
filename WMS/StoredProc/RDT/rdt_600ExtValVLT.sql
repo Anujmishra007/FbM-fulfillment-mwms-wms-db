@@ -12,6 +12,7 @@ GO
 /* 03/07/2024   1.1   PPA374   To stop using same ID that is in use      */
 /* 18/10/2024   1.2   PPA374   Adding check for SKU style (shlv/inb)     */
 /* 18/10/2024   1.3   PPA374   Consolidaton receiving prevention         */
+/* 30/07/2026   1.4   PPA374   Adding validation control for shelving    */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_600ExtValVLT] (
@@ -131,10 +132,9 @@ BEGIN
                   AND SL.Sku = @cSKU
                   AND SL.LocationType = 'PICK'
                GROUP BY LOC.LOC
-               HAVING SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(P.LengthUOM3,0) * ISNULL(P.WidthUOM3,0) * ISNULL(P.HeightUOM3,0)) + @nCubic <= MAX(LOC.CubicCapacity)
-               AND SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(SKU.STDGROSSWGT,0)) + @nWeight <= MAX(LOC.WeightCapacity))
-
-               BEGIN
+         HAVING SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(P.LengthUOM3,0) * ISNULL(P.WidthUOM3,0) * ISNULL(P.HeightUOM3,0)) + @nCubic <= MAX(LOC.CubicCapacity)
+         AND SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(SKU.STDGROSSWGT,0)) + @nWeight <= MAX(LOC.WeightCapacity))
+            BEGIN
                SET @nErrNo = 218038
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No loc OR big/heavy'
                GOTO Quit
@@ -151,7 +151,17 @@ BEGIN
          BEGIN
             SET @nErrNo = 218004
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Receive to trolley'
-            GOTO Quit
+			BEGIN --V1.4 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			   ELSE
+			   BEGIN
+				  GOTO Quit
+			   END
+			END
          END
 
          IF EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'SHELFRHUSQ' AND Storerkey = @cStorerKey
@@ -160,7 +170,17 @@ BEGIN
          BEGIN
             SET @nErrNo = 218005
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Receive to INB stage'
-            GOTO Quit
+			BEGIN --V1.4 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			   ELSE
+			   BEGIN
+				  GOTO Quit
+			   END
+			END
          END
 
          IF (SELECT TOP 1 Style FROM dbo.SKU WITH(NOLOCK) WHERE Sku = @cSKU AND StorerKey = @cStorerKey) = 'CON'
@@ -178,7 +198,17 @@ BEGIN
          BEGIN
             SET @nErrNo = 218039
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No shelfpick loc set'
-            GOTO Quit          
+			BEGIN --V1.4 PPA374 30/07/2026
+			   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE UDF01 = @nFunc AND Short = '1' AND Storerkey = @cStorerKey AND Code = CAST (@nErrNo AS NVARCHAR(20)) AND LISTNAME = 'HUSQSHLVEC')
+			   BEGIN
+			      SET @nErrNo = ''
+				  SET @cErrMsg = ''
+			   END
+			   ELSE
+			   BEGIN
+				  GOTO Quit
+			   END
+			END   
          END
       END
 

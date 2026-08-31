@@ -274,7 +274,7 @@ EXECUTE rdt.rdtAddScn 677, 'ENG',
    @cLine02 = 'ID:',
    @cLine03 = '%18d02',
    @cLine05 = 'SKU/UPC:',
-   @cLine06 = '%30i03',
+   @cLine06 = '%200iV_Barcode',
    @cLine14 = '%e', 
    @cWebGroup = '{"1":["1"],"2":["2","3"],"3":["5","6"]}', 
    @nFunc = 610
@@ -305,7 +305,7 @@ EXECUTE rdt.rdtAddScn 679, 'ENG',
    @cLine02 = 'ID:',
    @cLine03 = '%18d02',
    @cLine05 = 'SKU/UPC:',
-   @cLine06 = '%30i03',
+   @cLine06 = '%200iV_Barcode',
    @cLine07 = 'SKU:',
    @cLine08 = '%20d04',
    @cLine09 = '%20d05',
@@ -427,3 +427,16 @@ EXECUTE rdt.rdtAddScn 3264, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["6","7"],"4":["8","9"],"5":["10","11"],"6":["12","13"]}'
    ,@nFunc = 610
+
+-- WMS-22616
+-- 703 = ?? screen
+DELETE rdt.RDTScn WHERE Scn = 703 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 703, 'ENG'
+   ,@cLine01 = 'UCC:'
+   ,@cLine02 = '%20d01'   
+   ,@cLine03 = 'SKU:'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%20d04'
+   ,@cLine07 = 'Qty: %05i05'
+   ,@cLine14 = '%e'   

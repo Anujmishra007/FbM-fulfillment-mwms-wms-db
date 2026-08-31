@@ -270,6 +270,9 @@ BEGIN
                     -- Link: PACKHEADER.OrderKey = PICKDETAIL.OrderKey
                     --       PACKDETAIL.PickSlipNo = PACKHEADER.PickSlipNo
                     --       PACKDETAIL.LabelNo = PICKDETAIL.CaseID
+                    SET @nTranCount = @@TRANCOUNT
+                    BEGIN TRAN
+                    SAVE TRAN rdt_1855ExtUpd05
 
                     DECLARE @cDropID NVARCHAR(30)
                     DECLARE @cCaseID NVARCHAR(20)

@@ -20,6 +20,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Ver.  Purposes                            */
 /* 23-MAR-2026  Preetham NV   1.0   FCR-11186                           */
+/* 17-JUL-2026  Preetham NV   2.0   FCR-11186 : Hypercare Bug Fix(VNI01) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspALDAM03]
     @c_DocumentNo NVARCHAR(10), --KitKey
@@ -100,7 +101,7 @@ BEGIN
         WHERE KITDETAIL.KITKEY = @c_KitKey
         AND KITDETAIL.KITLineNumber = @c_KitLineNumber
     END
-
+                                                        --VNI01(START)
     SET @c_SQL = N'
      DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
      SELECT LOTxLOCxID.LOT,
@@ -123,15 +124,13 @@ BEGIN
         AND NOT EXISTS (SELECT 1
                   FROM KIT K (NOLOCK)
                   JOIN KITDETAIL KD (NOLOCK) ON K.Kitkey = KD.Kitkey
-                  WHERE K.Status <> ''9''
-                  AND KD.Status <> ''9''
-                  AND KD.Type = ''F''
+                  WHERE K.Status = ''2''
                   AND KD.STORERKEY = LOTxLOCxID.STORERKEY
                   AND KD.SKU = LOTxLOCxID.SKU
                   AND KD.Lot = LOT.Lot
                   AND KD.LOC = LOTxLOCxID.LOC
                   AND KD.ID = LOTxLOCxID.ID)
-                  AND LOC.LocationFlag = ''NONE'' ' +
+        AND LOC.LocationFlag = ''NONE'' ' +                      --VNI01(END)
      CASE WHEN ISNULL(RTRIM(@c_LotFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOT IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOT = @c_LotFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_LocFromKitDetail),'') = '' THEN ' AND LOTxLOCxID.LOC IS NOT NULL ' ELSE ' AND LOTxLOCxID.LOC = @c_LocFromKitDetail ' END +
      CASE WHEN ISNULL(RTRIM(@c_IDFromKitDetail),'') = ''  THEN ' AND LOTxLOCxID.ID IS NOT NULL ' ELSE ' AND LOTxLOCxID.ID = @c_IDFromKitDetail ' END +

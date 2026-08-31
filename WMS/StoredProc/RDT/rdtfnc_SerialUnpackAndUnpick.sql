@@ -11,6 +11,7 @@ GO
 /* 2024-11-05   1.0  TLE109         FCR-917 Serial Unpack and Unpick                            */
 /* 2025-01-15   1.1  NYE018         FCR-9889 Added Decode QR logic                              */
 /* 2026-02-19   1.2  NYE018         FCR-10102 Added extended screen logic                       */
+/* 2026-06-16   1.3  NYE018         FCR-12825 Add default option and validation on option step_2*/
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_SerialUnpackAndUnpick] (
@@ -71,6 +72,11 @@ DECLARE
    @tExtScnData         VariableTable,
    -- END NEW VARIABLES - (NYE018 - FCR-10102)
 
+   -- FCR-12825
+   @cDefaultOpt         NVARCHAR( 1),
+   @cExtendedValidateSP NVARCHAR( 20),
+   -- FCR-12825
+
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),   @cFieldAttr02 NVARCHAR( 1), @cLottable02  NVARCHAR( 18),
@@ -117,6 +123,8 @@ SELECT
    @cDecodeSP        = V_String10,    -- FCR-9889
 
    @cExtScnSP        = V_String9, -- (NYE018 - FCR-10102)
+   @cDefaultOpt      = V_String12, -- FCR-12825
+   @cExtendedValidateSP = V_String13, -- FCR-12825
 
    @cPickSlipNo      = V_PickSlipNo,
    @cUnPackType      = V_String1,
@@ -184,7 +192,16 @@ BEGIN
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtScnSP = '0' SET @cExtScnSP = ''
    -- END CHANGE - (NYE018 - FCR-10102)
-   
+
+   -- FCR-12825: Load DefaultOpt Config
+   SET @cDefaultOpt = rdt.RDTGetConfig( @nFunc, 'DefaultOpt', @cStorerKey)
+   IF @cDefaultOpt NOT IN (@cUNPACK_MODEL, @cUNPACKANDUNPICK_MODEL) SET @cDefaultOpt = ''
+
+   -- FCR-12825: Load ExtendedValidateSP Config
+   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0' SET @cExtendedValidateSP = ''
+   -- FCR-12825
+
 END
 GOTO QUIT
 
@@ -236,6 +253,12 @@ BEGIN
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+
+      -- FCR-12825: Set default option for Step_2 screen
+      SET @cOutField01 = @cDefaultOpt
+
+      GOTO QUIT
+      -- FCR-12825
    END
    ELSE BEGIN
       -- EventLog
@@ -272,7 +295,38 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO Step_2_QUIT
       END
-      
+
+      -- FCR-12825: Extended Validation SP call
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cUnPackType, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cFacility    NVARCHAR( 5),  ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cUnPackType  NVARCHAR( 60), ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cUnPackType,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+               GOTO Step_2_QUIT
+            END
+         END
+      END
+      -- FCR-12825
 
       IF @cUnPackType = @cUNPACK_MODEL
       BEGIN
@@ -675,6 +729,8 @@ BEGIN
       V_Barcode     = @cBarcode,  -- FCR-9889
       V_String10    = @cDecodeSP, -- FCR-9889
       V_String9     = @cExtScnSP, -- (NYE018 - FCR-10102)
+      V_String12    = @cDefaultOpt, -- FCR-12825
+      V_String13    = @cExtendedValidateSP, -- FCR-12825
 
       V_PickSlipNo   = @cPickSlipNo,
       V_String1      = @cUnPackType,

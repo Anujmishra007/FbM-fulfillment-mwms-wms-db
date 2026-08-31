@@ -181,7 +181,7 @@ BEGIN
 
       SELECT  @cLblLineNumber = LabelLine
             , @cLabelNo = LabelNo
-      FROM PACDETAIL (NOLOCK)
+      FROM PACKDETAIL (NOLOCK)
       WHERE StorerKey = @cStorerKey        
       AND PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo

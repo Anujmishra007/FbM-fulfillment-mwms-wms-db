@@ -25,6 +25,8 @@ GO
 /*                            Sub SP                                    */
 /* 2025-07-25  AK01     1.2   FCR-6532 - Add support for time-based job */
 /*                            scheduling using Notes2 config            */
+/* 2026-06-10  VNI01    1.3   FCR-12991 - Time based scheduling update  */
+/* 2026-08-19  Michael  1.4   FCR-15122 - Add Weekly/Monthly Sch (ML01) */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ
    @c_jobname   NVARCHAR(30) = 'BEJ-STD-01'
@@ -52,17 +54,75 @@ BEGIN
          , @c_IntervalType    NVARCHAR(50)   = ''
          , @t_OccurAt         TIME           = ''
          --AK01 END
-
+           --VNI01 START
+         , @c_ExecutionHour   NVARCHAR(500)  = ''
+         , @c_ExecutionMinute NVARCHAR(500)  = ''
+         , @n_DailyFrequency  INT            = 0
+         , @dt_NextRunSlot    DATETIME       = NULL
+         , @n_ParsedSlotCnt   INT            = 0
+         , @c_HourList        NVARCHAR(510)  = ''
+         , @c_MinList         NVARCHAR(510)  = ''
+         , @n_Pos             INT            = 0
+         , @n_SlotIdx         INT            = 0
+         , @c_HourItem        NVARCHAR(10)   = ''
+         , @c_MinItem         NVARCHAR(10)   = ''
+           --VNI01 END
          , @c_SQL             NVARCHAR(500)  = ''
          , @c_PName           NVARCHAR(30)   = '' 
 
          , @CUR_JOB           CURSOR
          , @CUR_PARMS         CURSOR
 
+   --ML01-S
+   DECLARE @d_SysDateTime     DATETIME = GETDATE()
+         , @c_ScheduleType    NVARCHAR(50)
+         , @n_DayOfMonth      INT            -- +ve(1..31)=n-th day / -ve(-1..-31)=Last n-th day
+         , @c_Weekdays        NVARCHAR(50)   -- Mon,Tue,Wed,Thu,Fri,Sat,Sun / ALL
+         , @c_TimeInterval    NVARCHAR(50)   -- hh:mm / hh:mm:ss
+         , @c_StartDate       NVARCHAR(50)   -- yyyy-MM-dd
+         , @c_EndDate         NVARCHAR(50)   -- yyyy-MM-dd
+         , @c_StartTime       NVARCHAR(MAX)  -- hh:mm / hh:mm,hh:mm,...
+         , @c_EndTime         NVARCHAR(50)   -- hh:mm
+         , @n_SecondInterval  INT
+         , @d_StartDateTime   DATETIME
+         , @d_EndDateTime     DATETIME
+         , @c_Schedule        NVARCHAR(MAX)
+         , @c_Schedule1       NVARCHAR(MAX)
+         , @c_Schedule2       NVARCHAR(MAX)
+         , @c_Schedule3       NVARCHAR(MAX)
+         , @c_Schedule4       NVARCHAR(MAX)
+         , @c_Schedule5       NVARCHAR(MAX)
+         , @n_I               INT
+         , @d_Temp            DATETIME
+         , @b_JobFire         INT
+         , @c_JobLog          NVARCHAR(10)
+         , @c_SQLDb           NVARCHAR(128)
+         , @c_SQLSchema       NVARCHAR(128)
+         , @c_LogText         NVARCHAR(MAX)
+         , @n_Duration        INT
+         , @d_JobStartTime    DATETIME
+         , @d_JobEndTime      DATETIME
+
+   DECLARE @t_StartTimeList   TABLE(time_val NVARCHAR(12) NULL)
+   --ML01-E
+
    IF OBJECT_ID('tempdb..#TMP_BEJCL','u') IS NOT NULL         
    BEGIN
       DROP TABLE #TMP_BEJCL;
    END
+   --VNI01 START
+   IF OBJECT_ID('tempdb..#TMP_BEJSCHED','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #TMP_BEJSCHED;
+   END
+
+   CREATE TABLE #TMP_BEJSCHED
+   (  SlotIndex     INT          NOT NULL
+   ,  ExecutionHour TINYINT      NULL
+   ,  ExecutionMin  TINYINT      NULL
+   ,  SlotDateTime  DATETIME     NULL
+   )
+   --VNI01 END
    --sp_help codelkup
    CREATE TABLE #TMP_BEJCL
    (  ListName    NVARCHAR(10)   NOT NULL    DEFAULT ('')
@@ -131,10 +191,13 @@ BEGIN
       BEGIN
          GOTO NEXT_JOB
       END
+      
+      SET @c_JobLog = ''   --ML01
 
       --AK01 START
       IF @c_JobSchedConfig <> ''
       BEGIN
+         SET @c_JobLog = dbo.fnc_GetParamValueFromString('@JobLog', @c_JobSchedConfig, '')   --ML01
          SET @c_IntervalType = dbo.fnc_GetParamValueFromString('@IntervalType', @c_JobSchedConfig, '')
 
          IF @c_IntervalType = 'SpecificTime'
@@ -149,12 +212,180 @@ BEGIN
                END
             END
          END
+         ELSE IF @c_IntervalType = 'DailySchedule'    --VNI01 START
+         BEGIN
+            SET @c_ExecutionHour   = dbo.fnc_GetParamValueFromString('@ExecutionHour'  , @c_JobSchedConfig, '')
+            SET @c_ExecutionMinute = dbo.fnc_GetParamValueFromString('@ExecutionMinute', @c_JobSchedConfig, '')
+            SET @n_DailyFrequency  = ISNULL(TRY_CAST(dbo.fnc_GetParamValueFromString('@DailyFrequency', @c_JobSchedConfig, '1') AS INT), 1)
+
+            TRUNCATE TABLE #TMP_BEJSCHED
+
+            SET @c_HourList = ISNULL(@c_ExecutionHour  ,'') + ','
+            SET @c_MinList  = ISNULL(@c_ExecutionMinute,'') + ','
+            SET @n_SlotIdx  = 0
+
+            WHILE CHARINDEX(',', @c_HourList) > 0 AND CHARINDEX(',', @c_MinList) > 0
+            BEGIN
+               SET @n_Pos      = CHARINDEX(',', @c_HourList)
+               SET @c_HourItem = LTRIM(RTRIM(SUBSTRING(@c_HourList, 1, @n_Pos - 1)))
+               SET @c_HourList = SUBSTRING(@c_HourList, @n_Pos + 1, LEN(@c_HourList))
+
+               SET @n_Pos     = CHARINDEX(',', @c_MinList)
+               SET @c_MinItem = LTRIM(RTRIM(SUBSTRING(@c_MinList, 1, @n_Pos - 1)))
+               SET @c_MinList = SUBSTRING(@c_MinList, @n_Pos + 1, LEN(@c_MinList))
+
+               IF ISNULL(@c_HourItem,'') = '' AND ISNULL(@c_MinItem,'') = ''
+                  CONTINUE
+
+               SET @n_SlotIdx = @n_SlotIdx + 1
+
+               INSERT INTO #TMP_BEJSCHED (SlotIndex, ExecutionHour, ExecutionMin, SlotDateTime)
+               SELECT @n_SlotIdx
+                    , TRY_CAST(@c_HourItem AS TINYINT)
+                    , TRY_CAST(@c_MinItem  AS TINYINT)
+                    , CASE WHEN TRY_CAST(@c_HourItem AS INT) BETWEEN 0 AND 23
+                            AND TRY_CAST(@c_MinItem  AS INT) BETWEEN 0 AND 59
+                           THEN DATEADD(MINUTE, TRY_CAST(@c_MinItem AS INT)
+                                , DATEADD(HOUR, TRY_CAST(@c_HourItem AS INT), CAST(CAST(GETDATE() AS DATE) AS DATETIME)))
+                           ELSE NULL
+                      END
+            END
+
+            SELECT @n_ParsedSlotCnt = COUNT(1) FROM #TMP_BEJSCHED WHERE SlotDateTime IS NOT NULL
+
+
+            SELECT @dt_NextRunSlot = MAX(SlotDateTime)
+            FROM #TMP_BEJSCHED
+            WHERE SlotDateTime IS NOT NULL
+              AND SlotDateTime <= GETDATE()
+
+            IF @dt_NextRunSlot IS NULL OR @dt_NextRunSlot <= TRY_CAST(@dt_LastRunDTime AS DATETIME)
+            BEGIN
+               GOTO NEXT_JOB
+            END
+         END                                    --VNI01 END
+         --ML01-S
+         ELSE IF @c_IntervalType IN ('WeeklySchedule', 'MonthlySchedule')
+         BEGIN
+            /*
+            @IntervalType = WeeklySchedule / MonthlySchedule
+            @Weekdays     = Mon,Tue,Wed,Thu,Fri,Sat,Sun / ALL                  (Mandatory for Weekly Schedule)
+            @DayOfMonth   = +ve(1..31)=n-th day / -ve(-1..-31)=Last n-th day   (Mandatory for Monthly Schedule)
+            @TimeInterval = hh:mm / hh:mm:ss          (Optional)
+            @StartDate    = yyyy-MM-dd                (Optional)
+            @EndDate      = yyyy-MM-dd                (Optional)
+            @StartTime    = hh:mm / hh:mm,hh:mm,...   (Mandatory) (first is start time, others are specific time)
+            @EndTime      = hh:mm                     (Optional)
+
+            * Max can setup 6 different schedules for Weekly type. For example,
+              @IntervalType = WeeklySchedule
+                          @Weekdays  = Mon,Tue,Wed,Thu,Fri @TimeInterval  = 00:30 @StartTime  = 07:00 @EndTime  = 17:00   <- Schedule 0
+              @Schedule1 = @@Weekdays = Mon,Tue,Wed,Thu,Fri @@TimeInterval = 00:30 @@StartTime = 00:00 @@EndTime = 02:00   <- Schedule 1
+              @Schedule2 = @@Weekdays = Sat,Sun             @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 2
+              @Schedule3 = @@IntervalType = MonthlySchedule @@DayOfMonth = 1 @@TimeInterval = 01:00 @@StartTime = 07:00 @@EndTime = 17:00   <- Schedule 3
+            */
+            SET @c_Schedule1 = dbo.fnc_GetParamValueFromString('@Schedule1', @c_JobSchedConfig, '')
+            SET @c_Schedule2 = dbo.fnc_GetParamValueFromString('@Schedule2', @c_JobSchedConfig, '')
+            SET @c_Schedule3 = dbo.fnc_GetParamValueFromString('@Schedule3', @c_JobSchedConfig, '')
+            SET @c_Schedule4 = dbo.fnc_GetParamValueFromString('@Schedule4', @c_JobSchedConfig, '')
+            SET @c_Schedule5 = dbo.fnc_GetParamValueFromString('@Schedule5', @c_JobSchedConfig, '')
+            SET @n_I = 0
+            SET @b_JobFire = 0
+
+            WHILE @n_I <= 5 AND ISNULL(@b_JobFire,0) <> 1
+            BEGIN
+               SET @c_Schedule = CASE @n_I WHEN 0 THEN @c_JobSchedConfig
+                                           WHEN 1 THEN @c_Schedule1
+                                           WHEN 2 THEN @c_Schedule2
+                                           WHEN 3 THEN @c_Schedule3
+                                           WHEN 4 THEN @c_Schedule4
+                                           WHEN 5 THEN @c_Schedule5
+                                END
+               SET @n_I= @n_I + 1
+
+               IF ISNULL(@c_Schedule,'') <> ''
+               BEGIN
+                  SET @c_ScheduleType  = dbo.fnc_GetParamValueFromString('@IntervalType', @c_Schedule, '')
+                  SET @n_DayOfMonth    = TRY_PARSE(ISNULL(dbo.fnc_GetParamValueFromString('@DayOfMonth'  , @c_Schedule, ''),'') AS INT)
+                  SET @c_Weekdays      = dbo.fnc_GetParamValueFromString('@Weekdays'    , @c_Schedule, '')
+                  SET @c_TimeInterval  = dbo.fnc_GetParamValueFromString('@TimeInterval', @c_Schedule, '')
+                  SET @c_StartDate     = dbo.fnc_GetParamValueFromString('@StartDate'   , @c_Schedule, '')
+                  SET @c_EndDate       = dbo.fnc_GetParamValueFromString('@EndDate'     , @c_Schedule, '')
+                  SET @c_StartTime     = dbo.fnc_GetParamValueFromString('@StartTime'   , @c_Schedule, '')
+                  SET @c_EndTime       = dbo.fnc_GetParamValueFromString('@EndTime'     , @c_Schedule, '')
+
+                  IF ISNULL(@c_ScheduleType,'') = ''
+                     SET @c_ScheduleType = @c_IntervalType
+
+                  DELETE FROM @t_StartTimeList
+
+                  INSERT INTO @t_StartTimeList (time_val)
+                  SELECT DISTINCT LEFT(TRIM(value),12) FROM STRING_SPLIT(@c_StartTime, ',') WHERE value<>'' ORDER BY 1
+
+                  SELECT @c_StartTime = ISNULL(MIN(LEFT(TRIM(ColValue),12)),'') FROM dbo.fnc_DelimSplit(',',@c_StartTime) WHERE SeqNo=1
+
+                  DELETE FROM @t_StartTimeList WHERE time_val = @c_StartTime
+
+                  SET @n_SecondInterval = DATEDIFF(SECOND, '', TRY_CONVERT(DATETIME, @c_TimeInterval))
+                  SET @d_StartDateTime  = TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + @c_StartTime,''))
+                  SET @d_EndDateTime    = DATEADD(SECOND, 30, TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + @c_EndTime  ,'')))
+
+                  IF @c_ScheduleType = 'WeeklySchedule'
+                  BEGIN
+                     IF NOT EXISTS(SELECT TOP 1 1 FROM STRING_SPLIT(@c_Weekdays,',') WHERE value<>'' AND TRIM(value) IN ('ALL', LEFT(DATENAME(weekday,@d_SysDateTime),3)))   --Weekday not match
+                        CONTINUE
+                  END
+                  ELSE IF @c_ScheduleType = 'MonthlySchedule'
+                  BEGIN
+                     IF @n_DayOfMonth > 0
+                        SET @d_Temp = DATEADD(DAY, @n_DayOfMonth - 1, CONVERT(NVARCHAR(8),@d_SysDateTime,120)+'01')
+                     ELSE IF @n_DayOfMonth < 0
+                        SET @d_Temp = DATEADD(DAY, @n_DayOfMonth, CONVERT(NVARCHAR(8),DATEADD(MONTH,1,@d_SysDateTime),120)+'01')
+                     ELSE
+                        SET @d_Temp = NULL
+
+                     IF @d_Temp IS NULL OR DATEDIFF(DAY, @d_SysDateTime, @d_Temp) <> 0   -- Day of Month not match
+                        CONTINUE
+                  END
+                  ELSE
+                     CONTINUE
+
+                  IF (ISNULL(@c_StartDate,'')<>'' AND DATEDIFF(DAY, TRY_CONVERT(DATE, ISNULL(@c_StartDate,'')), @d_SysDateTime) < 0) OR   -- Out of Date Range
+                     (ISNULL(@c_EndDate  ,'')<>'' AND DATEDIFF(DAY, TRY_CONVERT(DATE, ISNULL(@c_EndDate,'')), @d_SysDateTime) > 0)
+                     CONTINUE
+
+                  IF ISNULL(@c_StartTime,'')<>'' AND @d_SysDateTime >= @d_StartDateTime AND    -- Time Range and Interval
+                    (ISNULL(@c_EndTime  ,'')=''  OR  @d_SysDateTime <= @d_EndDateTime ) AND
+                     DATEADD(SECOND, CASE WHEN @n_SecondInterval > 0 THEN DATEDIFF(SECOND, @d_StartDateTime, @d_SysDateTime) /
+                             @n_SecondInterval * @n_SecondInterval ELSE 0 END, @d_StartDateTime) > @dt_LastRunDTime
+                  BEGIN
+                     SET @b_JobFire = 1
+                     BREAK
+                  END
+
+                  IF EXISTS(SELECT TOP 1 1 FROM (
+                        SELECT SchDateTime = TRY_CONVERT(DATETIME, ISNULL(CONVERT(NVARCHAR(11),@d_SysDateTime,120) + time_val,''))
+                        FROM @t_StartTimeList
+                     ) X
+                     WHERE @dt_LastRunDTime < SchDateTime AND SchDateTime <= @d_SysDateTime)   -- Specific Time
+                  BEGIN
+                     SET @b_JobFire = 1
+                     BREAK
+                  END
+               END
+            END
+            IF ISNULL(@b_JobFire,0) <> 1
+               GOTO NEXT_JOB
+         END
+         --ML01-E
 
          -- Future development notes:
          -- For @IntervalType=SpecificDay: Run if today matches one of the days listed in @Days (e.g., Mon,Wed,Fri).
          -- For @IntervalType=TimeRange, Run if current time is within @StartTime and @EndTime, and last run time (@UDF04) exceeds the defined interval (@UDF03).
       END
       --AK01 END
+
+      SET @d_JobStartTime = NULL   --ML01
 
       BEGIN TRY
         --SET @c_SQL = 'EXEC '  + @c_StoredProc                                     --(Wan01) - START
@@ -192,6 +423,7 @@ BEGIN
          IF @c_SQL IS NOT NULL
          BEGIN
             SET @c_SQL = 'EXEC '  + @c_StoredProc + ' ' + @c_SQL
+            SET @d_JobStartTime = GETDATE()   --ML01
 
             EXEC sp_ExecuteSQL @c_SQL
                               ,N'@c_Storerkey   NVARCHAR(15)
@@ -224,6 +456,40 @@ BEGIN
       AND   Storerkey= @c_Storerkey
       AND   Code2    = @c_Facility
  
+      --ML01-S
+      IF @c_JobLog IN ('1','Y')
+      BEGIN
+         SET @d_JobEndTime = GETDATE()
+         SET @c_LogText =
+              'StartTime='  + CASE WHEN @d_JobStartTime IS NULL THEN 'NULL' ELSE '''' + CONVERT(NVARCHAR(23),@d_JobStartTime,121) + '''' END
+           +', EndTime='    + CASE WHEN @d_JobEndTime   IS NULL THEN 'NULL' ELSE '''' + CONVERT(NVARCHAR(23),@d_JobEndTime  ,121) + '''' END
+           + CASE WHEN @n_Continue=3 AND @c_ErrMsg<>'' THEN ', ErrMsg=''' + REPLACE(@c_ErrMsg,'''','''''') + '''' ELSE '' END
+           +', Storerkey='  + CASE WHEN @c_Storerkey    IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_Storerkey  ,'''','''''') + '''' END
+           +', Facility='   + CASE WHEN @c_Facility     IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_Facility   ,'''','''''') + '''' END
+           +', OtherConfig='+ CASE WHEN @c_OtherConfig  IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_OtherConfig,'''','''''') + '''' END
+           +', SQL='        + CASE WHEN @c_SQL          IS NULL THEN 'NULL' ELSE '''' + REPLACE(@c_SQL        ,'''','''''') + '''' END
+
+         SET @c_SQLDb     = DB_NAME()
+         SET @c_SQLSchema = SCHEMA_NAME()
+         SET @c_LogText   = ISNULL(@c_LogText,'')
+         SET @n_Duration  = ISNULL(DATEDIFF(s,@d_JobStartTime,@d_JobEndTime),0)
+         SET @c_Jobname   = ISNULL(@c_Jobname,'')
+
+         EXEC dbo.ispLogQuery
+              @SQLDb        = @c_SQLDb
+            , @SQLSchema    = @c_SQLSchema
+            , @SQLProc      = 'msp_BEJ'
+            , @SourceKey    = 0
+            , @SQLText      = @c_LogText
+            , @Duration     = @n_Duration
+            , @RowCnt       = 0
+            , @SourceTable  = @c_Jobname
+            , @SQLId        = 0
+
+         IF @n_Continue = 3 SET @n_Continue = 2
+      END
+      --ML01-E
+
       NEXT_JOB:
       FETCH NEXT FROM @CUR_JOB INTO @c_Code, @c_StoredProc
                                  ,  @c_Storerkey, @c_Facility
@@ -240,3 +506,7 @@ QUIT_SP:
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR
    END
 END
+GO
+
+GRANT EXECUTE ON dbo.msp_BEJ TO NSQL
+GO

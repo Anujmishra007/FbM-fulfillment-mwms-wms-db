@@ -6,8 +6,9 @@
 /* Purpose: Extended validation for Pallet Consolidate BESE             */
 /*                                                                      */
 /* Modifications log:                                                   */
-/* Date        Rev  Author   Purposes                                   */
-/* 2026-03-13  1.0  Jackc    FCR-9676 Created                           */
+/* Date        Rev    Author   Purposes                                 */
+/* 2026-03-13  1.0.0  Jackc    FCR-9676 Created                         */
+/* 2026-05-12  1.0.1  Jackc    FCR-9676 V1.2 FBR                        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1878ExtValidSP01] (
@@ -51,6 +52,8 @@ BEGIN
       @cFromLottable01  NVARCHAR(18),
       @cFromLottable02  NVARCHAR(18),
       @cToLottable01    NVARCHAR(18),
+      @cTaskType        NVARCHAR(10),
+      @cTaskStatus      NVARCHAR(10),
       @nRowCount        INT
 
    SET @nErrNo   = 0
@@ -78,6 +81,7 @@ BEGIN
 
          IF @nStep = 3
          BEGIN
+            SET @nRowCount = 0
             -- Get FromID Lottable01 and Lottable02
             SELECT TOP 1
                @cFromLottable01 = Lottable01,
@@ -119,6 +123,29 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Missing MONO Type
                GOTO QUIT
             END
+
+            --V1.0.1 start
+            IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND TaskType = 'ASTLO'
+                           AND FromID = @cFromID
+                           AND Status = '0')
+            BEGIN
+               SET @nErrNo = 261154
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Open ASTLO exist
+               GOTO QUIT
+            END
+
+            IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND FromID = @cFromID
+                           AND Status = '3')
+            BEGIN
+               SET @nErrNo = 261155
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Task in progress
+               GOTO QUIT
+            END
+            --V1.0.1 end
          END--st3
       END -- inputkey=1
    END

@@ -55,7 +55,7 @@ BEGIN
          , @cInputValue3      NVARCHAR(128)
          , @cSKU              NVARCHAR(20)
          , @nQty              INT
-         , @bIsADInput        BIT
+         , @bIsVASDone        BIT
          , @cScanType         NVARCHAR(30)
          , @cResponseJson     NVARCHAR(MAX)
 
@@ -78,7 +78,7 @@ BEGIN
    SET @cInputValue3       = ''
    SET @cSKU               = ''
    SET @nQty               = 0
-   SET @bIsADInput         = 0
+   SET @bIsVASDone         = 0
    SET @cScanType          = ''
    SET @cResponseJson      = ''
 
@@ -98,18 +98,10 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   IF @b_sp_ExecuteAs = 1
    BEGIN
       EXECUTE AS LOGIN = @DBUserName
       SET @c_UserID = @DBUserName
-
-      IF OBJECT_ID('dbo.fnc_GetUserName', 'FN') IS NOT NULL
-      BEGIN
-         IF dbo.fnc_GetUserName() NOT IN ('WMConnect', '')
-         BEGIN
-            SET @c_UserID = dbo.fnc_GetUserName()
-         END
-      END
    END
 
    SELECT  @cType                = cType
@@ -129,6 +121,7 @@ BEGIN
          , @cScanType            = cScanType
          , @cSKU                 = cSKU
          , @nQty                 = nQty
+         , @bIsVASDone           = bIsVASDone
    FROM OPENJSON(@c_RequestString)
    WITH (
          cType                NVARCHAR(30)
@@ -148,6 +141,7 @@ BEGIN
        , cScanType            NVARCHAR(20)
        , cSKU                 NVARCHAR(20)
        , nQty                 INT
+       , bIsVASDone           BIT
    )
    
    --Validate Standard Request Payload
@@ -199,6 +193,7 @@ BEGIN
        , @cSKU              = @cSKU
        , @nCartonNo         = @nCartonNo
        , @nQty              = @nQty
+       , @bIsVASDone        = @bIsVASDone
        , @c_UserID          = @c_UserID
        , @cLangCode         = @cLangCode
        , @nPageIndex        = 0
@@ -251,6 +246,10 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_Pack_SKU] TO NSQL
+GO

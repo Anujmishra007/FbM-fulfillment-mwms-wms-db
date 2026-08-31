@@ -58,6 +58,8 @@ GO
 /* 2026-01-07  1.0.0  Dennis     FCR-7820 Created                          */
 /* 2026-03-26  1.1.0  Dennis     FCR-7820 Step1 loop scan DropID to        */
 /*                               RDT.rdtPickLog                            */
+/* 2026-06-01  1.2.0  Dennis     FCR-7820 Get CartonType from PackInfo     */
+/*                               when only PickSlipNo + ToDropID scanned   */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn07] (
@@ -371,6 +373,7 @@ BEGIN
          SET @cOutField01 = ''  -- DropID input
          SET @cOutField02 = ''
          SET @cOutField03 = ''
+         SET @cOutField04 = '0'  -- Count of scanned DropIDs
          SET @nAfterStep = 99
          SET @nAfterScn = 6861
          GOTO QUIT
@@ -409,9 +412,22 @@ BEGIN
                HAVING COUNT(DropID)>1
             )
             BEGIN
-               SET @nErrNo = 180064
+               SET @nErrNo = 269554
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Quit
+            END
+
+            -- Check if PickSlipNo has valid OrderKey
+            IF @cScannedPickSlipNo <> '' AND EXISTS (
+               SELECT 1 FROM dbo.PickHeader WITH (NOLOCK)
+               WHERE PickHeaderKey = @cScannedPickSlipNo
+                 AND ISNULL(OrderKey, '') = ''
+            )
+            BEGIN
+               SET @nErrNo = 269556
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidPickSlipNo
+               EXEC rdt.rdtSetFocusField @nMobile, 1
                GOTO Quit
             END
 
@@ -429,6 +445,21 @@ BEGIN
                GOTO Quit
             END
 
+            -- Check if cPackDtlDropID exists in PackDetail under same PickSlipNo (when scanning PickSlipNo)
+            IF @cPackDtlDropID <> ''
+            AND @cScannedPickSlipNo <> ''
+            AND NOT EXISTS (
+               SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE LabelNo = @cPackDtlDropID
+                 AND PickSlipNo = @cScannedPickSlipNo
+            )
+            BEGIN
+               SET @nErrNo = 269557
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Quit
+            END
+
             IF (@cScannedDropID = '' AND EXISTS (
                SELECT 1 FROM RDT.rdtPickLog WITH (NOLOCK)
                WHERE StorerKey = @cStorerKey
@@ -439,7 +470,6 @@ BEGIN
                IF @cScannedPickSlipNo <> ''
                   SET @cPickSlipNo = @cScannedPickSlipNo
 
-               SET @nCartonNo    = 0
                SET @cLabelNo     = ''
                SET @cCustomNo    = ''
                SET @cCustomID    = ''
@@ -449,7 +479,23 @@ BEGIN
                SET @nTotalPick   = 0
                SET @nTotalPack   = 0
                SET @nTotalShort  = 0
-               SET @cType        = 'NEXT'
+
+               -- If PickSlipNo and PackDtlDropID (LabelNo) both scanned, get CartonNo and use CURRENT
+               IF @cScannedPickSlipNo <> '' AND @cPackDtlDropID <> ''
+               BEGIN
+                  SELECT TOP 1 @nCartonNo = CartonNo
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE PickSlipNo = @cScannedPickSlipNo
+                    AND LabelNo = @cPackDtlDropID
+                    AND StorerKey = @cStorerKey
+
+                  SET @cType = 'CURRENT'
+               END
+               ELSE
+               BEGIN
+                  SET @nCartonNo = 0
+                  SET @cType = 'NEXT'
+               END
 
                -- Get task
                EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
@@ -594,7 +640,7 @@ BEGIN
                   AND Status = '0'
             )
             BEGIN
-               SET @nErrNo = 180062
+               SET @nErrNo = 269552
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Already Scanned
                EXEC rdt.rdtSetFocusField @nMobile, 2
                SET @cOutField02 = ''
@@ -654,7 +700,7 @@ BEGIN
                      EXECUTE nspg_GetKey 'PICKSLIP', 9, @cNewPickSlipNo OUTPUT, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 180066
+                        SET @nErrNo = 269558
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- GenPickSlipFail
                         GOTO Quit
                      END
@@ -666,7 +712,7 @@ BEGIN
                         VALUES (@cNewPickSlipNo, '', @cOrderKey, '0', '', @cStorerKey, @cWaveKey)
                      END TRY
                      BEGIN CATCH
-                        SET @nErrNo = 180067
+                        SET @nErrNo = 269559
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InsPickHdrFail
                         GOTO Quit
                      END CATCH
@@ -686,6 +732,20 @@ BEGIN
                GOTO Quit
             END
 
+            -- Check if cPackDtlDropID exists in PackDetail under same PickSlipNo (when scanning DropID)
+            IF @cPackDtlDropID <> ''
+            AND NOT EXISTS (
+               SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE LabelNo = @cPackDtlDropID
+                 AND PickSlipNo = @cPickSlipNo
+            )
+            BEGIN
+               SET @nErrNo = 269557
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InvalidToDropid
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Quit
+            END
+
             -- Check if scanned DropID belongs to same PickSlipNo as previously scanned
             DECLARE @cExistingPickSlipNo NVARCHAR(10)
             SELECT TOP 1 @cExistingPickSlipNo = PickSlipNo
@@ -696,7 +756,7 @@ BEGIN
 
             IF @cExistingPickSlipNo IS NOT NULL AND @cExistingPickSlipNo <> @cPickSlipNo
             BEGIN
-               SET @nErrNo = 180065
+               SET @nErrNo = 269555
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DiffPickSlipNo
                EXEC rdt.rdtSetFocusField @nMobile, 2
                SET @cOutField02 = ''
@@ -823,7 +883,7 @@ BEGIN
                   )
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 180063
+               SET @nErrNo = 269553
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert Failed
                GOTO Quit
             END CATCH
@@ -958,6 +1018,12 @@ BEGIN
             SET @cOutField01 = ''
             SET @cOutField02 = ''  -- Clear for next scan
             SET @cOutField03 = ''
+            -- Get count of scanned DropIDs
+            SELECT @cOutField04 = CAST(COUNT(DISTINCT DropID) AS NVARCHAR(5))
+            FROM RDT.rdtPickLog WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND Mobile = @nMobile
+               AND Status = '0'
             SET @nAfterStep = 99
             SET @nAfterScn = 6861
             GOTO QUIT
@@ -983,6 +1049,13 @@ BEGIN
       IF (@nCurrentStep = 2 AND @nAfterStep = 3)
       OR (@nCurrentStep = 7 AND @nAfterStep = 3)
       BEGIN
+         -- Option 2: Skip CartonType selection, go directly to quit
+         IF @nCurrentStep = 2 AND EXISTS (
+            SELECT 1 FROM RDT.RDTMOBREC WITH (NOLOCK)
+            WHERE Mobile = @nMobile AND C_STRING1 = '2'
+         )
+            GOTO Quit
+
          SET @cOutField01 = ''
          -- Check if any DropID scanned in rdtPickLog
          DECLARE @nDropIDCount INT = 0
@@ -1036,7 +1109,32 @@ BEGIN
                AND CL.UDF01 = 'Y'
                AND CAST(CZ.Cube AS FLOAT) >= @fTotalCube
                ORDER BY CAST(CZ.Cube AS FLOAT) ASC
+
+               -- Fallback: If no carton found, select largest carton with inventory
+               IF ISNULL(@cOutField01, '') = ''
+               BEGIN
+                  SELECT TOP 1 @cOutField01 = Code
+                  FROM CodeLKUP CL (NOLOCK)
+                  JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
+                  JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
+                  JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+                  JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
+                  WHERE CL.ListName = 'PAGECARTON'
+                  AND S.StorerKey = @cStorerKey
+                  AND CL.UDF01 = 'Y'
+                  ORDER BY CAST(CZ.Cube AS FLOAT) DESC
+               END
             END
+         END
+         -- No FromDropID scanned, but ToDropID provided - get CartonType from PackInfo
+         ELSE IF ISNULL(@cPackDtlDropID, '') <> ''
+         BEGIN
+            SELECT TOP 1 @cOutField01 = PI.CartonType
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackInfo PI WITH (NOLOCK) ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+            WHERE PD.LabelNo = @cPackDtlDropID
+              AND PD.PickSlipNo = @cPickSlipNo
+              AND PD.StorerKey = @cStorerKey
          END
 
          SET @cOutField02 = ''
@@ -1092,7 +1190,7 @@ BEGIN
             AND CL.Code = @cCartonType
             AND CL.UDF01 = 'Y')
             BEGIN
-               SET @nErrNo = 180061
+               SET @nErrNo = 269551
                SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --Invalid Carton Type
                EXEC rdt.rdtSetFocusField @nMobile, 2
                GOTO Quit
@@ -1487,7 +1585,32 @@ BEGIN
                AND CL.UDF01 = 'Y'
                AND CAST(CZ.Cube AS FLOAT) >= @fTotalCube
                ORDER BY CAST(CZ.Cube AS FLOAT) ASC
+
+               -- Fallback: If no carton found, select largest carton with inventory
+               IF ISNULL(@cOutField01, '') = ''
+               BEGIN
+                  SELECT TOP 1 @cOutField01 = Code
+                  FROM CodeLKUP CL (NOLOCK)
+                  JOIN Cartonization CZ WITH (NOLOCK) ON CL.Code = CZ.CartonType
+                  JOIN Storer S WITH (NOLOCK) ON (S.CartonGroup = CZ.CartonizationGroup AND S.StorerKey = CL.StorerKey)
+                  JOIN SKU SKU WITH (NOLOCK) ON SKU.StorerKey = S.StorerKey AND BUSR8 = CZ.CartonType
+                  JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = S.StorerKey AND LLI.SKU = SKU.SKU AND (QTY-QtyPicked-QTYAllocated) > 0
+                  WHERE CL.ListName = 'PAGECARTON'
+                  AND S.StorerKey = @cStorerKey
+                  AND CL.UDF01 = 'Y'
+                  ORDER BY CAST(CZ.Cube AS FLOAT) DESC
+               END
             END
+         END
+         -- No FromDropID scanned, but ToDropID provided - get CartonType from PackInfo
+         ELSE IF ISNULL(@cPackDtlDropID, '') <> ''
+         BEGIN
+            SELECT TOP 1 @cOutField01 = PI.CartonType
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackInfo PI WITH (NOLOCK) ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+            WHERE PD.LabelNo = @cPackDtlDropID
+              AND PD.PickSlipNo = @cPickSlipNo
+              AND PD.StorerKey = @cStorerKey
          END
 
          SET @cOutField02 = ''

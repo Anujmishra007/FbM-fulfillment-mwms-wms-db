@@ -360,8 +360,8 @@ BEGIN
       @cWaveKey = WaveKey        
    FROM dbo.TaskDetail WITH (NOLOCK)          
    WHERE TaskDetailKey = @cTaskDetailKey         
-  
-  insert into traceinfo (tracename,timein,step1,step2) values ('rmt1',getdate(),@cTaskDetailKey,'' )    
+
+   --insert into traceinfo (tracename,timein,step1,step2) values ('rmt1',getdate(),@cTaskDetailKey,'' )    
 
    -- Get storer config        
    SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey)          
@@ -664,10 +664,22 @@ BEGIN
                      AND   TD.UserKey = ''      
                      AND   TD.DeviceID = ''
                      AND   TD.AreaKey = @cPickZone
-                     --AND   (
-                           --(@cMethod <> '' AND ORD.UserDefine10 = @cShort4CDLKUp)
-                           --OR (1=1)
-                           --)
+					 AND   NOT EXISTS
+					       (
+						      SELECT 1
+							  FROM TaskDetail TD2 WITH(NOLOCK) 
+							  WHERE TD.WaveKey = TD2.WaveKey 
+							     AND 
+								    (
+									   (TD2.UserKey <> '' AND TD2.UserKey <> @cUserName)
+								       OR 
+									   (TD2.UserKeyOverRide <> '' AND TD2.UserKeyOverRide <> @cUserName)
+									   OR
+									   (TD2.DeviceID <> '' AND TD2.DeviceID <> @cCartID)
+									)
+								 AND TD2.Status NOT IN ('X','9')
+								 AND @cMethod = '1'
+						   )
                      AND   (
                             (EXISTS(SELECT 1 FROM @tMethodShort MS WHERE ORD.UserDefine10 = MS.MethodShort) AND @cMethod <> '')
                             OR
@@ -1074,8 +1086,6 @@ BEGIN
       IF @nErrNo <> 0      
          GOTO Quit      
             
-
-      
       SET @cMax = ''
 
       IF @cMethod = '3'
@@ -1087,6 +1097,13 @@ BEGIN
          FROM Taskdetail TD WITH(NOLOCK)
          WHERE TD.storerkey = @cStorerkey
          AND TD.Groupkey = @cGroupKey
+
+		 UPDATE Taskdetail
+		 SET Message03 = '2'
+		 WHERE Groupkey = @cGroupKey
+		    AND StorerKey = @cStorerKey
+
+		 SET @cMessage03 = '2'
 
          SET @cOutField01 = @cMessage01
          SET @cOutField02 = @cMessage02
@@ -1275,7 +1292,7 @@ BEGIN
             DECLARE @nMaxCartonCnt INT = 0
             SELECT @nMaxCartonCnt = COUNT(1) FROM STRING_SPLIT(@cMax, '|')
 
-            SELECT @cMessage03 = Message03
+            SELECT TOP 1 @cMessage03 = Message03
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE Storerkey = @cStorerKey
             AND   TaskType = 'ASTCPK'
@@ -1291,7 +1308,7 @@ BEGIN
                IF @nMaxCartonCnt <> CAST(@cMessage03 AS INT)
                BEGIN
                   SET @nErrNo = 229605
-                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Carton Cnt Mismatch
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --229605^Scan More DropIDs
                   GOTO Quit
                END
             END
@@ -3956,7 +3973,19 @@ BEGIN
       
       IF @cOption = '1'
       BEGIN
-         IF @cSKU <> ''  AND @cCartonID <> ''--Dennis 21/01/2025
+         IF EXISTS (
+            SELECT 1
+            FROM dbo.TaskDetail TD WITH (NOLOCK)
+            JOIN dbo.PickDetail PD WITH (NOLOCK)
+               ON TD.TaskDetailKey = PD.TaskDetailKey
+               AND TD.StorerKey = PD.StorerKey
+            WHERE TD.StorerKey = @cStorerKey
+            AND TD.TaskType = 'ASTCPK'
+            AND TD.Groupkey = @cGroupKey
+            AND TD.DeviceID = @cCartID
+            AND TD.UserKey = @cUserName
+            AND PD.[Status] = '5'
+         )
          BEGIN
             SELECT TOP 1 @cSuggToLOC = ToLoc      --PPA374 Added TOP 1 15/01/2025
             FROM dbo.TaskDetail WITH (NOLOCK)      

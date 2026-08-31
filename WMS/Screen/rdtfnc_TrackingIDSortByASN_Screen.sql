@@ -59,8 +59,8 @@ EXECUTE rdt.rdtAddScn 5723, 'ENG'
    ,@nFunc = 644
 
 -- 5724 = RefNo Selection screen
-DELETE rdt.RDTScn WHERE Scn = 4040 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 4040, 'ENG'
+DELETE rdt.RDTScn WHERE Scn = 5724 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5724, 'ENG'
    ,@cLine01 = 'SELECT ASN:'
    ,@cLine02 = ''
    ,@cLine03 = '%20d01'

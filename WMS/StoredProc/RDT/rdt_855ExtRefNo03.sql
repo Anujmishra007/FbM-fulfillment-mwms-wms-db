@@ -171,7 +171,6 @@ BEGIN
          -- Handle NULL values
          SET @nCQTY = ISNULL(@nCQTY, 0)
          SET @nPQTY = ISNULL(@nPQTY, 0)
-         SET @nQTY_PPA = ISNULL(@nQTY_PPA, 0)
          SET @nQTY_CHK = ISNULL(@nQTY_CHK, 0)
 
          -- Calculate variance

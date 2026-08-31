@@ -333,11 +333,15 @@ BEGIN
 
                FETCH NEXT FROM @curMV INTO @cFromLot, @cFromID, @nQTY, @cFromLoc, @cDropID, @cSKU
             END
+            CLOSE @curMV
+            DEALLOCATE @curMV
          END
       END
 
       FETCH NEXT FROM @cur INTO @cTaskKey
    END
+   CLOSE @cur
+   DEALLOCATE @cur
 
    /*--------------------------------------------------------------------------------------------------
       Step 4: Update TaskDetail to Status='9' and create PackHeader/PackDetail
@@ -370,91 +374,95 @@ BEGIN
          GOTO RollBackTran
       END
 
+      -- Update PickDetail status once per task (moved outside cursor loop for performance)
+      IF NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
+                      WHERE TaskDetailKey = @cTaskKey
+                        AND Status = '4')
+      BEGIN
+         UPDATE dbo.PickDetail
+         SET Status = '5',
+             EditWho = @cUserName,
+             EditDate = GETDATE()
+         WHERE TaskDetailKey = @cTaskKey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 227202
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseID Err
+            GOTO RollBackTran
+         END
+      END
+
+      -- Get Order/PickHeader info once per task (moved outside @cur2 loop for performance)
+      SELECT @cLoadKey = LoadKey
+      FROM dbo.ORDERS WITH (NOLOCK)
+      WHERE OrderKey = @cOrderKey
+
+      SELECT TOP 1
+         @cPickSlipNo = PH.PickheaderKey,
+         @cStatus = PH.Status,
+         @cConsigneeKey = ORD.ConsigneeKey,
+         @cRoute = ORD.Route
+      FROM dbo.PICKHEADER PH WITH (NOLOCK)
+      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK)
+         ON ORD.StorerKey = @cStorerKey AND PH.OrderKey = ORD.OrderKey
+      WHERE PH.OrderKey = @cOrderKey
+        AND ORD.StorerKey = @cStorerKey
+
+      SELECT @cCartonGroup = CartonGroup
+      FROM Storer WITH(NOLOCK)
+      WHERE Storerkey = @cStorerKey
+
+      -- PackHeader: INSERT or UPDATE once per task (moved outside @cur2 loop for performance)
+      IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK)
+                     WHERE PickslipNo = @cPickslipNo
+                       AND OrderKey = @cOrderKey)
+      BEGIN
+         INSERT INTO dbo.PackHeader
+            (PickSlipNo, StorerKey, OrderKey, LoadKey, Route, ConsigneeKey,
+             Status, TTLCNTS, CtnCnt1, CartonGroup)
+         VALUES
+            (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey, @cRoute, @cConsigneeKey,
+             @cStatus, 1, 1, @cCartonGroup)
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 227203
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
+            GOTO RollBackTran
+         END
+      END
+      ELSE
+      BEGIN
+         UPDATE dbo.PackHeader
+         SET status = @cStatus
+         WHERE Pickslipno = @cPickslipNo
+           AND StorerKey = @cStorerkey
+           AND OrderKey = @cOrderKey
+           AND status <> @cStatus
+      END
+
+      -- Get MAX(CartonNo) once before loop (incremented in memory when inserting new cartons)
+      SELECT @nMaxCartonNo = ISNULL(MAX(CartonNo), 0)
+      FROM dbo.PackDetail (NOLOCK)
+      WHERE Pickslipno = @cPickSlipNo
+        AND Storerkey = @cStorerKey
+
       SET @cur2 = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
          SELECT DropID, SKU, SUM( Qty)
          FROM dbo.PICKDETAIL WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskKey
            AND DropID <> ''
-         GROUP BY LOT, ID, DropID, Loc, SKU
+         GROUP BY DropID, SKU
 
       OPEN @cur2
       FETCH NEXT FROM @cur2 INTO @cDropID, @cSKU, @nQTY
       WHILE @@FETCH_STATUS = 0
       BEGIN
-         IF NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)
-                         WHERE TaskDetailKey = @cTaskKey
-                           AND Status = '4')
-         BEGIN
-            UPDATE dbo.PickDetail
-            SET Status = '5',
-                EditWho = @cUserName,
-                EditDate = GETDATE()
-            WHERE TaskDetailKey = @cTaskKey
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 227202
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd CaseID Err
-               SET @cErrMsg = 'Upd Pick confirm'
-               GOTO RollBackTran
-            END
-         END
-
-         -- Get PickHeader info
-         SELECT @cLoadKey = LoadKey
-         FROM dbo.ORDERS WITH (NOLOCK)
-         WHERE OrderKey = @cOrderKey
-
-         SELECT TOP 1
-            @cPickSlipNo = PH.PickheaderKey,
-            @cStatus = PH.Status,
-            @cConsigneeKey = ORD.ConsigneeKey,
-            @cRoute = ORD.Route
-         FROM dbo.PICKHEADER PH WITH (NOLOCK)
-         INNER JOIN dbo.ORDERS ORD WITH (NOLOCK)
-            ON ORD.StorerKey = @cStorerKey AND PH.OrderKey = ORD.OrderKey
-         WHERE PH.OrderKey = @cOrderKey
-           AND ORD.StorerKey = @cStorerKey
-
-         -- PackHeader
-         IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK)
-                        WHERE PickslipNo = @cPickslipNo
-                          AND OrderKey = @cOrderKey)
-         BEGIN
-            SELECT @cCartonGroup = CartonGroup
-            FROM Storer WITH(NOLOCK)
-            WHERE Storerkey = @cStorerKey
-
-            INSERT INTO dbo.PackHeader
-               (PickSlipNo, StorerKey, OrderKey, LoadKey, Route, ConsigneeKey,
-                Status, TTLCNTS, CtnCnt1, CartonGroup)
-            VALUES
-               (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey, @cRoute, @cConsigneeKey,
-                @cStatus, 1, 1, @cCartonGroup)
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 227203
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
-               GOTO RollBackTran
-            END
-         END
-         ELSE
-         BEGIN
-            UPDATE dbo.PackHeader
-            SET status = @cStatus
-            WHERE Pickslipno = @cPickslipNo
-              AND StorerKey = @cStorerkey
-              AND OrderKey = @cOrderKey
-              AND status <> @cStatus
-         END
-
          SET @cLabelLine = ''
-         SET @nMaxCartonNo = 0
 
-         SELECT TOP 1
-            @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) AS NVARCHAR( 5)), 5),
-            @nMaxCartonNo = MAX(CartonNo)
+         -- Get MAX(LabelLine) for this specific DropID
+         SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) AS NVARCHAR( 5)), 5)
          FROM dbo.PackDetail (NOLOCK)
          WHERE Pickslipno = @cPickSlipNo
            AND LabelNo = @cDropID
@@ -462,9 +470,8 @@ BEGIN
 
          IF @cLabelLine = '00000'
          BEGIN
-            SELECT TOP 1
-               @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5),
-               @nMaxCartonNo = MAX(CartonNo)
+            -- New DropID: get next LabelLine from entire PickSlip
+            SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
             FROM dbo.PackDetail (NOLOCK)
             WHERE Pickslipno = @cPickSlipNo
               AND Storerkey = @cStorerKey
@@ -472,9 +479,6 @@ BEGIN
 
          IF @cLabelLine = ''
             SET @cLabelLine = '00001'
-
-         IF ISNULL(@nMaxCartonNo, 0) = 0
-            SET @nMaxCartonNo = 0
 
          IF NOT EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
                        WHERE PickslipNo = @cPickslipNo
@@ -513,6 +517,14 @@ BEGIN
                   (PickslipNo, CartonNo, Weight, Cube, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
                VALUES
                   (@cPickSlipNo, @nCartonNo, @fStdGrossWgt, 0, @nQTY, '', @cDropID, 0, 0, 0, '', '')
+            END
+            ELSE
+            BEGIN
+               UPDATE dbo.PackInfo
+               SET QTY = Qty + @nQty,
+                  Weight = Weight + @fStdGrossWgt
+               WHERE PickslipNo = @cPickslipNo
+               AND CartonNo = @nCartonNo
             END
          END
          ELSE IF NOT EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
@@ -559,9 +571,27 @@ BEGIN
                VALUES
                   (@cPickSlipNo, @nCartonNo, @fStdGrossWgt, 0, @nQTY, '', @cDropID, 0, 0, 0, '', '')
             END
+            ELSE
+            BEGIN
+               UPDATE dbo.PackInfo
+               SET QTY = Qty + @nQty,
+                  Weight = Weight + @fStdGrossWgt
+               WHERE PickslipNo = @cPickslipNo
+               AND CartonNo = @nCartonNo
+            END
          END
          ELSE
          BEGIN
+            -- Get CartonNo and LabelLine from existing PackDetail for PackSerialNo insert
+            SELECT TOP 1
+               @nCartonNo = CartonNo,
+               @cLabelLine = LabelLine
+            FROM dbo.PackDetail WITH(NOLOCK)
+            WHERE PickslipNo = @cPickslipNo
+              AND StorerKey = @cStorerKey
+              AND Sku = @cSKU
+              AND DropID = @cDropID
+
             SELECT @fStdGrossWgt = @nQty * StdGrossWgt
             FROM SKU WITH(NOLOCK)
             WHERE SKU = @csku
@@ -597,7 +627,8 @@ BEGIN
             FROM dbo.PICKDETAIL PD WITH(NOLOCK)
             INNER JOIN PickSerialNo PSN WITH(NOLOCK)
                ON PD.PickDetailKey = PSN.PickDetailKey AND PD.Sku = PSN.Sku
-            WHERE TaskDetailKey = @cTaskKey
+            WHERE PD.TaskDetailKey = @cTaskKey
+              AND PD.DropID = @cDropID
               AND PSN.SKU = @cSku
               AND NOT EXISTS(SELECT 1 FROM PackSerialNo WITH(NOLOCK)
                              WHERE SerialNo = PSN.SerialNo
@@ -615,7 +646,8 @@ BEGIN
                FROM dbo.PICKDETAIL PD WITH(NOLOCK)
                INNER JOIN PickSerialNo PSN WITH(NOLOCK)
                   ON PD.PickDetailKey = PSN.PickDetailKey AND PD.Sku = PSN.Sku
-               WHERE TaskDetailKey = @cTaskKey
+               WHERE PD.TaskDetailKey = @cTaskKey
+                 AND PD.DropID = @cDropID
                  AND PSN.SKU = @cSku
                  AND PSN.PickSerialNoKey > @cPickSerialNoKey
                ORDER BY PSN.PickSerialNoKey ASC
@@ -698,7 +730,6 @@ BEGIN
 
                IF @bSuccess <> 1
                BEGIN
-                  ROLLBACK TRAN
                   SET @nErrNo = 227206
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey TransmitLogKey2 Fail
                   GOTO RollBackTran
@@ -710,7 +741,6 @@ BEGIN
                SET @nErrNo = @@ERROR
                IF @nErrNo <> 0
                BEGIN
-                  ROLLBACK TRAN
                   SET @nErrNo = 227207
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSERT TRANSMITLOG2 Fail
                   GOTO RollBackTran
@@ -732,9 +762,13 @@ BEGIN
 
          FETCH NEXT FROM @cur2 INTO @cDropID, @cSKU, @nQTY
       END
+      CLOSE @cur2
+      DEALLOCATE @cur2
 
       FETCH NEXT FROM @cur INTO @cTaskKey, @cOrderKey
    END
+   CLOSE @cur
+   DEALLOCATE @cur
 
    GOTO Quit
 

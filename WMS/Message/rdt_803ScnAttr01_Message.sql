@@ -1,0 +1,3 @@
+--rdt_803ScnAttr01
+--FCR-13139: Screen attribute SP for PTW/PTL background color
+--No error messages needed for this SP

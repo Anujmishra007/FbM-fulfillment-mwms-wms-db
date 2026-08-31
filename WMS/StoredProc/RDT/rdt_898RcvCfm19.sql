@@ -14,7 +14,9 @@ GO
 /*                                                                            */
 /* Date       Rev  Author      Purposes                                       */
 /* 2025-10-29 1.0  Dennis      FCR-8472 Created                               */ 
-/* 2025-11-20 1.1  Dennis      FCR-8897 Add inventory Hold                    */                               
+/* 2025-11-20 1.1  Dennis      FCR-8897 Add inventory Hold                    */   
+/* 2026-08-12 1.2  Sreeja      FCR-14542 update UserDefine01                  */
+/*                             with the Traceability code                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm19] (
@@ -72,6 +74,11 @@ DECLARE @nSrQTY      INT
 DECLARE @nRDQTY      INT
 DECLARE @nSKUNotInASN   INT = 0    -- (james04)
 DECLARE @cSkipCheckingSKUNotInASN   NVARCHAR( 1)   -- (james04)
+DECLARE @cUCCUserdefined01 NVARCHAR(15) = ''
+
+SELECT @cUCCUserdefined01 = ISNULL(C_String1, '') 
+FROM rdt.RDTMOBREC WITH (NOLOCK) 
+WHERE Mobile = @nMobile
 
 /*-------------------------------------------------------------------------------
 
@@ -2308,6 +2315,7 @@ BEGIN
             Status = '1', --1=Received
             ReceiptKey = @cReceiptKey,
             ReceiptLineNumber = @cReceiptLineNumber, 
+            Userdefined01 = CASE WHEN ISNULL(@cUCCUserdefined01,'') <> '' THEN @cUCCUserdefined01 ELSE Userdefined01 END,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()                   
          WHERE StorerKey = @cStorerKey
@@ -2325,10 +2333,9 @@ BEGIN
       END
       ELSE
       BEGIN
-
          -- Insert UCC
-         INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey)
-         VALUES (@cStorerKey, @cUCCNo, '1', @cSKU, @nQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber, '')
+         INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey, Userdefined01)
+         VALUES (@cStorerKey, @cUCCNo, '1', @cSKU, @nQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber, '', @cUCCUserdefined01)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 60347
@@ -2365,6 +2372,7 @@ BEGIN
             Status = '1', --1=Received
             ReceiptKey = @cReceiptKey,
             ReceiptLineNumber = @cReceiptLineNumber, 
+            Userdefined01 = CASE WHEN ISNULL(@cUCCUserdefined01,'') <> '' THEN @cUCCUserdefined01 ELSE Userdefined01 END,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()
          WHERE StorerKey = @cStorerKey
@@ -2381,8 +2389,8 @@ BEGIN
       ELSE
       BEGIN
          -- Insert UCC
-         INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey)
-         VALUES (@cStorerKey, @cUCCNo, '1', @cSKU, @nQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber, '')
+         INSERT INTO dbo.UCC (StorerKey, UCCNo, Status, SKU, QTY, LOC, ID, ReceiptKey, ReceiptLineNumber, ExternKey, Userdefined01)
+         VALUES (@cStorerKey, @cUCCNo, '1', @cSKU, @nQTY, @cToLOC, @cToID, @cReceiptKey, @cReceiptLineNumber, '', @cUCCUserdefined01)
          IF @@ERROR <> 0
          BEGIN
             SET @nErrNo = 60347

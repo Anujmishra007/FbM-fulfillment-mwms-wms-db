@@ -391,7 +391,7 @@ BEGIN
       SET @cOverrideLOC = rdt.RDTGetConfig( @nFunc, 'OverrideLOC', @cStorerkey)
 
       -- FCR-10365
-      SET @cCheckDigitLOC = @cInField02
+      SET @cCheckDigitLOC = TRIM(@cInField02)
       IF @cLOCCheckDigitSP = '1'
       BEGIN
          EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,

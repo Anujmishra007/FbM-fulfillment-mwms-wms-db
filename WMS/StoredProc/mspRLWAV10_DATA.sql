@@ -97,11 +97,6 @@ BEGIN
    BEGIN
       SET @n_continue = 3
    END
-
-   IF @b_Success <> 1
-   BEGIN
-      SET @n_continue = 3
-   END
  
    IF @n_Continue = 1
    BEGIN

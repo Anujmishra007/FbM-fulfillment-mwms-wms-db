@@ -79,8 +79,10 @@ BEGIN
    WHERE PickHeaderKey = @cPickSlipNo
 
    DECLARE @cLottable01 NVARCHAR( 18)
+   DECLARE @cOption NVARCHAR( 2) = '1'
+   DECLARE @cBarcode NVARCHAR( 500)
       -- Get session info
-   SELECT @cLottable01 = V_Lottable01 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+   SELECT @cLottable01 = V_Lottable01, @cOption = ISNULL(NULLIF(C_String1, ''), '1'), @cBarcode = LEFT(V_Barcode, 500) FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
 
    -- Handling transaction
    DECLARE @nTranCount  INT
@@ -386,8 +388,8 @@ BEGIN
          BEGIN
             -- Insert PackSerialNo
             BEGIN TRY
-               INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
-               VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
+               INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY, Barcode)
+               VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cBarcode)
             END TRY
             BEGIN CATCH
                SET @nErrNo = 208310
@@ -460,8 +462,8 @@ BEGIN
       BEGIN
          -- Insert PackSerialNo
          BEGIN TRY
-            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
-            VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY)
+            INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY, Barcode)
+            VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cBarcode)
          END TRY
          BEGIN CATCH
             SET @nErrNo = 208315
@@ -544,33 +546,64 @@ BEGIN
 
    -- PickDetail
    DECLARE @curPD CURSOR
-   IF @cPackByFromDropID = '1'
-      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PD.PickDetailKey, PD.QTY
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
-            JOIN RDT.rdtPickLog PL WITH (NOLOCK) ON PD.PickDetailKey = PL.PickDetailKey
-               AND PL.Mobile = @nMobile AND PL.Status = '0'
-         WHERE PD.OrderKey = @cOrderKey
-            AND PD.StorerKey = @cStorerKey
-            AND PD.SKU = @cSKU
-            AND LA.Lottable01 = @cLottable01
-            AND PD.CaseID = ''
-            AND PD.DropID = @cFromDropID
-            AND PD.Status = '5'
-   ELSE
-      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PD.PickDetailKey, PD.QTY
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-            JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
-            JOIN RDT.rdtPickLog PL WITH (NOLOCK) ON PD.PickDetailKey = PL.PickDetailKey
-               AND PL.Mobile = @nMobile AND PL.Status = '0'
-         WHERE PD.OrderKey = @cOrderKey
-            AND PD.StorerKey = @cStorerKey
-            AND PD.SKU = @cSKU
-            AND LA.Lottable01 = @cLottable01
-            AND PD.CaseID = ''
-            AND PD.Status = '5'
+   -- Option 1: Join rdtPickLog
+   IF @cOption = '1'
+   BEGIN
+      IF @cPackByFromDropID = '1'
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+               JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+               JOIN RDT.rdtPickLog PL WITH (NOLOCK) ON PD.PickDetailKey = PL.PickDetailKey
+                  AND PL.Mobile = @nMobile AND PL.Status = '0'
+            WHERE PD.OrderKey = @cOrderKey
+               AND PD.StorerKey = @cStorerKey
+               AND PD.SKU = @cSKU
+               AND LA.Lottable01 = @cLottable01
+               AND PD.CaseID = ''
+               AND PD.DropID = @cFromDropID
+               AND PD.Status = '5'
+      ELSE
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+               JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+               JOIN RDT.rdtPickLog PL WITH (NOLOCK) ON PD.PickDetailKey = PL.PickDetailKey
+                  AND PL.Mobile = @nMobile AND PL.Status = '0'
+            WHERE PD.OrderKey = @cOrderKey
+               AND PD.StorerKey = @cStorerKey
+               AND PD.SKU = @cSKU
+               AND LA.Lottable01 = @cLottable01
+               AND PD.CaseID = ''
+               AND PD.Status = '5'
+   END
+   -- Option 2 or 3: No rdtPickLog join
+   ELSE IF @cOption IN ('2', '3')
+   BEGIN
+      IF @cPackByFromDropID = '1'
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+               JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+            WHERE PD.OrderKey = @cOrderKey
+               AND PD.StorerKey = @cStorerKey
+               AND PD.SKU = @cSKU
+               AND LA.Lottable01 = @cLottable01
+               AND PD.CaseID = ''
+               AND PD.DropID = @cFromDropID
+               AND PD.Status = '5'
+      ELSE
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+               JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (PD.LOT = LA.LOT)
+            WHERE PD.OrderKey = @cOrderKey
+               AND PD.StorerKey = @cStorerKey
+               AND PD.SKU = @cSKU
+               AND LA.Lottable01 = @cLottable01
+               AND PD.CaseID = ''
+               AND PD.Status = '5'
+   END
    OPEN @curPD
    FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
    WHILE @@FETCH_STATUS = 0

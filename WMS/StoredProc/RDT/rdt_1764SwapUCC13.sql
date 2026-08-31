@@ -1,5 +1,3 @@
-
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -97,7 +95,7 @@ BEGIN
    -- Check double scan
    IF EXISTS( SELECT 1 FROM rdt.rdtRPFLog WITH (NOLOCK) WHERE UCCNo = @cActUCCNo)
    BEGIN
-      SET @nErrNo = 145101
+      SET @nErrNo = 266801
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC scanned
       GOTO Fail
    END
@@ -120,7 +118,7 @@ BEGIN
    WHERE TaskDetailKey = @cTaskDetailKey
    IF @@ROWCOUNT = 0
    BEGIN
-      SET @nErrNo = 145102
+      SET @nErrNo = 266802
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadTaskDtlKey
       GOTO Fail
    END
@@ -143,7 +141,7 @@ BEGIN
    -- Check label scanned is UCC
  IF @nRowCount = 0
    BEGIN
-      SET @nErrNo = 145103
+      SET @nErrNo = 266803
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not an UCC
       GOTO Fail
    END
@@ -151,7 +149,7 @@ BEGIN
    -- Check multi SKU UCC
    IF @nRowCount > 1
    BEGIN
-      SET @nErrNo = 145104
+      SET @nErrNo = 266804
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Multi SKU UCC
       GOTO Fail
    END
@@ -171,7 +169,7 @@ BEGIN
    -- Check UCC status
    IF @cActUCCStatus NOT IN ('1', '3')
    BEGIN
-      SET @nErrNo = 145105
+      SET @nErrNo = 266805
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad UCC Status
       GOTO Fail
    END
@@ -179,7 +177,7 @@ BEGIN
    -- Check UCC LOC match
    IF @cTaskLOC <> @cActUCCLOC
    BEGIN
-      SET @nErrNo = 145106
+      SET @nErrNo = 266806
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCLOCNotMatch
       GOTO Fail
    END
@@ -187,7 +185,7 @@ BEGIN
    -- Check UCC ID match
    IF @cTaskID <> @cActUCCID
    BEGIN
-      SET @nErrNo = 145107
+      SET @nErrNo = 266807
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCIDNotMatch
       GOTO Fail
    END
@@ -195,7 +193,7 @@ BEGIN
    -- Check SKU match
    IF @cTaskSKU <> @cActUCCSKU
    BEGIN
-      SET @nErrNo = 145108
+      SET @nErrNo = 266808
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCSKUNotMatch
       GOTO Fail
    END
@@ -203,7 +201,7 @@ BEGIN
    -- Check UCC QTY match
    IF @nTaskQTY <> @nActUCCQTY
    BEGIN
-      SET @nErrNo = 145109
+      SET @nErrNo = 266809
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCQTYNotMatch
       GOTO Fail
    END
@@ -287,7 +285,7 @@ BEGIN
    -- Validate lottable
    IF @nLottableNo > 0
    BEGIN
-      SET @nErrNo = 145110
+      SET @nErrNo = 266810
       SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --Not match L99
       GOTO Fail
    END
@@ -302,7 +300,7 @@ BEGIN
          AND PD.Status > '0'
          AND PD.QTY > 0)
    BEGIN
-      SET @nErrNo = 145111
+      SET @nErrNo = 266811
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCTookByOther
       GOTO Fail
    END
@@ -319,7 +317,7 @@ BEGIN
          AND TD.QTY > 0
          AND TD.EditWho <> SUSER_SNAME())
    BEGIN
-      SET @nErrNo = 145112
+      SET @nErrNo = 266811
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCTookByOther
       GOTO Fail
    END
@@ -383,7 +381,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145113
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -396,7 +394,7 @@ BEGIN
 
    -- Get actual task info
    SET @cActTaskDetailKey = ''
-   SET @nActSystemQTY = ''
+   SET @nActSystemQTY = 0
    SET @nActPendingMoveIn = 0
    SET @cActUOM = ''
    SELECT
@@ -426,7 +424,7 @@ BEGIN
    -- Check actual UCC type
    IF @cActUCCType = ''
    BEGIN
-      SET @nErrNo = 145114
+      SET @nErrNo = 266813
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ActUCCTypeFail
       GOTO RollBackTran
    END
@@ -444,7 +442,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145115
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -499,7 +497,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145116
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -514,7 +512,7 @@ BEGIN
       WHERE TaskDetailKey = @cActTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145117
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -611,7 +609,7 @@ BEGIN
       -- Check PickDetail changed
       IF @nQTY <> @nActSystemQTY
       BEGIN
-         SET @nErrNo = 145118
+         SET @nErrNo = 266815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
          GOTO RollBackTran
       END
@@ -636,7 +634,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145119
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -707,14 +705,14 @@ BEGIN
          
             IF @nRowCount = 0
             BEGIN
-               SET @nErrNo = 145142
+               SET @nErrNo = 266817
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
                GOTO RollBackTran
             END
          
             IF @nRowCount > 1
             BEGIN
-               SET @nErrNo = 145143
+               SET @nErrNo = 266818
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
                GOTO RollBackTran
             END 
@@ -745,7 +743,7 @@ BEGIN
          AND UCCNo = @cTaskUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145120
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -759,7 +757,7 @@ BEGIN
          AND UCCNo = @cActUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145121
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -774,7 +772,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145122
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -789,7 +787,7 @@ BEGIN
       WHERE TaskDetailKey = @cActTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145123
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -886,7 +884,7 @@ BEGIN
       -- Check PickDetail changed
       IF @nQTY <> @nTaskSystemQTY
       BEGIN
-         SET @nErrNo = 145124
+         SET @nErrNo = 266815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
          GOTO RollBackTran
       END
@@ -912,7 +910,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145125
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -984,14 +982,14 @@ BEGIN
          
             IF @nRowCount = 0
             BEGIN
-               SET @nErrNo = 145144
+               SET @nErrNo = 266817
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
                GOTO RollBackTran
             END
          
             IF @nRowCount > 1
             BEGIN
-               SET @nErrNo = 145145
+               SET @nErrNo = 266818
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
                GOTO RollBackTran
             END 
@@ -1022,7 +1020,7 @@ BEGIN
          AND UCCNo = @cActUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145126
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -1036,7 +1034,7 @@ BEGIN
          AND UCCNo = @cTaskUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145127
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -1051,7 +1049,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145128
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -1092,8 +1090,8 @@ BEGIN
          END
       END
 
-      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
-      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
+      SET @nTaskReplenQTY = ISNULL(@nTaskReplenQTY, 0)
+      SET @nActReplenQTY = ISNULL(@nActReplenQTY, 0)
 
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN
@@ -1106,7 +1104,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145146
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1120,7 +1118,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145147
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1151,7 +1149,7 @@ BEGIN
       -- Check PickDetail changed
       IF @nQTY <> @nTaskSystemQTY
       BEGIN
-         SET @nErrNo = 145129
+         SET @nErrNo = 266815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
          GOTO RollBackTran
       END
@@ -1178,7 +1176,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145130
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -1252,14 +1250,14 @@ BEGIN
          
             IF @nRowCount = 0
             BEGIN
-               SET @nErrNo = 145146
+               SET @nErrNo = 266817
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
                GOTO RollBackTran
             END
          
             IF @nRowCount > 1
             BEGIN
-               SET @nErrNo = 145147
+               SET @nErrNo = 266818
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
                GOTO RollBackTran
             END 
@@ -1291,7 +1289,7 @@ BEGIN
          AND UCCNo = @cActUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145140
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -1305,7 +1303,7 @@ BEGIN
          AND UCCNo = @cTaskUCCNo
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145141
+         SET @nErrNo = 266816
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
          GOTO RollBackTran
       END
@@ -1321,7 +1319,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145131
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -1336,7 +1334,7 @@ BEGIN
       WHERE TaskDetailKey = @cActTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145132
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -1409,8 +1407,8 @@ BEGIN
          END
       END
 
-      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
-      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
+      SET @nTaskReplenQTY = ISNULL(@nTaskReplenQTY, 0)
+      SET @nActReplenQTY = ISNULL(@nActReplenQTY, 0)
 
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN
@@ -1423,7 +1421,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145144
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1437,7 +1435,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145145
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1467,7 +1465,7 @@ BEGIN
       -- Check PickDetail changed
       IF @nQTY <> @nTaskSystemQTY
       BEGIN
-         SET @nErrNo = 145133
+         SET @nErrNo = 266815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
          GOTO RollBackTran
       END
@@ -1490,7 +1488,7 @@ BEGIN
       -- Check PickDetail changed
       IF @nQTY <> @nActSystemQTY
       BEGIN
-         SET @nErrNo = 145134
+         SET @nErrNo = 266815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
          GOTO RollBackTran
       END
@@ -1517,7 +1515,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145135
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -1543,7 +1541,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
             IF @@ERROR <> 0 OR @@ROWCOUNT = 0
             BEGIN
-               SET @nErrNo = 145136
+               SET @nErrNo = 266812
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                GOTO RollBackTran
             END
@@ -1667,14 +1665,14 @@ BEGIN
             
                IF @nRowCount = 0
                BEGIN
-                  SET @nErrNo = 145148
+                  SET @nErrNo = 266817
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
                   GOTO RollBackTran
                END
             
                IF @nRowCount > 1
                BEGIN
-                  SET @nErrNo = 145149
+                  SET @nErrNo = 266818
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
                   GOTO RollBackTran
                END
@@ -1697,14 +1695,14 @@ BEGIN
             
                IF @nRowCount = 0
                BEGIN
-                  SET @nErrNo = 145150
+                  SET @nErrNo = 266817
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MissingPackDtl
                   GOTO RollBackTran
                END
             
                IF @nRowCount > 1
                BEGIN
-                  SET @nErrNo = 160101
+                  SET @nErrNo = 266818
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DUP PackDtl
                   GOTO RollBackTran
                END
@@ -1760,7 +1758,7 @@ BEGIN
       WHERE TaskDetailKey = @cTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145137
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -1775,7 +1773,7 @@ BEGIN
       WHERE TaskDetailKey = @cActTaskDetailKey
       IF @@ERROR <> 0
       BEGIN
-         SET @nErrNo = 145138
+         SET @nErrNo = 266814
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD TKDtl Fail
          GOTO RollBackTran
       END
@@ -1848,8 +1846,8 @@ BEGIN
          END
       END
 
-      SET @nTaskReplenQTY= CASE WHEN ISNULL(@nTaskReplenQTY,'')='' THEN 0 ELSE @nTaskReplenQTY END
-      SET @nActReplenQTY= CASE WHEN ISNULL(@nActReplenQTY,'')='' THEN 0 ELSE @nActReplenQTY END
+      SET @nTaskReplenQTY = ISNULL(@nTaskReplenQTY, 0)
+      SET @nActReplenQTY = ISNULL(@nActReplenQTY, 0)
 
       IF (@nTaskReplenQTY<>0 OR @nActReplenQTY<>0) AND @cSwapQtyReplen='1'
       BEGIN
@@ -1862,7 +1860,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145142
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1876,7 +1874,7 @@ BEGIN
 
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 145143
+            SET @nErrNo = 266819
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDLLIFail
             GOTO RollBackTran
          END
@@ -1889,7 +1887,7 @@ BEGIN
    -- Data error (not in the 7 scenarios)
    ELSE
    BEGIN
-      SET @nErrNo = 145139
+      SET @nErrNo = 266820
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Data error
       GOTO RollBackTran
    END

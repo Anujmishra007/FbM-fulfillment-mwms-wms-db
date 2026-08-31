@@ -38,6 +38,7 @@ GO
 /* 02-Nov-2018 1.9  James    WMS6809 Add custom fetch task (james04)    */
 /* 21-Mar-2024 2.0  NLT013   UWP-17125 Correct the sorting sequence     */
 /* 17-Dec-2025 2.1  NLT013   UWP-45560 Bug fix: cannot find next Loc    */
+/* 08-Jun-2026 2.2  JackC    UWP-58389 Remove codes for debug           */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_CycleCount_GetNextLOC] (    
@@ -88,8 +89,7 @@ BEGIN
           @cStorerKey = StorerKey
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE UserName = @cUserName
-   DELETE FROM TRACEINFO WHERE TRACENAME = '6100'
-   INSERT INTO TRACEINFO (TRACENAME, TIMEIN, COL1, COL2, COL3) VALUES ('6100', GETDATE(), @cCurrSuggestLogiLOC, @cSuggestLogiLOC, @cSuggestLOC)
+   
    SET @cExtendedGetNextLocSP = rdt.RDTGetConfig( @nFunc, 'ExtendedGetNextLocSP', @cStorerKey)
    IF @cExtendedGetNextLocSP = '0'
       SET @cExtendedGetNextLocSP = ''      

@@ -24,6 +24,8 @@ GO
 /* 2024-12-08  1.3.2  Dennis   FCR-1316 Fix Bugs when wave type =''       */
 /* 2024-12-08  1.3.3  Dennis   FCR-1316 Available pallet based on p.status*/
 /* 2025-10-24  1.4.0  NickT    FCR-6801 MobileKey is not mandatory        */
+/* 2026-08-04  1.5.0  NickT    FCR-14201 Extend WaveType/CODELKUP sorting */
+/*                             to no-MBOLKey path                         */
 /**************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
@@ -83,28 +85,139 @@ BEGIN
 
    IF @cMBOLKey = ''
    BEGIN
-      SELECT @cPalletKey = Palletkey
-      FROM dbo.PalletDetail WITH(NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND Orderkey = @cOrderKey
-         AND Status = '0'
+      --FCR-14201 --BEGIN
+      SELECT @cWaveKey = ISNULL(UserDefine09, '')
+      FROM dbo.ORDERS WITH(NOLOCK)
+      WHERE OrderKey = @cOrderKey
+         AND StorerKey = @cStorerKey
 
-      IF ISNULL(@cPalletKey, '') <> ''
+      SELECT @cWaveType = WaveType
+      FROM dbo.Wave WITH(NOLOCK)
+      WHERE WaveKey = @cWaveKey
+
+      IF @cWaveType IS NOT NULL AND TRIM(@cWaveType) NOT IN ('', '0')
       BEGIN
-         SELECT TOP 1 @cLane = LOC
-         FROM PALLETDETAIL WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND PalletKey = @cPalletKey
+         SELECT TOP 1
+            @cCODELKUPUdf01 = TRIM(UDF01),
+            @cCODELKUPUdf02 = TRIM(UDF02),
+            @cCODELKUPUdf03 = TRIM(UDF03),
+            @cCODELKUPUdf04 = TRIM(UDF04),
+            @cCODELKUPUdf05 = TRIM(UDF05)
+         FROM dbo.CODELKUP WITH(NOLOCK)
+         WHERE LISTNAME = 'WAVETYPE'
+            AND StorerKey = @cStorerKey
+            AND Code = @cWaveType
+
+         IF @cCODELKUPUdf01 IS NULL OR TRIM(@cCODELKUPUdf01) = ''
+         BEGIN
+            SET @nErrNo = 219108
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PLT Group logic missing
+            GOTO Quit
+         END
+
+         BEGIN TRY
+            SET @cSQLString =
+               ' SELECT  @cCODELKUPUdf01Value = ' + @cCODELKUPUdf01 + ' ' +
+               IIF(@cCODELKUPUdf02 <> '',   ', @cCODELKUPUdf02Value = ' + @cCODELKUPUdf02 + ' ', '') +
+               IIF(@cCODELKUPUdf03 <> '',   ', @cCODELKUPUdf03Value = ' + @cCODELKUPUdf03 + ' ', '') +
+               IIF(@cCODELKUPUdf04 <> '',   ', @cCODELKUPUdf04Value = ' + @cCODELKUPUdf04 + ' ', '') +
+               IIF(@cCODELKUPUdf05 <> '',   ', @cCODELKUPUdf05Value = ' + @cCODELKUPUdf05 + ' ', '') +
+               ' FROM dbo.ORDERS WITH(NOLOCK) '     +
+               ' WHERE OrderKey =  @cOrderKey' +
+               ' AND StorerKey = @cStorerKey'
+
+            SET @cSQLParam =  '@cOrderKey       NVARCHAR(20), ' +
+                              '@cStorerKey      NVARCHAR(20), ' +
+                              '@cCODELKUPUdf01Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf02Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf03Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf04Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf05Value  NVARCHAR(60) OUTPUT '
+
+            EXEC sp_executesql @cSQLString, @cSQLParam,
+               @cOrderKey = @cOrderKey,
+               @cStorerKey = @cStorerKey,
+               @cCODELKUPUdf01Value = @cCODELKUPUdf01Value OUTPUT,
+               @cCODELKUPUdf02Value = @cCODELKUPUdf02Value OUTPUT,
+               @cCODELKUPUdf03Value = @cCODELKUPUdf03Value OUTPUT,
+               @cCODELKUPUdf04Value = @cCODELKUPUdf04Value OUTPUT,
+               @cCODELKUPUdf05Value = @cCODELKUPUdf05Value OUTPUT
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 219110
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Execute SQL Statement Fail
+            GOTO Quit
+         END CATCH
+
+         -- Check if carton already on a pallet, return that palletkey for remove carton screen
+         SET @cPalletKey = ''
+         SELECT TOP 1
+            @cPalletKey = PD.PalletKey
+         FROM dbo.PALLETDETAIL PD WITH (NOLOCK)
+         JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
+            AND PD.CaseId = @cTrackNo
+            AND P.Status <> '9'
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SELECT
+               @cPalletKey = PD.PalletKey
+            FROM dbo.PALLETDETAIL PD WITH(NOLOCK)
+            JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+            WHERE PD.StorerKey = @cStorerKey
+               AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
+               AND ISNULL(UserDefine02, '') LIKE IIF(@cCODELKUPUdf02 = '', '%%', @cCODELKUPUdf02Value)
+               AND ISNULL(UserDefine03, '') LIKE IIF(@cCODELKUPUdf03 = '', '%%', @cCODELKUPUdf03Value)
+               AND ISNULL(UserDefine04, '') LIKE IIF(@cCODELKUPUdf04 = '', '%%', @cCODELKUPUdf04Value)
+               AND ISNULL(UserDefine05, '') LIKE IIF(@cCODELKUPUdf05 = '', '%%', @cCODELKUPUdf05Value)
+               AND P.Status = '0'
+         END
+
+         SET @cLane = ''
+         IF @cPalletKey <> '' AND @cPalletKey IS NOT NULL
+         BEGIN
+            SELECT TOP 1 @cLane = LOC
+            FROM PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND PalletKey = @cPalletKey
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @cLane = LOC
+            FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
+            ORDER BY EditDate DESC
+         END
       END
       ELSE
       BEGIN
-         SELECT TOP 1 @cLane = LOC
-         FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         -- No WaveType: original OrderKey-based pallet lookup (preserved)
+         SELECT @cPalletKey = Palletkey
+         FROM dbo.PalletDetail WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND Orderkey = @cOrderKey
             AND Status = '0'
-         ORDER BY EditDate DESC
+
+         IF ISNULL(@cPalletKey, '') <> ''
+         BEGIN
+            SELECT TOP 1 @cLane = LOC
+            FROM PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND PalletKey = @cPalletKey
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @cLane = LOC
+            FROM dbo.PALLETDETAIL WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND Orderkey = @cOrderKey
+               AND Status = '0'
+            ORDER BY EditDate DESC
+         END
       END
+      --FCR-14201 --END
    END
    ELSE
    BEGIN

@@ -61,12 +61,12 @@ BEGIN
    SET @cWorkOrderKey         = ''
    SET @cWorkOrderLineNumber  = ''
 
-   IF @bIsDiscrete = 1 AND @cLoadKey = ''
+   IF @cOrderKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       VALUES (@cOrderKey)
    END
-   ELSE
+   ELSE IF @cLoadKey <> ''
    BEGIN
       INSERT INTO @OrderList (OrderKey)
       SELECT OrderKey
@@ -359,6 +359,14 @@ BEGIN
             END
             CLOSE CUR_UPDVAS
             DEALLOCATE CUR_UPDVAS
+
+            UPDATE WORKORDERDETAIL 
+            SET [Status] = '3'
+            WHERE WorkOrderKey = @cWorkOrderKey
+
+            UPDATE WORKORDER
+            SET [Status] = '0'
+            WHERE WorkOrderKey = @cWorkOrderKey
          END
       END
 
@@ -555,6 +563,53 @@ BEGIN
          END
       END
 
+      -- Reset WorkOrderDetail Status to 3
+      IF EXISTS(  SELECT 1
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-VAS'
+                  AND sValue IN ('1', '3')
+      )
+      BEGIN
+         SELECT TOP 1 @cWorkOrderKey = WorkOrderKey
+                     FROM WORKORDERDETAIL WOD (NOLOCK)
+                     LEFT JOIN CODELKUP CLK (NOLOCK)
+                     ON WOD.[Type] = CLK.Code
+                     WHERE CLK.LISTNAME = 'WKOrdType'
+                     AND EXISTS (SELECT 1
+                                 FROM WORKORDER WO (NOLOCK)
+                                 WHERE EXISTS ( SELECT 1 
+                                                FROM @OrderList t
+                                                WHERE t.OrderKey = WO.ExternWorkOrderKey
+                                                )
+                                 AND StorerKey = @cStorerKey
+                                 AND Facility = @cFacility
+                                 AND WO.[Type] IN('PACK', 'VAS')
+                                 AND WO.WorkOrderKey = WOD.WorkOrderKey
+                                 )
+                     AND EXISTS (SELECT 1 
+                                 FROM PACKDETAIL PD(NOLOCK)
+                                 WHERE PD.PickSlipNo = @cPickSlipNo
+                                 AND PD.SKU = WOD.Sku
+                                )
+
+         IF ISNULL(@cWorkOrderKey, '') <> ''
+         AND EXISTS (SELECT 1
+                     FROM WORKORDER WO (NOLOCK)
+                     WHERE WO.WorkOrderKey = @cWorkOrderKey
+                     AND WO.[Status] = '9'
+         )
+         BEGIN
+            UPDATE WORKORDERDETAIL 
+            SET [Status] = '3'
+            WHERE WorkOrderKey = @cWorkOrderKey
+            
+            UPDATE WORKORDER
+            SET [Status] = '0'
+            WHERE WorkOrderKey = @cWorkOrderKey
+         END
+      END
+      
       DELETE FROM PACKDETAIL
       WHERE PickSlipNo = @cPickSlipNo
       AND CartonNo = @nCartonNo
@@ -595,6 +650,10 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_ResetCarton_Std] TO NSQL
+GO

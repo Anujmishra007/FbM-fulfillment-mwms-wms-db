@@ -5,7 +5,7 @@ GO
 /**************************************************************************/  
 /* Stored Procedure: lsp_Validate_TransferDetail_Std                      */  
 /* Creation Date: 30-JUL-2018                                             */  
-/* Copyright: LFL                                                         */  
+/* Copyright: Maersk                                                      */  
 /* Written by: Wan                                                        */  
 /*                                                                        */  
 /* Purpose:                                                               */  
@@ -60,6 +60,7 @@ BEGIN
    ,  @n_XMLHandle         INT    --NJOW01
    ,  @c_SQLSchema_OXML    NVARCHAR(MAX) = N''  --NJOW01
    ,  @c_TableColumns_OXML NVARCHAR(MAX) = N''  --NJOW01
+   ,  @c_SQLParam          NVARCHAR(MAX) = N''  --ML01
    
    --(mingle01) - START
    BEGIN TRY
@@ -114,7 +115,7 @@ BEGIN
             SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
                
             EXEC (@c_SQL)
-         
+
             EXEC sp_xml_preparedocument @n_XMLHandle OUTPUT, @c_XMLDataString
          
             SET @c_SQL = N' INSERT INTO #VALDN' 
@@ -278,6 +279,7 @@ BEGIN
          END
       END                                                                           --(Wan01) - END
 
+/* ML01-S
       SELECT TOP 1 
             @c_TransferKey     = TFD.TransferKey
          ,  @c_TransferLineNo  = TFD.TransferLineNumber
@@ -287,7 +289,6 @@ BEGIN
          ,  @c_ToSku           = RTRIM(TFD.ToSku)
          ,  @c_FromLot         = TFD.FromLot                                        --(Wan02)
          ,  @c_ToLot           = TFD.ToLot                                          --(Wan02)
-         ,  @c_FromLoc         = ISNULL(TFD.FromLoc,'')   --ML01
          ,  @c_ToLoc           = ISNULL(TFD.ToLoc,'')
          ,  @c_FromID          = TFD.FromID                                         --(Wan02)
          ,  @c_ToID            = TFD.ToID                                           --(Wan02)
@@ -312,6 +313,129 @@ BEGIN
          ,  @c_FromSerialNo    = TFD.FromSerialNo
          ,  @c_ToSerialNo      = TFD.ToSerialNo
       FROM  #VALDN TFD  --NJOW01
+ML01-E */
+      --ML01-S
+      SET @c_SQL = N'SELECT TOP 1'
+        + ' @c_TransferKey     = TFD.TransferKey'
+        +', @c_TransferLineNo  = TFD.TransferLineNumber'
+        +', @c_FromStorerkey   = TFD.FromStorerkey'
+        +', @c_ToStorerkey     = TFD.ToStorerkey'
+        +', @c_FromSku         = TFD.FromSku'
+        +', @c_ToSku           = RTRIM(TFD.ToSku)'
+        +', @c_FromLot         = TFD.FromLot'
+        +', @c_ToLot           = TFD.ToLot'
+        +', @c_FromLoc         = ISNULL(TFD.FromLoc,'''')'
+        +', @c_ToLoc           = ISNULL(TFD.ToLoc,'''')'
+        +', @c_FromID          = TFD.FromID'
+        +', @c_ToID            = TFD.ToID'
+        +', @n_FromQty         = TFD.FromQty'
+        +', @n_ToQty           = TFD.ToQty'
+        +', @c_Userdefine02    = ISNULL(RTRIM(TFD.Userdefine02),'''')'
+        +', @c_ToLottable01    = TFD.ToLottable01'
+        +', @c_ToLottable02    = TFD.ToLottable02'
+        +', @c_ToLottable03    = TFD.ToLottable03'
+        +', @dt_ToLottable04   = TFD.ToLottable04'
+        +', @dt_ToLottable05   = TFD.ToLottable05'
+        +', @c_ToLottable06    = TFD.ToLottable06'
+        +', @c_ToLottable07    = TFD.ToLottable07'
+        +', @c_ToLottable08    = TFD.ToLottable08'
+        +', @c_ToLottable09    = TFD.ToLottable09'
+        +', @c_ToLottable10    = TFD.ToLottable10'
+        +', @c_ToLottable11    = TFD.ToLottable11'
+        +', @c_ToLottable12    = TFD.ToLottable12'
+        +', @dt_ToLottable13   = TFD.ToLottable13'
+        +', @dt_ToLottable14   = TFD.ToLottable14'
+        +', @dt_ToLottable15   = TFD.ToLottable15'
+
+      IF EXISTS ( SELECT TOP 1 1
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')
+                 AND   c.[COLUMN_NAME] = 'FromSerialNo')
+         SET @c_SQL = @c_SQL + ', @c_FromSerialNo = TFD.FromSerialNo'
+      ELSE
+         SET @c_SQL = @c_SQL + ', @c_FromSerialNo = '''''
+
+      IF EXISTS ( SELECT TOP 1 1
+                 FROM tempdb.INFORMATION_SCHEMA.COLUMNS c
+                 JOIN tempdb.dbo.SysObjects AS s ON s.[name] = c.TABLE_NAME
+                 WHERE s.id = OBJECT_ID('tempdb..#VALDN')
+                 AND   c.[COLUMN_NAME] = 'ToSerialNo')
+         SET @c_SQL = @c_SQL + ', @c_ToSerialNo = TFD.ToSerialNo'
+      ELSE
+         SET @c_SQL = @c_SQL + ', @c_ToSerialNo = '''''
+
+      SET @c_SQL = @c_SQL
+        + ' FROM  #VALDN TFD'
+
+      SET @c_SQLParam = 
+         N'@c_TransferKey    NVARCHAR(10) OUTPUT'
+        +',@c_TransferLineNo NVARCHAR(5)  OUTPUT'
+        +',@c_FromStorerkey  NVARCHAR(15) OUTPUT'
+        +',@c_ToStorerkey    NVARCHAR(15) OUTPUT'
+        +',@c_FromSku        NVARCHAR(20) OUTPUT'
+        +',@c_ToSku          NVARCHAR(20) OUTPUT'
+        +',@c_FromLot        NVARCHAR(10) OUTPUT'
+        +',@c_ToLot          NVARCHAR(10) OUTPUT'
+        +',@c_FromLoc        NVARCHAR(10) OUTPUT'
+        +',@c_ToLoc          NVARCHAR(10) OUTPUT'
+        +',@c_FromID         NVARCHAR(18) OUTPUT'
+        +',@c_ToID           NVARCHAR(18) OUTPUT'
+        +',@n_FromQty        INT          OUTPUT'
+        +',@n_ToQty          INT          OUTPUT'
+        +',@c_Userdefine02   NVARCHAR(20) OUTPUT'
+        +',@c_ToLottable01   NVARCHAR(18) OUTPUT'
+        +',@c_ToLottable02   NVARCHAR(18) OUTPUT'
+        +',@c_ToLottable03   NVARCHAR(18) OUTPUT'
+        +',@dt_ToLottable04  DATETIME     OUTPUT'
+        +',@dt_ToLottable05  DATETIME     OUTPUT'
+        +',@c_ToLottable06   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable07   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable08   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable09   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable10   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable11   NVARCHAR(30) OUTPUT'
+        +',@c_ToLottable12   NVARCHAR(30) OUTPUT'
+        +',@dt_ToLottable13  DATETIME     OUTPUT'
+        +',@dt_ToLottable14  DATETIME     OUTPUT'
+        +',@dt_ToLottable15  DATETIME     OUTPUT'
+        +',@c_FromSerialNo   NVARCHAR(50) OUTPUT'
+        +',@c_ToSerialNo     NVARCHAR(50) OUTPUT'
+
+      EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam
+         , @c_TransferKey    OUTPUT
+         , @c_TransferLineNo OUTPUT
+         , @c_FromStorerkey  OUTPUT
+         , @c_ToStorerkey    OUTPUT
+         , @c_FromSku        OUTPUT
+         , @c_ToSku          OUTPUT
+         , @c_FromLot        OUTPUT
+         , @c_ToLot          OUTPUT
+         , @c_FromLoc        OUTPUT
+         , @c_ToLoc          OUTPUT
+         , @c_FromID         OUTPUT
+         , @c_ToID           OUTPUT
+         , @n_FromQty        OUTPUT
+         , @n_ToQty          OUTPUT
+         , @c_Userdefine02   OUTPUT
+         , @c_ToLottable01   OUTPUT
+         , @c_ToLottable02   OUTPUT
+         , @c_ToLottable03   OUTPUT
+         , @dt_ToLottable04  OUTPUT
+         , @dt_ToLottable05  OUTPUT
+         , @c_ToLottable06   OUTPUT
+         , @c_ToLottable07   OUTPUT
+         , @c_ToLottable08   OUTPUT
+         , @c_ToLottable09   OUTPUT
+         , @c_ToLottable10   OUTPUT
+         , @c_ToLottable11   OUTPUT
+         , @c_ToLottable12   OUTPUT
+         , @dt_ToLottable13  OUTPUT
+         , @dt_ToLottable14  OUTPUT
+         , @dt_ToLottable15  OUTPUT
+         , @c_FromSerialNo   OUTPUT
+         , @c_ToSerialNo     OUTPUT
+      --ML01-E
 
       IF @n_FromQty = 0 AND @n_ToQty = 0
       BEGIN

@@ -32,7 +32,7 @@ GO
 /*                                                                                              */ 
 /* PVCS Version: 1.3                                                                            */ 
 /*                                                                                              */ 
-/* Version: 5.4                                                                                 */ 
+/* Version: 5.5                                                                                 */ 
 /*                                                                                              */ 
 /* Data Modifications:                                                                          */ 
 /*                                                                                              */ 
@@ -52,6 +52,10 @@ GO
 /* 2025-05-19         ALT028      V.9         Filter out CommingleSku=0 distinct sku>1          */
 /* 2025-05-19         ALT028      V.10        Remove FCR-2650                                   */
 /* 2025-10-21         WLC015      V.11        UWP-42738 Revise Find Pickface Logic (WL01)       */
+/* 2026-07-21         USH022      V.12        FCR-14202 Prevent Duplicate Replenishment Tasks - */
+/*                                            Removed ReplenishmentGroup=LocAisle condition     */
+/*                                            from duplicate-check; now matches strictly on     */
+/*                                            WaveKey + DropID + Confirmed='N'                  */
 /************************************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]    
       @c_WaveKey NVARCHAR(10), 
@@ -158,9 +162,10 @@ BEGIN
 			AND PD.UOM = '6' 
 			AND loc.LocationType = 'CASE' 
 			AND PD.STATUS = '0'  
-         AND NOT EXISTS (SELECT 1 FROM Replenishment r(NOLOCK)									 
-			   				WHERE r.ReplenishmentGroup = loc.LocAisle 
-			   				AND  r.DropID = pd.DropID 
+         AND NOT EXISTS (SELECT 1 FROM Replenishment r(NOLOCK)
+			   				WHERE
+                            --r.ReplenishmentGroup = loc.LocAisle                           --(V.12)
+                            r.DropID = pd.DropID
 			   				AND  r.Confirmed = 'N' 
 			   				AND  r.Wavekey = @c_Wavekey)) 
       BEGIN 
@@ -183,9 +188,10 @@ BEGIN
 			AND PD.UOM = '6' 
 			AND loc.LocationType = 'CASE' 
 			AND PD.STATUS = '0' 
-			AND NOT EXISTS (SELECT 1 FROM Replenishment r(NOLOCK)									 
-			   				WHERE r.ReplenishmentGroup = loc.LocAisle 
-			   				AND  r.DropID = pd.DropID 
+			AND NOT EXISTS (SELECT 1 FROM Replenishment r(NOLOCK)
+			   				WHERE
+                            --r.ReplenishmentGroup = loc.LocAisle                           --(V.12)
+			                r.DropID = pd.DropID
 			   				AND  r.Confirmed = 'N' 
 			   				AND  r.Wavekey = @c_Wavekey) 
 			GROUP BY PD.StorerKey, PD.Sku, PD.Lot, PD.ID,  PD.DropID,  PD.Loc, PACK.PackUOM3, PD.PackKey, loc.LocAisle 

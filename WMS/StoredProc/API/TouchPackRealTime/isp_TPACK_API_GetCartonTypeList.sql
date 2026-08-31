@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
 /* 2026-02-05   2.0  GCH225     UWP-48097: Recommended CartonType from PackInfo  */
+/* 2026-05-07   3.0  GCH225     UWP-55973: Wrapper to support custom and standard*/
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_API_GetCartonTypeList] (
@@ -40,12 +41,6 @@ BEGIN
          , @DBUserName     NVARCHAR(100)
          , @b_sp_ExecuteAs BIT
 
-   DECLARE @storer TABLE (
-      StorerKey     NVARCHAR( 15),
-      catchWeight   INT,
-      catchCube     INT
-   )
-
    DECLARE @cType       NVARCHAR(30)
          , @bIsDiscrete BIT
          , @bIsCustom   BIT
@@ -56,7 +51,15 @@ BEGIN
          , @cDropID     NVARCHAR(20)
          , @cStorerKey  NVARCHAR(15)
          , @cFacility   NVARCHAR(5)
-         , @cConfigVal  NVARCHAR(30)
+         , @nCartonNo   INT
+         , @cSQL        NVARCHAR(MAX)
+         , @cSQLParam   NVARCHAR(MAX)
+         , @c_authority NVARCHAR(100)
+         , @c_Option1   NVARCHAR(100)
+         , @c_Option2   NVARCHAR(100)
+         , @c_Option3   NVARCHAR(100)
+         , @c_Option4   NVARCHAR(100)
+         , @c_Option5   NVARCHAR(100)
 
    SET @b_Success        = 0  
    SET @n_ErrNo          = 0  
@@ -71,7 +74,36 @@ BEGIN
    SET @cDropID          = ''
    SET @cStorerKey       = ''
    SET @cFacility        = ''
+   SET @nCartonNo        = 0
+   SET @c_authority      = ''
+   SET @c_Option1        = ''
+   SET @c_Option2        = ''
+   SET @c_Option3        = ''
+   SET @c_Option4        = ''
+   SET @c_Option5        = ''
 
+    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID
+      , @c_DBUserName  = @DBUserName OUTPUT
+      , @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT
+      , @b_Success     = @b_sp_Success OUTPUT
+      , @n_ErrNo       = @n_sp_err OUTPUT
+      , @c_ErrMsg      = @c_sp_errmsg OUTPUT
+
+   IF @b_sp_Success = 0
+   BEGIN    
+      SET @n_Continue = 3
+      SET @n_ErrNo = @n_sp_err      
+      SET @c_ErrMsg = @c_sp_errmsg     
+      GOTO EXIT_SP
+   END
+
+   IF @b_sp_ExecuteAs = 1
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+   
    --Decode Json Format
    SELECT  @cType       = cType
          , @bIsDiscrete = bIsDiscrete
@@ -83,6 +115,7 @@ BEGIN
          , @cLangCode   = cLangCode
          , @cStorerKey  = cStorerKey
          , @cFacility   = cFacility
+         , @nCartonNo   = nCartonNo
    FROM OPENJSON(@c_RequestString)
    WITH (
         cType       NVARCHAR(30)
@@ -95,74 +128,216 @@ BEGIN
       , cLangCode   NVARCHAR(3)
       , cStorerKey  NVARCHAR(15)
       , cFacility   NVARCHAR(5)
+      , nCartonNo   INT
    )
-
-   SELECT TOP 1 @cConfigVal = ISNULL(sValue,'0')
-   FROM STORERCONFIG (NOLOCK)  
-   WHERE StorerKey = @cStorerKey
-   AND ConfigKey = 'DefaultCartonType'
    
-   IF @cType = 'toteid' AND @bIsDiscrete = 1
+   EXEC nspGetRight  -- (yeekung20)  
+      @c_Facility   = @cFacility   
+   ,  @c_StorerKey  = @cStorerKey   
+   ,  @c_sku        = ''    
+   ,  @c_ConfigKey  = 'TPS-RecartonBlocked'    
+   ,  @b_Success    = @b_Success       OUTPUT    
+   ,  @c_authority  = @c_authority     OUTPUT    
+   ,  @n_err        = @n_ErrNo         OUTPUT    
+   ,  @c_errmsg     = @c_ErrMsg        OUTPUT
+   ,  @c_Option1    = @c_Option1       OUTPUT
+   ,  @c_Option2    = @c_Option2       OUTPUT
+   ,  @c_Option3    = @c_Option3       OUTPUT
+   ,  @c_Option4    = @c_Option4       OUTPUT 
+   ,  @c_Option5    = @c_Option5       OUTPUT
+   
+   IF @c_authority = '1' 
+   AND @c_Option5 <> ''
+   AND EXISTS (SELECT 1
+               FROM dbo.sysobjects (NOLOCK)
+               WHERE [name] = @c_Option5 
+               AND type = 'P'
+   )
+   AND @nCartonNo > 0
    BEGIN
-      IF ( SELECT ISNULL(SUM(ExpQty), 0)
-            FROM PACKDETAIL (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-         ) > 0
-      AND ( SELECT ISNULL(COUNT(CartonNo), 0)
-            FROM PACKINFO (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-            AND CartonStatus = 'INPROGRESS'
-         ) = 1
-      BEGIN
-         SELECT TOP 1 @cConfigVal = CartonType
-         FROM PACKINFO (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-         AND CartonStatus = 'INPROGRESS'
+      SET @cSQL   = 'EXEC [API].[' + @c_Option5    + ']' + CHAR(13)
+                  + '  @cType              ' + CHAR(13)
+                  + ', @bIsDiscrete        ' + CHAR(13)
+                  + ', @bIsCustom          ' + CHAR(13)
+                  + ', @cPickSlipNo        ' + CHAR(13)
+                  + ', @cOrderKey          ' + CHAR(13)
+                  + ', @cLoadKey           ' + CHAR(13)
+                  + ', @cDropID            ' + CHAR(13)
+                  + ', @cStorerKey         ' + CHAR(13)
+                  + ', @cFacility          ' + CHAR(13)
+                  + ', @nCartonNo          ' + CHAR(13)
+                  + ', @c_UserID           ' + CHAR(13)
+                  + ', @cLangCode          ' + CHAR(13)
+                  + ', @b_Success   OUTPUT ' + CHAR(13)
+                  + ', @n_ErrNo     OUTPUT ' + CHAR(13)
+                  + ', @c_ErrMsg    OUTPUT ' + CHAR(13)
+
+      SET @cSQLParam = '  @cType        NVARCHAR(30)         ' + CHAR(13)
+                     + ', @bIsDiscrete  BIT                  ' + CHAR(13)
+                     + ', @bIsCustom    BIT                  ' + CHAR(13)
+                     + ', @cPickSlipNo  NVARCHAR(10)         ' + CHAR(13)
+                     + ', @cOrderKey    NVARCHAR(10)         ' + CHAR(13)
+                     + ', @cLoadKey     NVARCHAR(10)         ' + CHAR(13)
+                     + ', @cDropID      NVARCHAR(20)         ' + CHAR(13)
+                     + ', @cStorerKey   NVARCHAR(15)         ' + CHAR(13)
+                     + ', @cFacility    NVARCHAR(5)          ' + CHAR(13)
+                     + ', @nCartonNo    INT                  ' + CHAR(13)
+                     + ', @c_UserID     NVARCHAR(256)        ' + CHAR(13)
+                     + ', @cLangCode    NVARCHAR(3)          ' + CHAR(13)
+                     + ', @b_Success    INT           OUTPUT ' + CHAR(13)
+                     + ', @n_ErrNo      INT           OUTPUT ' + CHAR(13)
+                     + ', @c_ErrMsg     NVARCHAR(250) OUTPUT ' + CHAR(13)
+
+      EXEC sp_ExecuteSQL  @cSQL
+                        , @cSQLParam
+                        , @cType            
+                        , @bIsDiscrete     
+                        , @bIsCustom        
+                        , @cPickSlipNo      
+                        , @cOrderKey        
+                        , @cLoadKey         
+                        , @cDropID          
+                        , @cStorerKey       
+                        , @cFacility          
+                        , @nCartonNo        
+                        , @c_UserID         
+                        , @cLangCode  
+                        , @b_Success   OUTPUT
+                        , @n_ErrNo     OUTPUT
+                        , @c_ErrMsg    OUTPUT
+            
+      IF @b_Success = 0
+      BEGIN     
+         SET @n_Continue = 3   
+         GOTO EXIT_SP
       END
    END
-   
-   INSERT INTO @storer
-   SELECT @cStorerKey
-        , IIF(sValue LIKE '%W%', 1, 0)
-        , IIF(sValue LIKE '%C%', 1, 0)
-   FROM STORERCONFIG  WITH (NOLOCK)  
-   WHERE StorerKey = @cStorerKey
-   AND ConfigKey = 'TPS-captureWeight'
 
-   IF NOT EXISTS (SELECT 1 FROM @storer)
+   --Cartonization Entry Point
+   IF EXISTS ( SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-CtnRec'
+               AND SValue = '1'
+   )
+   AND @cType = 'toteid'
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-SinglePKStation'
+               AND SValue = '1'
+   ) 
+   AND EXISTS (SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ListName = 'TPSCtnRec'
+   )
+   AND @nCartonNo > 0
+   AND @cPickSlipNo = ''
+   AND @cOrderKey = ''
+   AND @cLoadKey = ''
    BEGIN
-      INSERT INTO @storer (StorerKey, catchWeight, catchCube)
-      VALUES (@cStorerKey, 0, 0)
+
+      SELECT  @cPickSlipNo = PH.PickSlipNo
+            , @cOrderKey = PH.OrderKey
+      FROM PACKHEADER PH (NOLOCK)
+      WHERE EXISTS ( SELECT 1 
+                     FROM PACKDETAIL PD (NOLOCK)
+                     WHERE PD.PickSlipNo = PH.PickSlipNo
+                     AND PD.DropID = @cDropID
+                     AND PD.CartonNo = @nCartonNo
+                     AND EXISTS (SELECT 1 
+                                 FROM PACKINFO PIF (NOLOCK)
+                                 WHERE PIF.PickSlipNo = PD.PickSlipNo
+                                 AND PIF.CartonNo = PD.CartonNo
+                                 AND PIF.EditWho = @c_UserID
+                                 AND PIF.CartonStatus = 'INPROGRESS'
+                     )
+                  )
+
+      IF @cPickSlipNo <> '' AND @cOrderKey <> ''
+      BEGIN
+         EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+            @cType          = @cType            
+         , @bIsDiscrete    = @bIsDiscrete      
+         , @bIsCustom      = @bIsCustom        
+         , @cPickSlipNo    = @cPickSlipNo       
+         , @cOrderKey      = @cOrderKey
+         , @cLoadKey       = @cLoadKey          
+         , @cDropID        = @cDropID
+         , @cStorerKey     = @cStorerKey        
+         , @cFacility      = @cFacility
+         , @c_UserID       = @c_UserID
+         , @cLangCode      = @cLangCode
+         , @nCartonNo      = @nCartonNo
+         , @nCartonizeStep = 2
+         , @b_Success      = @b_Success      OUTPUT
+         , @n_ErrNo        = @n_ErrNo        OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg       OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3   
+            GOTO EXIT_SP
+         END
+      END
    END
 
-   --Json Format Output
-   SET @b_Success = 1
-   SET @c_ResponseString = ISNULL((
-                              SELECT  vs.StorerKey
-                                    , vs.catchWeight
-                                    , vs.catchCube 
-                                    , Carton.cartonType
-                                    , Carton.CartonDescription
-                                    , Carton.Barcode
-                                    , CAST(ISNULL(Carton.CartonLength,0) AS DECIMAL(10,3)) AS CartonLength
-                                    , CAST(ISNULL(Carton.CartonWidth,0) AS DECIMAL(10,3)) AS CartonWidth
-                                    , CAST(ISNULL(Carton.CartonHeight,0) AS DECIMAL(10,3)) AS CartonHeight
-                                    , CAST(ISNULL(Carton.MaxWeight,0) AS DECIMAL(10,3)) AS MaxWeight
-                                    , CAST(Carton.[CUBE] AS DECIMAL(10,3)) AS [Cube]
-                                    , Carton.UseSequence AS UseSequence
-                                    , CAST(IIF(RTRIM(Carton.cartonType) = RTRIM(@cConfigVal), 1, 0) AS BIT) AS Recommended
-                              FROM @storer vs
-                              JOIN STORER S WITH (NOLOCK)  ON vs.StorerKey = s.StorerKey
-                              JOIN CARTONIZATION Carton WITH (NOLOCK) 
-                              ON S.cartonGroup = Carton.CartonizationGroup
-                              WHERE S.StorerKey = @cStorerKey
-                              AND Carton.cartonType <> ''
-                              ORDER BY Carton.[Cube] ASC
-                              FOR JSON AUTO, WITHOUT_ARRAY_WRAPPER
-                           ), '') 
-   EXIT_SP:
-      REVERT
+   EXEC [API].[isp_TPACK_GetCartonType_Wrapper]
+     @cType             = @cType            
+   , @bIsDiscrete       = @bIsDiscrete      
+   , @bIsCustom         = @bIsCustom        
+   , @cPickSlipNo       = @cPickSlipNo       
+   , @cOrderKey         = @cOrderKey         
+   , @cLoadKey          = @cLoadKey          
+   , @cDropID           = @cDropID           
+   , @cStorerKey        = @cStorerKey        
+   , @cFacility         = @cFacility  
+   , @c_UserID          = @c_UserID
+   , @cLangCode         = @cLangCode
+   , @nCartonNo         = @nCartonNo
+   , @c_ResponseString  = @c_ResponseString  OUTPUT
+   , @b_Success         = @b_Success         OUTPUT
+   , @n_ErrNo           = @n_ErrNo           OUTPUT
+   , @c_ErrMsg          = @c_ErrMsg          OUTPUT
 
+   IF @b_Success = 0 OR ISNULL(@c_ResponseString, '') = ''
+   BEGIN
+      SET @n_Continue = 3  
+      GOTO EXIT_SP
+   END
+
+EXIT_SP:
+   IF @n_Continue = 3  -- Error Occured - Process And Return      
+   BEGIN      
+      SET @b_Success = 0      
+      IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
+      BEGIN               
+         ROLLBACK TRAN      
+      END      
+      ELSE      
+      BEGIN      
+         WHILE @@TRANCOUNT > @n_StartCnt      
+         BEGIN      
+            COMMIT TRAN      
+         END      
+      END   
+      RETURN      
+   END      
+   ELSE      
+   BEGIN      
+      SET @b_Success = 1      
+      WHILE @@TRANCOUNT > @n_StartCnt      
+      BEGIN      
+         COMMIT TRAN      
+      END      
+      RETURN      
+   END
 END
-
-
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_GetCartonTypeList] TO NSQL
+GO

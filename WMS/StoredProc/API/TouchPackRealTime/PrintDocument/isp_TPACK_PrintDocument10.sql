@@ -31,6 +31,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument10] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @bIsAutoPrint         BIT               = 0
    , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
@@ -103,17 +104,16 @@ BEGIN
    SET @IsAggregate4    = 0
    SET @cModuleID       = 'TPPACK'
    SET @cCustomLabelSP  = ''
-   SET @cReportType     = 'TPFULLCTNLBL'
-   SET @bPrintStdLabel  = 0
+   SET @cReportType     = 'TPSHIPPLBL'
+   SET @bPrintStdLabel  = 1
 
    IF EXISTS (SELECT 1
    FROM ORDERS O (NOLOCK)
    WHERE O.OrderKey = @cOrderKey
-   AND O.DocType = 'N'
+   AND O.DocType = 'E'
    )
    BEGIN
-      SET @bPrintStdLabel = 1
-      SET @cReportType = 'TPSHIPPLBL'
+      GOTO EXIT_SP
    END
 
    IF NOT EXISTS (SELECT 1 
@@ -686,3 +686,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_PrintDocument10] TO NSQL
+GO

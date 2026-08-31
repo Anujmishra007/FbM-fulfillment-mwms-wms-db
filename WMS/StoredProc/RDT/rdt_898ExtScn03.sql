@@ -5,15 +5,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/  
-/* Store procedure: rdt_898ExtScn03                                           */  
-/*                                                                            */  
-/*                                                                            */  
-/* Date        Rev     Author   Purposes                                      */  
-/* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                              */  
-/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields    */  
-/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99              */
-/******************************************************************************/  
+/*******************************************************************************************/  
+/* Store procedure: rdt_898ExtScn03                                                        */  
+/*                                                                                         */  
+/*                                                                                         */  
+/* Date        Rev     Author   Purposes                                                   */  
+/* 2025-10-28  1.0.0   Dennis   FCR-8472 Created                                           */  
+/* 2026-01-08  1.0.1   Dennis   UWP-46688 Fixed issue with lottable fields                 */  
+/* 2026-04-14  1.2     Sreeja   FCR-11052 Add DecodeSP for Step_99                         */
+/* 2026-08-12  1.3     Sreeja   FCR-14542 update UserDefine01 with the Traceability code   */
+/*******************************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn03] (
    @nMobile      INT,           
@@ -75,7 +76,7 @@ BEGIN
       @cReceiveAllowAddNewUCC          NVARCHAR(10),
       @cUCCWithDynamicCaseCnt          NVARCHAR(10),
       @cTempAddNewUCC                  NVARCHAR(10),
-      @cUCC                            NVARCHAR(MAX),
+      @cUCC                            NVARCHAR(20),
       @cTempUCC                        NVARCHAR(20),
       @cListName                       NVARCHAR(20),
       @cLottableCode                   NVARCHAR( 30),
@@ -140,8 +141,8 @@ BEGIN
       @cExtendedScreenSP    NVARCHAR(20) ,--(wsa099)
 
       @cTempLottable01   NVARCHAR(18), --input field lottable01 from lottable screen
-      @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
-      @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
+      -- @cTempLottable02   NVARCHAR(18), --input field lottable02 from lottable screen
+      -- @cTempLottable03   NVARCHAR(18), --input field lottable03 from lottable screen
       @cTempLottable04   NVARCHAR(16), --input field lottable04 from lottable screen
 
       @cTempLotLabel01   NVARCHAR(20),
@@ -220,8 +221,8 @@ BEGIN
       @cPQIndicator     = ISNULL(RTRIM(V_String8),'0'),
       @cPPK             = ISNULL(RTRIM(V_String9),'0'),
       @cTempLottable01  = V_String12,
-      @cTempLottable02  = V_String13,
-      @cTempLottable03  = V_String14,
+      -- @cTempLottable02  = V_String13,
+      -- @cTempLottable03  = V_String14,
       @cTempLottable04  = V_String15,
       @cUCCWithMultiSKU = V_String16,
       @cReceiveAllowAddNewUCC = V_String17,
@@ -268,8 +269,8 @@ BEGIN
       END
       IF (@nMOBRECStep = 8 AND @nStep = 9) OR (@nMOBRECStep = 9 AND @nStep = 8)
       BEGIN
-         SELECT @cOutField01 = @cLottable01, @cOutField02 = @cLottable02 ,
-         @cOutField03 = @cLottable03 , @cOutField04 = CONVERT(NVARCHAR(16),@dLottable04,120)
+         SELECT @cOutField01 = @cLottable01, @cOutField02 = ISNULL(@cLottable02, N'') ,
+            @cOutField03 = ISNULL(@cLottable03, N'') , @cOutField04 = CONVERT(NVARCHAR(16),@dLottable04,120)
 
          SET @nAfterStep = 99
          SET @nAfterScn = 1304
@@ -294,10 +295,16 @@ BEGIN
                   DECLARE @nUCCQTY INT
                   
                   -- @cLottable02 is only NVARCHAR(18) and truncates the barcode
-                  SET @cUCC = @cInField02
-                  SET @cSQL = 'EXEC rdt.' + QUOTENAME( RTRIM( @cDecodeSP)) +
+                  --SET @cUCC = @cInField02
+
+                  DECLARE @cBarcode NVARCHAR(MAX)
+                  
+                  --  Use separate @cBarcode variable for DecodeSP input
+                  SET @cBarcode = @cInField02
+
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
-                              ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
+                              ' @cBarcode   OUTPUT, @nUCCQTY     OUTPUT,' +
                               ' @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT, ' +
                               ' @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT, ' +
                               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
@@ -314,7 +321,7 @@ BEGIN
                         ' @cReceiptKey     NVARCHAR( 10),          ' +
                         ' @cPOKey          NVARCHAR( 10),          ' +
                         ' @cLOC            NVARCHAR( 10),          ' +
-                        ' @cUCC            NVARCHAR( MAX)  OUTPUT,  ' +
+                        ' @cBarcode        NVARCHAR( MAX)  OUTPUT,  ' +
                         ' @nUCCQTY         INT            OUTPUT,  ' +
                         ' @cUserDefine01   NVARCHAR(30)   OUTPUT,  ' +
                         ' @cUserDefine02   NVARCHAR(30)   OUTPUT,  ' +
@@ -341,11 +348,11 @@ BEGIN
                         ' @dLottable14     DATETIME       OUTPUT,  ' +
                         ' @dLottable15     DATETIME       OUTPUT,  ' +
                         ' @nErrNo          INT            OUTPUT,  ' +
-                        ' @cErrMsg         NVARCHAR( 1024)  OUTPUT   '
+                        ' @cErrMsg         NVARCHAR( 20)  OUTPUT   '
 
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                      @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
-                     @cUCC              OUTPUT, @nUCCQTY     OUTPUT,
+                     @cBarcode      OUTPUT, @nUCCQTY     OUTPUT,
                      @cUserDefine01 OUTPUT, @cUserDefine02 OUTPUT, @cUserDefine03 OUTPUT, @cUserDefine04 OUTPUT, @cUserDefine05 OUTPUT,
                      @cUserDefine06 OUTPUT, @cUserDefine07 OUTPUT, @cUserDefine08 OUTPUT, @cUserDefine09 OUTPUT,
                      @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
@@ -355,6 +362,20 @@ BEGIN
 
                   IF @nErrNo <> 0
                      GOTO Quit
+
+                  -- Update the user defined field in RDTMOBREC table if @cUserDefine01 is not null or empty
+                  -- C_String1 is used for traceability code; use C_String to avoid V_String conflicts
+                  IF ISNULL(@cUserDefine01, '') <> ''
+                  BEGIN
+                     BEGIN TRY
+                        UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET C_String1 = @cUserDefine01 WHERE Mobile = @nMobile
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 250754
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --250754^Failed to update UserDefine01 in RDTMOBREC
+                        GOTO Quit
+                     END CATCH
+                  END
                END
             END
             
@@ -414,8 +435,8 @@ BEGIN
 
 
             SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
-            SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
-            SET @cOutField08 = CASE WHEN @cLottable03 <> '' THEN @cLottable03 ELSE @cTempLottable03 END
+            SET @cOutField07 = @cLottable02
+            SET @cOutField08 = @cLottable03
             SET @cOutField09 = CASE WHEN @dLottable04 <> 0  THEN rdt.rdtFormatDate( @dLottable04) ELSE @cTempLottable04 END
 
             SET @cOutField01 = @cUCC

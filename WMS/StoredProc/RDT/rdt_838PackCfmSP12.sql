@@ -4,18 +4,21 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdt_838PackCfmSP12                                        */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: ONBR BRA                                                          */
-/*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 2026-02-12 1.0  NLT013      UWP-48240. Created                             */
-/* 2026-03-31 1.1  JackC       FCR-11193 Move Inv from FromDropID to LabelNo  */
-/* 2026-04-08 1.2  NLT013      FCR-11343. Update Packheader for single        */
-/* 2026-04-14 1.3  JackC       FCR-12450 Update PKD status & merge duplicates */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_838PackCfmSP12                                          */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Purpose: ONBR BRA                                                            */
+/*                                                                              */
+/* Date       Rev    Author      Purposes                                       */
+/* 2026-02-12 1.0    NLT013      UWP-48240. Created                             */
+/* 2026-03-31 1.1    JackC       FCR-11193 Move Inv from FromDropID to LabelNo  */
+/* 2026-04-08 1.2    NLT013      FCR-11343. Update Packheader for single        */
+/* 2026-04-14 1.3    JackC       FCR-12450 Update PKD status & merge duplicates */
+/* 2026-05-08 1.3.1  JackC       UWP-55429 Hotfix for PICK-TRF config on Prod   */
+/* 2026-07-28 1.4    NYE018      FCR-13548 B2C Single: only PackHeader Status=0 */
+/* 2026-08-18 1.5    NYE018      FCR-13548 Archive PackDetail.DropID            */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
     @nMobile      INT
@@ -66,6 +69,21 @@ BEGIN
    DECLARE @cMsg01                  NVARCHAR (60)
    DECLARE @cMsg02                  NVARCHAR (60)
    DECLARE @cMsg03                  NVARCHAR (60)
+   DECLARE @cArcPackDtlFlag         NVARCHAR(1) = '' --V1.5
+
+   --V1.5
+   DECLARE @nPackDtlLoopRow    INT          = 0
+   DECLARE @cLoopPackSlipNo    NVARCHAR(10) = ''
+   DECLARE @nLoopPackCartonNo  INT          = 0
+   DECLARE @cLoopPackLabelNo   NVARCHAR(20) = ''
+   DECLARE @cLoopPackLabelLine NVARCHAR(5)  = ''
+   DECLARE @tPackDetail TABLE (
+      RowRef     INT IDENTITY(1,1),
+      PickSlipNo NVARCHAR( 10) NOT NULL,
+      CartonNo   INT           NOT NULL,
+      LabelNo    NVARCHAR( 20) NOT NULL,
+      LabelLine  NVARCHAR(  5) NOT NULL
+   )
 
    SET @cOrderKey = ''      
    SET @cLoadKey = ''      
@@ -263,7 +281,8 @@ BEGIN
 
                   IF @nDebugFlag = 1
                      SELECT 'Set MoveInvFlag = 1'
-                  SET @cMoveInvFlag = '1' 
+                  SET @cMoveInvFlag    = '1'
+                  SET @cArcPackDtlFlag = 'Y' --V1.5
                END
                ELSE
                BEGIN
@@ -291,6 +310,8 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END CATCH
+
+               SET @cArcPackDtlFlag = 'Y' --V1.5
             END -- UCC packing
          END
          ELSE
@@ -324,20 +345,27 @@ BEGIN
    BEGIN
       IF @cPackByFromDropID = '1' AND ISNULL(@cFromDropID, '') <> ''
       BEGIN
-         IF NOT EXISTS( SELECT 1 
-            FROM dbo.PackDetail WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cFromDropID
-               AND Qty <> ExpQty
-               AND ExpQty > 0)
+         -- FCR-13548: Only consider PackHeader with Status = 0 for B2CSingle
+      IF NOT EXISTS( SELECT 1
+            FROM dbo.PackDetail PD WITH(NOLOCK)
+            INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+            WHERE PD.StorerKey = @cStorerKey
+               AND PH.StorerKey = @cStorerKey
+               AND PD.DropID = @cFromDropID
+               AND PD.Qty <> PD.ExpQty
+               AND PD.ExpQty > 0
+               AND PH.Status = '0')
          BEGIN
             SET @cPackConfirm = 'Y'
 
             INSERT INTO @tPickSlipNo (PickSlipNo)
-            SELECT PickSlipNo 
-            FROM dbo.PackDetail WITH(NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cFromDropID
+            SELECT DISTINCT PD.PickSlipNo
+            FROM dbo.PackDetail PD WITH(NOLOCK)
+            INNER JOIN dbo.PackHeader PH WITH(NOLOCK) ON PD.PickSlipNo = PH.PickSlipNo
+            WHERE PD.StorerKey = @cStorerKey
+               AND PH.StorerKey = @cStorerKey
+               AND PD.DropID = @cFromDropID
+               AND PH.Status = '0'
          END
          ELSE
          BEGIN
@@ -467,7 +495,7 @@ BEGIN
       BEGIN TRY
          UPDATE pd WITH (ROWLOCK)
          SET DropID = pd.CaseId,
-             Status = '5',
+             -- Status = '5', -- V1.3.1
              EditWho = SUSER_SNAME(),
              EditDate = GETDATE()
          FROM dbo.PickDetail pd
@@ -573,6 +601,24 @@ BEGIN
             GOTO RollBackTran
          END CATCH
       END -- handle duplicate pkd
+      
+      --V1.3.1 start
+      BEGIN TRY  
+         UPDATE pd WITH (ROWLOCK)  
+         SET  Status = '5',  
+             EditWho = SUSER_SNAME(),  
+             EditDate = GETDATE()  
+         FROM dbo.PickDetail pd  
+         JOIN #AffectedPKD a ON pd.PickDetailKey = a.PickDetailKey  
+      END TRY  
+      BEGIN CATCH  
+         DROP TABLE #AffectedPKD
+         DROP TABLE #MergeAction 
+         SET @nErrNo = 262664  
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  
+         GOTO RollBackTran  
+      END CATCH
+      --V1.3.1 end
 
       DROP TABLE #MergeAction
       DROP TABLE #AffectedPKD
@@ -816,8 +862,74 @@ BEGIN
          IF @bSuccess <> 1            
             GOTO RollBackTran       
       END 
-   END-- pack confirm          
-      
+   END-- pack confirm
+
+   --V1.5 start: Archive PackDetail.DropID after pack confirm
+   IF @cArcPackDtlFlag = 'Y'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT 'Archive PackDetail DropID', @cFromDropID AS FromDropID, @cMoveInvFlag AS MoveInvFlag, @cArcPackDtlFlag AS ArcPackDtlFlag
+
+      BEGIN TRY
+         IF @cMoveInvFlag = '1'
+            -- UOM6: DropID was updated to LabelNo by V1.1; DropID = LabelNo is a column-to-column filter
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey  = @cStorerKey
+               AND PickSlipNo = @cPickSlipNo
+               AND DropID     = LabelNo
+         ELSE
+            -- UCC: DropID is still @cFromDropID
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND DropID   = @cFromDropID
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 262665
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
+         GOTO RollBackTran
+      END CATCH
+
+      SET @nPackDtlLoopRow = 0
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @nPackDtlLoopRow    = RowRef,
+            @cLoopPackSlipNo    = PickSlipNo,
+            @nLoopPackCartonNo  = CartonNo,
+            @cLoopPackLabelNo   = LabelNo,
+            @cLoopPackLabelLine = LabelLine
+         FROM @tPackDetail
+         WHERE RowRef > @nPackDtlLoopRow
+         ORDER BY RowRef
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         BEGIN TRY
+            UPDATE dbo.PackDetail WITH (ROWLOCK)
+            SET DropID   = LEFT('ARC' + DropID, 20),
+                EditDate = GETDATE(),
+                EditWho  = SUSER_SNAME()
+            WHERE StorerKey = @cStorerKey
+               AND PickSlipNo = @cLoopPackSlipNo
+               AND CartonNo  = @nLoopPackCartonNo
+               AND LabelNo   = @cLoopPackLabelNo
+               AND LabelLine = @cLoopPackLabelLine
+               AND DropID NOT LIKE 'ARC%'
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo  = 262666
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --ArcPackDtlDropIDFail
+            GOTO RollBackTran
+         END CATCH
+      END
+   END
+   --V1.5 end
+
    COMMIT TRAN rdt_838PackCfmSP12      
    GOTO Quit      
       

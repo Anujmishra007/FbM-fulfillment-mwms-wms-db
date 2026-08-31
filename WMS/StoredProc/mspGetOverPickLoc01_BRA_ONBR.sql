@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /*****************************************************************************************/  
-/* Stored Procedure: mspGetOverPickLoc01_BRA_ONBR                                                 */  
+/* Stored Procedure: mspGetOverPickLoc01_BRA_ONBR                                        */  
 /* Creation Date: 2026-01-02                                                             */  
 /* Copyright: Maersk                                                                     */  
 /* Written by:                                                                           */  
@@ -25,8 +25,10 @@ GO
 /*                            and removed loclevel = 0 and set Maxcarton > 0	     	 */
 /*							  and Changed logic Maxpallet to MaxCarton  			     */
 /*							  and PutawayZone OverLoc: LOC.PutawayZone = SKU.PutawayZone */
+/* 2026-04-23  PSJ036   1.1   UWP-59525 Change the logic for qtyallocated = 0 and qty = 0*/
+/*							  and do not exceed the maximum capacity for the location    */  
 /*****************************************************************************************/  
-CREATE OR ALTER             PROC [dbo].[mspGetOverPickLoc01_BRA_ONBR]  
+CREATE OR ALTER                 PROC [dbo].[mspGetOverPickLoc01_BRA_ONBR]  
    @c_Storerkey                  NVARCHAR(15)   
 ,  @c_Sku                        NVARCHAR(20)   
 ,  @c_AllocateStrategykey        NVARCHAR(10)  
@@ -111,11 +113,14 @@ BEGIN
       AND l.HostWHCode = @c_Lottable02
       AND l.[Status] = 'OK'
       AND l.LocationFlag NOT IN ('HOLD','DAMAGE')
-	  AND l.MaxCarton * @n_PackQty = sl.QtyLocationLimit  --PSJ036 
-	  AND l.PutawayZone = @c_PAZoneSKU                    --PSJ036 
-	  GROUP BY sl.LOC, l.LogicalLocation, l.Loc  		  --PSJ036 
-	  HAVING SUM(SL.Qty-SL.QtyAllocated-SL.Qtypicked) = 0 --PSJ036 
-      ORDER BY l.LogicalLocation, l.Loc                   --PSJ036 
+	  AND l.MaxCarton * @n_PackQty = sl.QtyLocationLimit	--PSJ036 
+	  AND l.PutawayZone = @c_PAZoneSKU						--PSJ036 
+	  GROUP BY sl.LOC, l.LogicalLocation, l.Loc 			--PSJ036 
+	  HAVING (SUM(ISNULL(sl.QtyAllocated,0)-ISNULL(sl.Qtypicked,0)) = 0)		--PSJ036  VER1.1
+	         AND (SUM(ISNULL(sl.Qty,0)) = 0)									--PSJ036  VER1.1
+			 AND (SUM(ISNULL(sl.QtyExpected,0)) = 0)							--PSJ036  VER1.1
+	  --HAVING SUM(SL.Qty-SL.QtyAllocated-SL.Qtypicked) = 0 --PSJ036 
+      ORDER BY l.LogicalLocation, l.Loc						--PSJ036 
 	  
       SET @n_RowCount = @@ROWCOUNT                                            
 	  
@@ -139,10 +144,11 @@ BEGIN
          AND l.HostWHCode = @c_Lottable02
          AND l.[Status] = 'OK'
          AND l.LocationFlag NOT IN ('HOLD','DAMAGE')
-		 AND l.MaxCarton * @n_PackQty = sl.QtyLocationLimit
+		 --AND l.MaxCarton * @n_PackQty = sl.QtyLocationLimit   				--PSJ036  VER1.1
 	     AND l.PutawayZone = @c_PAZoneSKU
-	     GROUP BY sl.LOC, l.LogicalLocation, l.Loc 
+	     GROUP BY sl.LOC, l.LogicalLocation, l.Loc, sl.QtyLocationLimit  		--PSJ036  VER1.1
 	     HAVING SUM(SL.Qty-SL.QtyAllocated-SL.Qtypicked) < 0
+			AND SUM(SL.Qty-SL.QtyAllocated-SL.Qtypicked) < sl.QtyLocationLimit	--PSJ036  VER1.1
          ORDER BY l.LogicalLocation, l.Loc 
 
 	     SET @c_PickLoc = (SELECT TOP 1 LOC FROM #PICKLOCTYPE)
@@ -164,7 +170,7 @@ BEGIN
 	     AND l.PutawayZone = @c_PAZoneSKU
          ORDER BY l.LogicalLocation, l.Loc 
 
-	     IF @n_Qty + @n_QtyAllocated < @n_PickMaxQty
+	     IF @n_QtyToTake + @n_Qty + @n_QtyAllocated <= @n_PickMaxQty   --PSJ036  VER1.1
 		    BEGIN
 			  SET @n_RowCount = 1
 			END
@@ -225,11 +231,11 @@ BEGIN
          --   AND ((SUM(lli.PendingMoveIn) = 0 AND 
          --         CEILING(SUM(lli.QtyExpected + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet) OR   
          --         SUM(lli.QtyExpected) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn))
-         HAVING SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) <> 0                    
+         HAVING SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked) <> 0  AND                  
                  --((SUM(lli.Qty) = 0 AND SUM(lli.QtyAllocated) > 0) AND                      
                  -- (--(SUM(lli.PendingMoveIn) = 0 AND                                             
-                 --   CEILING(SUM(lli.QtyAllocated + @n_QtyLeftToFulfill)/@n_PalletQty) <= l.MaxPallet
-                 --  --) OR                                                                    
+                CEILING(SUM(lli.QtyAllocated + @n_QtyLeftToFulfill)/@n_PackQty) <= l.MaxCarton   --PSJ036  VER1.1
+				 --  --) OR                                                                    
                  --  -- SUM(lli.QtyAllocated) + @n_QtyLeftToFulfill <= SUM(lli.PendingMoveIn)  
                  -- )
          ORDER BY CASE WHEN SUM(lli.Qty-lli.QtyAllocated-lli.Qtypicked-@n_QtyLeftToFulfill) > 0 
@@ -281,7 +287,7 @@ BEGIN
                    (((@n_Qty-@n_QtyAllocated-@n_QtyPicked)/@n_PackQty)*@n_PackQty) --PSJ036
             END
             ELSE 
-            BEGIN
+            BEGIN 
                SET @n_QtyLeftToFulfill = 0
             END
    
@@ -302,7 +308,7 @@ BEGIN
             SET @n_RowCount = 0  
          END                                                    
       END
- 
+
       IF @n_RowCount = 0                                                            
       BEGIN  
   
@@ -321,13 +327,16 @@ BEGIN
 		 GROUP BY l.loc
                ,  l.ABC          
                ,  l.LogicalLocation
-         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.QtyAllocated,0)) = 0   
-            AND SUM(ISNULL(lli.Qty,0) - ISNULL(lli.QtyPicked,0)) = 0                
+         HAVING SUM(ISNULL(lli.PendingMoveIn,0) + ISNULL(lli.QtyAllocated,0)) = 0   --PSJ036
+            AND SUM(ISNULL(lli.QtyAllocated,0) - ISNULL(lli.QtyPicked,0)) = 0		--PSJ036
+			AND SUM(ISNULL(lli.QtyExpected,0)) = 0									--PSJ036  VER1.1
+			AND SUM(ISNULL(lli.Qty,0)) = 0											--PSJ036  VER1.1
          ORDER BY l.ABC
                ,  l.LogicalLocation
                ,  l.Loc
 
-         SET @n_RowCount = @@ROWCOUNT                                              
+         SET @n_RowCount = @@ROWCOUNT      
+	 
          IF @n_RowCount = 0                                                        
          BEGIN
             SET @n_OverQtyLeftToFulfill = @n_OverQtyLeftToFulfill - @n_QtyLeftToFulfill

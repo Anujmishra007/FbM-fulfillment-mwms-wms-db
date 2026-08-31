@@ -1,11 +1,10 @@
 --rdt_830ExtUpd03HRP
+--UWP-57192
+execute rdt.rdtDropMsg 267451, 267500
 
-execute rdt.rdtdropmsg  218390
-execute rdt.rdtdropmsg  218391
+execute rdt.rdtAddMsg 267451, 10, '267451 GenUCCLabelNo Failed. (rdt_830ExtUpd03HRP)',             'us_english', 830, 0, '267451 GenUCCLabelNo Failed. (rdt_830ExtUpd03HRP)'
+execute rdt.rdtAddMsg 267452, 10, '267452 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)',  'us_english', 830, 0, '267452 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)'
+execute rdt.rdtAddMsg 267453, 10, '267453 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)',  'us_english', 830, 0, '267453 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)'
+execute rdt.rdtAddMsg 267454, 10, '267454 UnknownError',                                           'us_english', 830, 0, '267454 Unknown Error happened'
 
-execute rdt.rdtAddMsg 218390, 10, '218390 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)',  'us_english', 830
-execute rdt.rdtAddMsg 218391, 10, '218391 Insert into TRANSMITLOG3 Failed. (rdt_830ExtUpd03HRP)',  'us_english', 830
-
-
-
-select * from rdt.rdtmsg (nolock) where message_ID in ('218390', '218391')
+SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 267451 AND 267500

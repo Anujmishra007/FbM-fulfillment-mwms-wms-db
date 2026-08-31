@@ -82,18 +82,10 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   IF @b_sp_ExecuteAs = 1
    BEGIN
       EXECUTE AS LOGIN = @DBUserName
       SET @c_UserID = @DBUserName
-
-      IF OBJECT_ID('dbo.fnc_GetUserName', 'FN') IS NOT NULL
-      BEGIN
-         IF dbo.fnc_GetUserName() NOT IN ('WMConnect', '')
-         BEGIN
-            SET @c_UserID = dbo.fnc_GetUserName()
-         END
-      END
    END
 
    --Decode Json Format
@@ -129,7 +121,7 @@ BEGIN
    --AppendDeviceID
    IF @cDeviceID = 'Web'
    BEGIN
-      SET @cDeviceID = @cDeviceID + @c_UserID
+      SET @cDeviceID = @cDeviceID + NEWID()
       SET @nWebFlag = 1
 
       SET @cSelWorkStation = @cWorkStation
@@ -240,7 +232,24 @@ BEGIN
 
          GOTO SUCCESS_SP
 	   END
-
+      ELSE
+      BEGIN
+         IF @cType = 'LOGIN'
+         BEGIN
+            IF EXISTS ( SELECT 1
+                        FROM API.AppSection WITH (NOLOCK) 
+                        WHERE UserID = @c_UserID 
+                        AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL)
+            )
+            BEGIN
+               --SELECT  '1ab'
+               SET @n_Continue = 3
+               SET @n_ErrNo = 10403
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current User still active in another device.'
+               GOTO EXIT_SP
+            END
+         END
+      END
 DEVICE_SP:
       -- 2a. Device expired
       IF EXISTS ( SELECT 1 
@@ -439,6 +448,7 @@ SUCCESS_SP:
 	   SET @c_ResponseString = ISNULL((
                                  SELECT  @dNow AS SectionTime
                                        , @timeOut AS ConfigInSec 
+                                       , @cDeviceID AS DeviceID
                                  FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                               ), '') 
 
@@ -477,3 +487,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_LogUserSession] TO NSQL
+GO

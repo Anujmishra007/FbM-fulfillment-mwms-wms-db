@@ -152,6 +152,8 @@ GO
 /* 18-Sep-2025 6.8  James    FCR-2614 Fix uom conversion issue (james34)*/
 /*                           Add decodesp to add new ucc step           */
 /* 17-04-2026  6.9  NYE018  FCR-9688 error handling after decode        */
+/* 29-05-2026  7.0  Sreeja  FCR-13447 Change IdBarcode to Barcode       */
+/* 26-06-2026  7.1  NYE018  UWP-59740 Add the scn 703 and correct field */                       
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -370,6 +372,18 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
    @nAction             INT,
    @nAfterScn           INT,
    @cLocNeedValid       NVARCHAR( 20),
+   @cExtScnSP           NVARCHAR( 20),
+   @tExtScnData         VariableTable,
+   @cUDF01  NVARCHAR( 250), @cUDF02  NVARCHAR( 250), @cUDF03  NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05  NVARCHAR( 250), @cUDF06  NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08  NVARCHAR( 250), @cUDF09  NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11  NVARCHAR( 250), @cUDF12  NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14  NVARCHAR( 250), @cUDF15  NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17  NVARCHAR( 250), @cUDF18  NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20  NVARCHAR( 250), @cUDF21  NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23  NVARCHAR( 250), @cUDF24  NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26  NVARCHAR( 250), @cUDF27  NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29  NVARCHAR( 250), @cUDF30  NVARCHAR( 250),
    @cSKUStatus          NVARCHAR( 10) = '',
    @cPUOM_Desc          NVARCHAR( 10),
    -- (james18)
@@ -413,6 +427,7 @@ DECLARE
    @cDecodeSP           NVARCHAR( 20),
    @cIDBarcode          NVARCHAR( 60),
    @cBarcode            NVARCHAR( MAX),
+   @cDecodeBuf          NVARCHAR( 60),
    @cUPC                NVARCHAR( 30),
    @cFromID             NVARCHAR( 18),
    @cToLOC              NVARCHAR( 10),
@@ -539,6 +554,7 @@ SELECT
    @cSKUEditQTYNotAllowBlank = V_String46,
    @cStepSKUAllowOpt         = V_String47,
    @cExtendedValidSP = V_String48,
+   @cExtScnSP        = V_String28,
    @cBarcode         = V_Barcode,
     
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -676,6 +692,7 @@ BEGIN
    IF @nStep = 27 GOTO Step_Blind_Qty                   -- Scn = 3262. Blind Count Qty             -- (james10)
    IF @nStep = 28 GOTO Step_Blind_Lottables             -- Scn = 3268. Blind Count Lottables       -- (james10)
    IF @nStep = 29 GOTO Step_Validate_SKULottables       -- Scn = 3264. Blind Count Lottables       -- (james15)
+   IF @nStep = 99 GOTO Step_99                         -- Scn = 924.  Extended Screen
 END
 
 RETURN -- Do nothing if incorrect step
@@ -718,6 +735,10 @@ BEGIN
    SET @cExtendedValidSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidSP', @cStorer)
    IF @cExtendedValidSP IN ('0', '')
       SET @cExtendedValidSP = ''
+
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorer)
+   IF @cExtScnSP IN ('0', '')
+      SET @cExtScnSP = ''
 
    --SY01 START
    SET @cDoubleDeep = rdt.RDTGetConfig( @nFunc, 'DoubleDeep', @cStorer)
@@ -3014,7 +3035,7 @@ BEGIN
                ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cIDBarcode,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cCCRefNo, @cCCSheetNo, @cBarcode,
                @cLOC          OUTPUT, @cID_In         OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -4450,6 +4471,11 @@ BEGIN
       -- Reset this screen var
       SET @cOutField01 = '' -- UCC
       SET @cOutField12 = '' -- OPT
+      IF @cExtScnSP <> ''
+      BEGIN
+         SET @nAction = 1
+         GOTO Step_99
+      END
    END
 END
 GOTO Quit
@@ -5493,14 +5519,14 @@ BEGIN
       DECLARE @cUCCQTY NVARCHAR( 5)
 
       -- Screen mapping
-      SET @cUCCQTY = @cInField01
+      SET @cUCCQTY = @cInField05
 
       -- Validate QTY
       IF rdt.rdtIsValidQTY( @cUCCQTY, 20) <> 1 -- Do Not Check for zero
       BEGIN
          SET @nErrNo = 62122
          SET @cErrMsg = rdt.rdtgetmessage( 62122, @cLangCode, 'DSP') -- 'Invalid QTY'
-         EXEC rdt.rdtSetFocusField @nMobile, 1   -- QTY
+         EXEC rdt.rdtSetFocusField @nMobile, 5   -- QTY
          GOTO Quit
       END
       SET @nQTY = CAST( @cUCCQTY AS INT)
@@ -9227,18 +9253,16 @@ GOTO Quit
 Step_SINGLE_SKU_Sku_Scan. Scn = 677. Screen 15.
    LOC (field01)
    ID          (field02)
-   SKU/UPC     (field03) - Input
+   SKU/UPC     (V_Barcode) - Input
 ************************************************************************************/
 Step_SINGLE_SKU_Sku_Scan:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping
-     SET @cNewSKU = @cInField03
-      SET @cLabel2Decode = @cInField03
-
-      -- Retain the key-in value
-      SET @cOutField03 = @cNewSKU
+      -- Screen mapping (screen 677 uses V_Barcode for scan input)
+      SET @cNewSKU       = LEFT(@cBarcode, 30)
+      SET @cLabel2Decode = LEFT(@cBarcode, 60)
+      SET @cBarcode      = LEFT(@cBarcode, 60)
 
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
@@ -9344,7 +9368,6 @@ BEGIN
 
             IF @cDecodeSP <> ''
             BEGIN
-               SET @cBarcode = @cInField03
                SET @cUPC = ''
 
                -- Standard decode
@@ -9492,13 +9515,13 @@ BEGIN
 
          IF @cDecodeSP <> ''
          BEGIN
-            SET @cBarcode = @cInField03
+            SET @cDecodeBuf = LEFT(@cBarcode, 60)
             SET @cUPC = ''
 
             -- Standard decode
             IF @cDecodeSP = '1'
             BEGIN
-               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cDecodeBuf,
                   @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                   @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                   @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -9559,7 +9582,7 @@ BEGIN
                   ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cBarcode, @cCCRefNo, @cCCSheetNo,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cDecodeBuf, @cCCRefNo, @cCCSheetNo,
                   @cLOC          OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
                   @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
                   @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
@@ -9750,6 +9773,7 @@ BEGIN
          SET @cOutField11 = ''
          SET @cOutField12 = ''
          SET @cOutField13 = ''
+         SET @cBarcode = ''
 
          -- Initiate labels
          SELECT
@@ -10008,6 +10032,7 @@ BEGIN
          SET @cOutField08 = @cEachUOM                       -- UOM (master unit)
          SET @cOutField09 = CAST( @nQTY AS NVARCHAR( 5))     -- ID QTY
          SET @cOutField10 = @cEachUOM                       -- UOM (master unit)
+         SET @cBarcode = ''
 
          EXEC rdt.rdtSetFocusField @nMobile, 3  -- SKU/UPC
 
@@ -10134,7 +10159,7 @@ BEGIN
    SINGLE_SKU_Sku_Scan_Fail:
    BEGIN
       -- Reset this screen var
-      SET @cOutField03 = '' -- SKU/UPC
+      SET @cBarcode    = '' -- SKU/UPC
    END
 END
 GOTO Quit
@@ -10559,9 +10584,9 @@ Step_SINGLE_SKU_Increase_Qty:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-      -- Screen mapping
-      SET @cNewSKU = @cInField03
-      SET @cLabel2Decode = @cInField03
+      -- Screen mapping (screen 679 uses V_Barcode for scan input)
+      SET @cNewSKU      = LEFT(@cBarcode, 30)
+      SET @cLabel2Decode = LEFT(@cBarcode, 60)
 
       -- Retain the key-in value
       SET @cOutField03 = @cNewSKU
@@ -10640,7 +10665,7 @@ BEGIN
 
             IF @cDecodeSP <> ''
             BEGIN
-               SET @cBarcode = @cInField03
+               SET @cBarcode      = LEFT(@cBarcode, 60)
                SET @cUPC = ''
 
                -- Standard decode
@@ -15255,7 +15280,8 @@ BEGIN
                      IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
                      BEGIN
                         SET @cValidateSKU = ''
-                        GOTO SINGLE_SKU_Increase_Qty_Fail
+                        EXEC rdt.rdtSetFocusField @nMobile, 3
+                        GOTO Quit
                      END
                   END
                END   -- End for DecodeSP
@@ -15406,7 +15432,8 @@ BEGIN
                   IF ISNULL(@nErrNo, 0) <> 0 -- FCR-9688
                   BEGIN
                      SET @cValidateSKU = ''
-                     GOTO SINGLE_SKU_Increase_Qty_Fail
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     GOTO Quit
                   END
 
                END
@@ -15807,6 +15834,62 @@ END
 GOTO Quit
 
 /********************************************************************************
+Step_99. Extended Screen
+********************************************************************************/
+Step_99:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+         @cExtScnSP,
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @tExtScnData,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction,
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT,
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
+
+/********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
 Quit:
@@ -15887,6 +15970,7 @@ BEGIN
       V_String46     = @cSKUEditQTYNotAllowBlank,
       V_String47     = @cStepSKUAllowOpt,
       V_String48     = @cExtendedValidSP,
+      V_String28     = @cExtScnSP,
 
       V_Integer1     = @nQTY,
       V_Integer2     = @nCCCountNo,

@@ -47,10 +47,12 @@ BEGIN
       @nCartLimit       INT,
       @nCount           INT,
       @cWaveKey         NVARCHAR(10),
-      @cGroupKey        NVARCHAR(10)
+      @cGroupKey        NVARCHAR(10),
+      @cUserName        NVARCHAR(128)
 
    SELECT @cWaveKey = C_String1,
-      @cGroupKey = V_String12
+      @cGroupKey = V_String12,
+      @cUserName = UserName
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
      
@@ -74,7 +76,7 @@ BEGIN
       WHERE TD.Storerkey = @cStorerKey
          AND TD.TaskType = 'ASTCPK'
          AND TD.Status = '3'
-         AND TD.UserKey = SUSER_SNAME()
+         AND TD.UserKey = @cUserName
          AND TD.DeviceID = @cCartID
          AND TD.WaveKey = @cWaveKey
          AND TD.GroupKey = @cGroupKey

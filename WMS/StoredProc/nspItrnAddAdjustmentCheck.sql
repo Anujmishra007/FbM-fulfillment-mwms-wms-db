@@ -1295,18 +1295,34 @@ BEGIN
             
             IF @n_Continue IN (1, 2)   
             BEGIN
-               EXEC dbo.ispITrnSerialNoAdjustment 
-                 @c_ItrnKey      = @c_ItrnKey
-               , @c_TranType     = @c_TranType
-               , @c_StorerKey    = @c_StorerKey
-               , @c_SKU          = @c_SKU
-               , @c_SerialNo     = @c_SerialNo 
-               , @n_QTY          = @n_QTY 
-               , @c_SourceKey    = @c_SourceKey 
-               , @c_SourceType   = @c_SourceType
-               , @b_Success      = @b_Success  OUTPUT  
-               , @n_Err          = @n_Err      OUTPUT  
-               , @c_ErrMsg       = @c_ErrMsg   OUTPUT
+               IF EXISTS(SELECT TOP 1 1 from sys.procedures a, sys.parameters b                                         --ML01
+                        WHERE a.object_id=b.object_id and a.name='ispITrnSerialNoAdjustment' and b.name='@c_ItrnKey')   --ML01
+                  EXEC dbo.ispITrnSerialNoAdjustment 
+                    @c_ItrnKey      = @c_ItrnKey
+                  , @c_TranType     = @c_TranType
+                  , @c_StorerKey    = @c_StorerKey
+                  , @c_SKU          = @c_SKU
+                  , @c_SerialNo     = @c_SerialNo 
+                  , @n_QTY          = @n_QTY 
+                  , @c_SourceKey    = @c_SourceKey 
+                  , @c_SourceType   = @c_SourceType
+                  , @b_Success      = @b_Success  OUTPUT  
+                  , @n_Err          = @n_Err      OUTPUT  
+                  , @c_ErrMsg       = @c_ErrMsg   OUTPUT
+               --ML01-S
+               ELSE
+                  EXEC dbo.ispITrnSerialNoAdjustment
+                    @c_TranType     = @c_TranType
+                  , @c_StorerKey    = @c_StorerKey
+                  , @c_SKU          = @c_SKU
+                  , @c_SerialNo     = @c_SerialNo
+                  , @n_QTY          = @n_QTY
+                  , @c_SourceKey    = @c_SourceKey
+                  , @c_SourceType   = @c_SourceType
+                  , @b_Success      = @b_Success  OUTPUT
+                  , @n_Err          = @n_Err      OUTPUT
+                  , @c_ErrMsg       = @c_ErrMsg   OUTPUT
+               --ML01-E
 
                IF @n_err <> 0
                BEGIN

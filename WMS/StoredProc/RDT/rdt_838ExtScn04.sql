@@ -12,7 +12,8 @@ GO
 /*                                                                         */
 /* Date        Rev   Author      Purposes                                  */
 /* 2024-09-11  1.0   PXL009      Create for FCR-778 Violet Pack Changes    */
-/*2025-09-09   1.1   SUNDAR      VAS Label Information in Pack ScreenRITM7760734*/
+/* 2025-09-09  1.1   SUNDAR      VAS Label Information in Pack Screen      */
+/*                               RITM7760734                               */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_838ExtScn04] (
@@ -108,7 +109,7 @@ BEGIN
       @cCustomerPalletMixBrands        NVARCHAR( 20),
       @cCustomerPalletProductGrouping  NVARCHAR( 18),
       @cCustomerOrderType              NVARCHAR( 10),
-	  @cVasLbl							NVARCHAR( 60),
+      @cVasLbl                         NVARCHAR( 60),
       @cDefaultOption                  NVARCHAR( 1),
       @cLabelNo                        NVARCHAR( 20),
       @cCustomNo                       NVARCHAR( 5),
@@ -238,7 +239,7 @@ BEGIN
             WHERE [Address1] = @cOrderConsigneeKey
                AND [ConsigneeFor] = @cOrderStorerKey
                AND [Zip] = @cOrderC_Zip
-               AND [Type] = 2
+               AND [Type] = '2'
 
             SELECT @cCustomerPalletType         = CASE WHEN ISNULL(@cCustomerPalletType, N'')            = N'' THEN [Pallet]      ELSE @cCustomerPalletType            END
                ,@cCustomerPalletCube            = CASE WHEN ISNULL(@cCustomerPalletCube, N'')            = N'' THEN [SUSR1]       ELSE @cCustomerPalletCube            END
@@ -249,7 +250,7 @@ BEGIN
             FROM [dbo].[STORER] WITH (NOLOCK)
             WHERE [StorerKey] = @cDefaultConsigneeKey
                AND [ConsigneeFor] = @cStorerKey
-               AND [Type] = 2
+               AND [Type] = '2'
 
             SELECT @cCustomerOrderType = [Ordertype] FROM [dbo].[StorerSODefault] WITH(NOLOCK) WHERE [StorerKey] = @cOrderConsigneeKey
             IF ISNULL(@cCustomerOrderType, N'') = N''
@@ -324,26 +325,35 @@ BEGIN
             --    GOTO Quit
             -- END
 
-	
-SELECT TOP 1 @cVasLbl= CASE WHEN ( OD.UserDefine08 IS  NULL OR OD.UserDefine08='') THEN 'Default Label'
-ELSE CONCAT('VAS:',ISNULL(SUBSTRING(S.COMPANY,1,6),''),':',ISNULL(OD.USERDEFINE08,''))   END
-FROM ORDERS O INNER JOIN ORDERDETAIL OD ON OD.ORDERKEY=O.ORDERKEY INNER JOIN CODELKUP C ON C.CODE2=O.ConsigneeKey 
-INNER JOIN PICKDETAIL PD ON PD.OrderKey=OD.ORDERKEY  AND PD.OrderLineNumber=OD.OrderLineNumber AND PD.SKU=OD.Sku
-INNER JOIN STORER S ON S.STORERKEY=C.CODE2 AND S.FACILITY=O.FACILITY  
-WHERE PD.DROPID=@cFromDropID  AND C.Storerkey=O.STORERKEY AND C.LISTNAME='VASLBL' AND S.TYPE=2 
-           
+            -- Get VAS Label Information
+            SELECT TOP 1 @cVasLbl = CASE
+                  WHEN ISNULL(OD.UserDefine08, N'') = N'' THEN N'Default Label'
+                  ELSE CONCAT(N'VAS:', ISNULL(SUBSTRING(S.COMPANY, 1, 6), N''), N':', ISNULL(OD.USERDEFINE08, N''))
+               END
+            FROM [dbo].[ORDERS] O WITH (NOLOCK)
+               INNER JOIN [dbo].[ORDERDETAIL] OD WITH (NOLOCK) ON OD.ORDERKEY = O.ORDERKEY
+               INNER JOIN [dbo].[CODELKUP] C WITH (NOLOCK) ON C.CODE2 = O.ConsigneeKey
+               INNER JOIN [dbo].[PICKDETAIL] PD WITH (NOLOCK) ON PD.OrderKey = OD.ORDERKEY
+                  AND PD.OrderLineNumber = OD.OrderLineNumber
+                  AND PD.SKU = OD.Sku
+               INNER JOIN [dbo].[STORER] S WITH (NOLOCK) ON S.STORERKEY = C.CODE2
+                  AND S.FACILITY = O.FACILITY
+            WHERE PD.DROPID = @cFromDropID
+               AND C.Storerkey = O.STORERKEY
+               AND C.LISTNAME = N'VASLBL'
+               AND S.[Type] = N'2'
 
             SET @cOutField01  = @cPackDtlDropID
             SET @cOutField02  = @cCustomerPalletType
             SET @cOutField03  = @cCustomerPalletHeight
             SET @cOutField04  = @cCustomerPalletCube
-            SET @cOutField05  =ISNULL(@cVasLbl,'Default Label')
+            SET @cOutField05  = ISNULL(@cVasLbl, N'Default Label')
             SET @cOutField06  = N''
             SET @cOutField07  = N''
             SET @cOutField08  = N''
             SET @cOutField09  = N''
             SET @cOutField10  = N''
-			   SET @cOutField11  = N''
+            SET @cOutField11  = N''
             SELECT @cOutField06  = [Message] FROM @tWarnings WHERE [ID] = 1
             SELECT @cOutField07  = [Message] FROM @tWarnings WHERE [ID] = 2
             SELECT @cOutField08  = [Message] FROM @tWarnings WHERE [ID] = 3
@@ -388,13 +398,13 @@ WHERE PD.DROPID=@cFromDropID  AND C.Storerkey=O.STORERKEY AND C.LISTNAME='VASLBL
                WHERE [StorerKey] = @cOrderConsigneeKey
                   AND [ConsigneeFor] = @cOrderStorerKey
                   AND [Zip] = @cOrderC_Zip
-                  AND [Type] = 2
+                  AND [Type] = '2'
 
                SELECT @cCustomerPalletType   = CASE WHEN ISNULL(@cCustomerPalletType, N'') = N'' THEN [Pallet] ELSE @cCustomerPalletType END
                FROM [dbo].[STORER] WITH (NOLOCK)
                WHERE [StorerKey] = @cDefaultConsigneeKey
                   AND [ConsigneeFor] = @cStorerKey
-                  AND [Type] = 2
+                  AND [Type] = '2'
 
                IF NOT EXISTS (SELECT 1 FROM [dbo].[PALLET] (NOLOCK) WHERE [PalletKey] = @cPackDtlDropID)
                BEGIN

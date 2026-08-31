@@ -12,6 +12,7 @@ GO
 /* 2024-08-14 1.0  Dennis     FCR-540. Created                          */  
 /* 2025-04-24 1.1  CYU027     FCR-540. Fix SerialNo Move                */
 /* 2025-07-21 1.2  CYU027     FCR-540. Fix OrderInfo Logic              */
+/* 2026-06-03 1.3  NYE018     FCR-10366. Add LOC check digit validation */
 /************************************************************************/
   
 CREATE OR ALTER PROC  [RDT].[rdt_839ExtScn02] (
@@ -131,13 +132,17 @@ BEGIN
          @cPickDetailKey      NVARCHAR( 18) = '',
          @cItrnKey            NVARCHAR(10),
          @cSerialNo           NVARCHAR( 30),
-         @SerialNoKey         NVARCHAR (10)
+         @SerialNoKey         NVARCHAR (10),
+
+         @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
+         @cCheckDigitLOC      NVARCHAR( 20)  -- FCR-10366
 
 
    SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
 
    SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
    IF @cPickConfirmStatus = '0'
       SET @cPickConfirmStatus = '5'
    IF @cPickConfirmStatus NOT IN ( '3', '5')
@@ -237,6 +242,23 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToLocNeeded
                      GOTO Quit
                   END
+                  
+                  -- FCR-10366
+                  SET @cCheckDigitLOC = @cInField02
+                  IF @cLOCCheckDigitSP = '1'
+                  BEGIN
+                     EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+                        @cCheckDigitLOC    OUTPUT,
+                        @nErrNo      OUTPUT,
+                        @cErrMsg     OUTPUT
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO Quit
+                     END
+                     SET @cToLOC = @cCheckDigitLOC
+                  END
+                  -- FCR-10366
 
                   IF NOT EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
                             WHERE Facility = @cFacility

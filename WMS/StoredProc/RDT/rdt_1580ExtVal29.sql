@@ -55,7 +55,7 @@ AS
                      FROM dbo.CodeLKUP WITH (NOLOCK) 
                      WHERE ListName = 'ReceiptGRP'
                         AND StorerKey = @cStorerKey
-                        AND UDF01 = @nFunc))
+                        AND Code2 = CAST( @nFunc AS NVARCHAR(5))))
             BEGIN
                SET @nErrNo = 248151
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid RcvGrp

@@ -25,8 +25,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author     Ver   Purposes                                  */
-/* 24-oct-2025	ABS060		1.0		Generate replenishment only from Bulk  */
-/*									type location						   */
+/* 24-oct-2025  ABS060     1.0   Generate replenishment only from Bulk     */
+/*                               type location                             */
+/* 20-Aug-2026  Michael    1.1   FCR-15122 - 1. Del O/S Task               */
+/*                               2. Chg Priority for AM Order (ML02)       */
 /***************************************************************************/
 
 CREATE OR ALTER  PROC [dbo].[isp_GenReplenishment_vivo]
@@ -96,6 +98,10 @@ BEGIN
            @c_UCCNo              NVARCHAR(20),   --ML01
            @c_OPTION5            NVARCHAR(MAX),  --ML01
            @c_BulkLocType        NVARCHAR(MAX)   --ML01
+         , @n_OrderedQty         INT             --ML02
+         , @n_LLI_AvailQty       INT             --ML02
+         , @b_HasTodayAMOrder    INT             --ML02
+         , @n_PendingTaskQty     INT             --ML02
 
    DECLARE @t_Bulk_LocType TABLE (
       LocationType NVARCHAR(10) NULL
@@ -325,6 +331,7 @@ BEGIN
 
 			   SET @c_ReplenQtyFlag = '0'
 
+/* ML02-S
          IF EXISTS(SELECT 1 FROM TASKDETAIL TD WITH (NOLOCK)
                    WHERE TD.Status IN ( '0','3','5')
                      AND TD.TaskType = 'RPF'
@@ -341,6 +348,7 @@ BEGIN
 
             GOTO GET_NEXT_RECORD
          END
+ML02-E */
 
       	  IF EXISTS(SELECT 1 FROM REPLENISHMENT R WITH (NOLOCK)
       	            WHERE R.Storerkey = @c_CurrentStorer AND
@@ -570,6 +578,64 @@ BEGIN
 
          IF @n_Cnt = 0
             GOTO GET_NEXT_RECORD
+
+            --ML02-S
+            SELECT @n_PendingTaskQty = ISNULL(SUM(Qty),0)
+              FROM TASKDETAIL WITH(NOLOCK)
+             WHERE Storerkey  = @c_CurrentStorer
+               AND Sku        = @c_CurrentSKU
+               AND ToLoc      = @c_CurrentLoc
+               AND TaskType   = 'RPF'
+               AND Status IN ('0', '3','5')
+
+            IF @n_RemainingQty = @n_PendingTaskQty
+               GOTO GET_NEXT_RECORD
+
+            IF EXISTS(SELECT TOP 1 1 FROM TASKDETAIL WITH (NOLOCK)
+                      WHERE Storerkey  = @c_CurrentStorer
+                        AND Sku        = @c_CurrentSKU
+                        AND ToLoc      = @c_CurrentLOC
+                        AND TaskType   = 'RPF'
+                        AND Status     = '0')
+            BEGIN
+               DELETE TASKDETAIL WITH(ROWLOCK)
+                WHERE Storerkey  = @c_CurrentStorer
+                  AND Sku        = @c_CurrentSKU
+                  AND ToLoc      = @c_CurrentLOC
+                  AND TaskType   = 'RPF'
+                  AND Status     = '0'
+            END
+
+            -- Set Prioirty
+            SELECT @n_OrderedQty      = ISNULL(SUM(OD.OpenQty),0)
+                 , @b_HasTodayAMOrder = ISNULL(MAX(CASE WHEN OH.AddDate < CONVERT(NVARCHAR(11),GETDATE(),120)+'12:00' THEN 1 ELSE 0 END),0)
+              FROM dbo.ORDERS      OH WITH (NOLOCK)
+              JOIN dbo.ORDERDETAIL OD WITH (NOLOCK) ON OH.OrderKey = OD.Orderkey
+             WHERE OH.Status    = '0'
+               AND OH.Facility  = @c_Facility
+               AND OD.Storerkey = @c_CurrentStorer
+               AND OD.Sku       = @c_CurrentSKU
+               AND OD.openqty   > 0
+
+            SELECT @n_LLI_AvailQty = ISNULL(SUM(Qty - QtyAllocated - QtyPicked - QtyReplen),0)
+              FROM dbo.LOTxLOCxID WITH (NOLOCK)
+             WHERE Storerkey = @c_CurrentStorer
+               AND Sku       = @c_CurrentSKU
+               AND Loc       = @c_CurrentLOC
+
+            SELECT @n_PendingTaskQty = ISNULL(SUM(Qty),0)
+              FROM TASKDETAIL WITH(NOLOCK)
+             WHERE Storerkey  = @c_CurrentStorer
+               AND Sku        = @c_CurrentSKU
+               AND ToLoc      = @c_CurrentLoc
+               AND TaskType   = 'RPF'
+               AND Status IN ('0', '3','5')
+
+            IF @n_OrderedQty > @n_LLI_AvailQty + @n_PendingTaskQty
+               SET @c_CurrentPriority = CASE WHEN @b_HasTodayAMOrder = 1 THEN '6' ELSE '7' END
+
+            SET @n_RemainingQty = @n_RemainingQty - @n_PendingTaskQty
+            --ML02-E
 
 			   DECLARE cur_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 			   SELECT DISTINCT LOT, SortColumn
@@ -1112,3 +1178,6 @@ BEGIN
       END
    END --Continue end
 END --SP end
+GO
+GRANT EXECUTE ON [dbo].[isp_GenReplenishment_vivo] TO [NSQL]
+GO

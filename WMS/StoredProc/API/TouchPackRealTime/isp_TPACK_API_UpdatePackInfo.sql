@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-21   1.0  GCH225     Created                                          */
+/* 2026-05-12   1.1  JWF011     UWP-54223: Add Cartonization entry point         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_UpdatePackInfo] (
@@ -60,6 +61,7 @@ BEGIN
          , @fWeight              FLOAT
          , @fCube                FLOAT
          , @cLabelNo             NVARCHAR(20)
+         , @nTempCartonNo        INT
 
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
@@ -74,7 +76,7 @@ BEGIN
    SET @cDropID               = ''
    SET @cStorerKey            = ''
    SET @cFacility             = ''
-   SET @nCartonNo             = ''
+   SET @nCartonNo             = 0
    SET @cCartonType           = ''
    SET @cPackInfoJson         = ''
    SET @cCartonStatus         = ''
@@ -85,6 +87,7 @@ BEGIN
    SET @fWeight               = 0
    SET @fCube                 = 0
    SET @cLabelNo              = ''
+   SET @nTempCartonNo         = 0
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -102,18 +105,10 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   IF @b_sp_ExecuteAs = 1
    BEGIN
       EXECUTE AS LOGIN = @DBUserName
       SET @c_UserID = @DBUserName
-
-      IF OBJECT_ID('dbo.fnc_GetUserName', 'FN') IS NOT NULL
-      BEGIN
-         IF dbo.fnc_GetUserName() NOT IN ('WMConnect', '')
-         BEGIN
-            SET @c_UserID = dbo.fnc_GetUserName()
-         END
-      END
    END
 
    --Decode Json Format
@@ -215,9 +210,9 @@ BEGIN
                , L.Workstation
                , L.LabelPrinter
                , L.PaperPrinter
-               , dbo.fnc_GetUserName()
+               , @c_UserID
                , dbo.fnc_GetDate()
-               , dbo.fnc_GetUserName()
+               , @c_UserID
                , dbo.fnc_GetDate()
             FROM API.TPACK_UserSessionActivityLog L WITH (NOLOCK)
             LEFT JOIN PACKDETAIL PD WITH (NOLOCK)
@@ -310,6 +305,73 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   --Cartonization Entry Point
+   IF @cCartonStatus IN ('HOLD', 'CLOSED')
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-CtnRec'
+               AND SValue = '1'
+   )
+   AND @cType = 'toteid'
+   AND EXISTS (SELECT 1
+               FROM STORERCONFIG (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ConfigKey = 'TPS-SinglePKStation'
+               AND SValue = '1'
+   ) 
+   AND EXISTS (SELECT 1
+               FROM CODELKUP (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND ListName = 'TPSCtnRec'
+   )
+   BEGIN
+      IF @bIsLastCarton = 0
+      BEGIN
+         EXEC [API].[isp_TPACK_Cartonization_Wrapper]
+            @cType          = @cType            
+         , @bIsDiscrete    = @bIsDiscrete      
+         , @bIsCustom      = @bIsCustom        
+         , @cPickSlipNo    = @cPickSlipNo       
+         , @cOrderKey      = @cOrderKey
+         , @cLoadKey       = @cLoadKey          
+         , @cDropID        = @cDropID
+         , @cStorerKey     = @cStorerKey        
+         , @cFacility      = @cFacility
+         , @c_UserID       = @c_UserID
+         , @cLangCode      = @cLangCode
+         , @nCartonNo      = 0
+         , @nCartonizeStep = 1
+         , @b_Success      = @b_Success      OUTPUT
+         , @n_ErrNo        = @n_ErrNo        OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg       OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3   
+            GOTO EXIT_SP
+         END
+      END
+      ELSE
+      BEGIN
+         SELECT @nTempCartonNo = ISNULL(CartonNo, 0)
+         FROM PACKINFO (NOLOCK)
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonStatus IN('INPROGRESS', 'HOLD')
+         AND CartonType <> ''
+         AND Qty = 0
+         AND [Weight] = 0
+         AND [Cube] = 0
+         
+         IF @nTempCartonNo > 0
+         BEGIN
+            DELETE FROM PACKINFO
+            WHERE PickSlipNo = @cPickSlipNo
+            AND CartonNo = @nTempCartonNo
+         END
+      END
+   END
+
    SET @c_ResponseString = ISNULL ((SELECT CAST(@b_Success AS BIT)   AS Success 
                                          , @bPrintPaperFlag          AS bPrintPaperFlag
                                          , @bPrintLabelFlag          AS bPrintLabelFlag
@@ -344,3 +406,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_UpdatePackInfo] TO NSQL
+GO

@@ -132,8 +132,8 @@ BEGIN
          END
       END
    END
+   Quit:
 END
-QUIT:
 GO
 SET QUOTED_IDENTIFIER OFF
 GO

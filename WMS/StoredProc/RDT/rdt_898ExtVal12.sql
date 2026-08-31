@@ -91,7 +91,7 @@ BEGIN
    SET @cSQLFoot = '
                , N'''')
                BEGIN
-                  SET @nErrNo = 224701
+                  SET @nErrNo = 263901
                   SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, N''ENG'', N''DSP'') 
                END
                '
@@ -115,7 +115,7 @@ BEGIN
       BEGIN
          IF LEN(@cTOID) <> 10
          BEGIN
-            SET @nErrNo = 263901
+            SET @nErrNo = 263908
             SET @cErrMsg = [rdt].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP') 
             GOTO Quit
          END

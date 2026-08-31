@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.6                                                  */
+/* GitHub Version: 6.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -98,6 +98,9 @@ GO
 /* 11-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
 /* 10-Oct-2025 SSA05     5.7 UWP-42248 -Enhanced session management     */
 /* 20-Nov-2025 WLC015    5.8 UWP-44475 Performance Tune (WL19)          */
+/* 07-May-2026 WLC015    5.9 FCR-12782 Allow Cross Wave Task Linkage by */
+/*                           Taskdetailkey (WL20)                       */
+/* 18-Jun-2026 WLC015    6.0 FCR-13104 Carton Estimation fixing (WL21)  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -174,7 +177,7 @@ BEGIN
           ,@b_MDS_Flag                BIT = 0 --SWT03
           ,@c_LabelLine               NVARCHAR(10)   --WL07   
 		  	  ,@c_DefaultPackInfoFlag     NVARCHAR(1) = '0' --SWT08
-		  	  ,@b_InsertTask              BIT = 1           --SWT11
+		  	  ,@b_InsertTask              INT = 1           --SWT11   --WL20
 
    DECLARE @n_VAS_LineCount INT = 0,
            @n_VAS_QtyCanPack INT = 0,
@@ -211,7 +214,10 @@ BEGIN
          , @c_PickMethod_TD            NVARCHAR(10) = ''                            --(Wan01)          
          , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)  
          , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)
-         , @c_OrderType                NVARCHAR(10) = ''                            --WL16          
+         , @c_OrderType                NVARCHAR(10) = ''                            --WL16
+
+   DECLARE @c_AllowCrossWaveTaskLinking   NVARCHAR(10) = 'N'                        --WL20
+         , @c_PDSourceType                NVARCHAR(10) = 'N'                        --WL20
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -580,9 +586,15 @@ BEGIN
                               )
                                                                                                           
       SELECT @c_RLWAV_Opt5 = SC.Option5
-      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'WAVGENPACKFROMPICKED_SP') AS SC 
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS SC   --WL20
             
-      SELECT @c_CartonItemOptimize = dbo.fnc_GetParamValueFromString('@c_CartonItemOptimize', @c_RLWAV_Opt5, @c_CartonItemOptimize)        
+      SELECT @c_CartonItemOptimize = dbo.fnc_GetParamValueFromString('@c_CartonItemOptimize', @c_RLWAV_Opt5, @c_CartonItemOptimize)
+      --WL20 S
+      SELECT @c_AllowCrossWaveTaskLinking = dbo.fnc_GetParamValueFromString('@c_AllowCrossWaveTaskLinking', @c_RLWAV_Opt5, @c_AllowCrossWaveTaskLinking)
+
+      IF ISNULL(@c_AllowCrossWaveTaskLinking, '') = ''
+         SET @c_AllowCrossWaveTaskLinking = 'N' 
+      --WL20 E
 
       -- MPOC Order Group
       INSERT INTO #OrderGroup
@@ -3149,12 +3161,15 @@ BEGIN
             SET @n_TotalCube = 0
             SET @n_CartonMaxCube = 0
 
-            SELECT @n_TotalCube = (PD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN SKU.STDCUBE                             
-                              ELSE (SKU.Length * SKU.Width * SKU.Height) 
-                           END)
-            FROM  PICKDETAIL pd (NOLOCK)
-            JOIN SKU (NOLOCK) ON SKU.StorerKey = PD.Storerkey AND SKU.SKU = PD.SKU
-            WHERE pd.Orderkey = @c_OrderKey
+            --WL21 S
+            SELECT @n_TotalCube = SUM(pd.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 
+                                                    THEN SKU.STDCUBE
+                                                    ELSE (SKU.[Length] * SKU.Width * SKU.Height) 
+                                                    END)
+            FROM PICKDETAIL pd (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.StorerKey = pd.Storerkey AND SKU.Sku = pd.Sku
+            WHERE pd.OrderKey = @c_Orderkey
+            --WL21 E
 
             SELECT TOP 1 @n_CartonMaxCube = 
                      CASE WHEN ISNULL(CZ.Cube,0) = 0 
@@ -3503,6 +3518,25 @@ BEGIN
                      SET @b_InsertTask = 0
                   END
 
+                  --WL20 S
+                  IF @c_AllowCrossWaveTaskLinking = 'Y' AND @b_InsertTask = 1
+                  BEGIN
+                     SET @c_TaskdetailKey = ''
+                     SELECT @c_TaskdetailKey = MIN(TD.TaskdetailKey)
+                     FROM TASKDETAIL TD WITH (NOLOCK)
+                     WHERE TD.Storerkey = @c_Storerkey
+                     AND TD.TaskType = 'RPF'
+                     AND TD.Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
+                     AND TD.FromLoc = @c_FromLoc
+                     AND (TD.[Status] < '5' OR TD.[Status] = 'H')
+
+                     IF @c_TaskdetailKey > ''
+                     BEGIN
+                        SET @b_InsertTask = 2
+                     END
+                  END
+                  --WL20 E
+
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
                   WHERE UCC.Storerkey = @c_Storerkey
@@ -3607,27 +3641,61 @@ BEGIN
                   END
                END
 
-               IF @n_Continue IN (1, 2) AND @b_InsertTask = 1   --WL12 
+               IF @n_Continue IN (1, 2) AND @b_InsertTask IN (1, 2)   --WL12   --WL20 
                BEGIN
                   DECLARE CUR_UDPATEPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-                  SELECT P.PickDetailKey
+                  SELECT PickDetailKey = P.PickDetailKey, PDSourceType = '1'
                   FROM #PickDetail_WIP P
                   WHERE P.UOM = @c_UOM
                   AND   P.PickMethod = @c_PickMethod
-                  AND   p.Lot = @c_Lot
-                  AND   p.Loc = @c_FromLoc
-                  AND   p.ID  = @c_ID
-                  AND   p.DropID  = @c_DropID
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID = @c_DropID
+                  --WL20 S
+                  UNION
+                  SELECT PickDetailKey = P.PickDetailKey, PDSourceType = '2'
+                  FROM dbo.PICKDETAIL P WITH (NOLOCK)
+                  WHERE P.UOM = @c_UOM
+                  AND   P.PickMethod = @c_PickMethod
+                  AND   P.Lot = @c_Lot
+                  AND   P.Loc = @c_FromLoc
+                  AND   P.ID  = @c_ID
+                  AND   P.DropID = @c_DropID
+                  AND   P.[Status] < '5'
+                  AND   P.Storerkey = @c_Storerkey
+                  AND   P.SKU = @c_SKU
+                  AND   @c_AllowCrossWaveTaskLinking = 'Y'
+                  AND   (P.TaskDetailKey IS NULL OR P.TaskDetailKey = '')
+                  AND   NOT EXISTS ( SELECT 1
+                                     FROM #PickDetail_WIP pw
+                                     WHERE pw.PickDetailKey = P.PickDetailKey )
+                  ORDER BY PDSourceType, PickDetailKey
+                  --WL20 E
 
                   OPEN CUR_UDPATEPD
 
-                  FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey
+                  FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL20
          
                   WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
                   BEGIN
-                     UPDATE #PickDetail_WIP  
-                        SET TaskDetailKey=@c_TaskDetailKey 
-                     WHERE PickDetailKey=@c_PickDetailKey
+                     --WL20 S
+                     IF @c_PDSourceType = '1'
+                     BEGIN
+                        UPDATE #PickDetail_WIP  
+                        SET TaskDetailKey = @c_TaskDetailKey 
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     ELSE IF @c_PDSourceType = '2'
+                     BEGIN
+                        UPDATE PickDetail
+                        SET TaskDetailKey = @c_TaskDetailKey
+                          , TrafficCop = NULL
+                          , EditDate = dbo.fnc_GetDate()
+                          , EditWho = dbo.fnc_GetUserName()
+                        WHERE PickDetailKey = @c_PickDetailKey
+                     END
+                     --WL20 E
 
                      -- (SWT999) Only update temp table.
                      --UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
@@ -3643,7 +3711,7 @@ BEGIN
                         SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating PickDetail Failed (mspRLWAV03)'  
                                        + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
                      END
-                     FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey
+                     FETCH NEXT FROM CUR_UDPATEPD INTO @c_PickDetailKey, @c_PDSourceType   --WL20
                   END
                   CLOSE CUR_UDPATEPD
                   DEALLOCATE CUR_UDPATEPD

@@ -24,7 +24,7 @@ EXECUTE rdt.rdtAddMsg 255619, 10, '255619 InsKDtlFail',                       'u
 EXECUTE rdt.rdtAddMsg 255620, 10, '255620 InsKDtlFail',                       'us_english', 839, 0, '255620 Insert @tPickDetail failed'
 EXECUTE rdt.rdtAddMsg 255621, 10, '255621 GenKeyFail',                        'us_english', 839, 0, '255621 Generate key failed'
 EXECUTE rdt.rdtAddMsg 255622, 10, '255622 UpdPKDtlFail',                      'us_english', 839, 0, '255622 Update pickdetail failed'
-EXECUTE rdt.rdtAddMsg 255623, 10, '255623 NoPKDFound',                        'us_english', 839, 0, '255623 No proper pickdetail failed'
+EXECUTE rdt.rdtAddMsg 255623, 10, '255623 NoPKDFound',                        'us_english', 839, 0, '255623 No proper pickdetail found'
 EXECUTE rdt.rdtAddMsg 255624, 10, '255624 DelPKDtlFail',                      'us_english', 839, 0, '255624 Delete pickdetail failed'
 EXECUTE rdt.rdtAddMsg 255625, 10, '255625 DelPKDtlFail',                      'us_english', 839, 0, '255625 Delete pickdetail failed'
 EXECUTE rdt.rdtAddMsg 255626, 10, '255626 UptPKDFail',                        'us_english', 839, 0, '255626 Update @tNewPickDetail failed'
@@ -45,8 +45,9 @@ EXECUTE rdt.rdtAddMsg 255640, 10, '255640 UpdPKDtlFail',                      'u
 EXECUTE rdt.rdtAddMsg 255641, 10, '255641 UpdPKDtlFail',                      'us_english', 839, 0, '255641 Update rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255642, 10, '255642 DelPKDtlFail',                      'us_english', 839, 0, '255642 Delete rdtPickLog failed'
 EXECUTE rdt.rdtAddMsg 255643, 10, '255643 UpdUCCtlFail',                      'us_english', 839, 0, '255643 Update UCC failed'
-EXECUTE rdt.rdtAddMsg 255644, 10, '255644 UpdSNFail',                         'us_english', 839, 0, '255643 Update SerialNo failed'
+EXECUTE rdt.rdtAddMsg 255644, 10, '255644 UpdSNFail',                         'us_english', 839, 0, '255644 Update SerialNo failed'
 EXECUTE rdt.rdtAddMsg 255645, 10, '255645 UpdMasterSNFail',                   'us_english', 839, 0, '255645 Update MasterSerialNo failed'
 EXECUTE rdt.rdtAddMsg 255646, 10, '255646 UpdUCCFail',                        'us_english', 839, 0, '255646 Update UCC failed'
+EXECUTE rdt.rdtAddMsg 255647, 10, '255647 InsKDtlFail',                       'us_english', 839, 0, '255647 Insert into @tPickedKeys failed'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 255601 AND 255650

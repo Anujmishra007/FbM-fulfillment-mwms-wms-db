@@ -46,7 +46,6 @@ DELETE rdt.RDTScn WHERE Scn = 4643 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4643, 'ENG'
    ,@cLine01 = ''
    ,@cLine02 = 'No more task in LOC'
-   ,@cLine03 = '%10d01'              -- FCR-10366
    ,@cLine04 = ''
    ,@cLine05 = 'Press ENTER or ESC'
    ,@cLine06 = 'to continue'

@@ -125,11 +125,24 @@ BEGIN
       SET @cPalletFinalZone = @cFinalPAZone
    END
 
-   -- Get next task using dynamic ORDER BY
-   DECLARE @curRPTask CURSOR
+   -- Get next task using dynamic ORDER BY with temp table
+   CREATE TABLE #TaskCandidates (
+      RowNum INT IDENTITY(1,1),
+      TaskDetailKey NVARCHAR(10),
+      TaskType NVARCHAR(10),
+      FromLOC NVARCHAR(10),
+      FromID NVARCHAR(18),
+      StorerKey NVARCHAR(10),
+      SKU NVARCHAR(20),
+      LOT NVARCHAR(10),
+      QTY INT,
+      ToLOC NVARCHAR(10),
+      ToID NVARCHAR(18)
+   )
+
    IF @cAreaKey = '' OR @cAreaKey = 'ALL'
       SET @cSQL = '
-         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         INSERT INTO #TaskCandidates (TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID)
          SELECT TOP 1
             TaskDetail.TaskDetailKey, TaskDetail.TaskType, TaskDetail.FromLOC, TaskDetail.FromID
             , TaskDetail.StorerKey, TaskDetail.SKU, TaskDetail.LOT, TaskDetail.QTY, TaskDetail.ToLOC, TaskDetail.ToID
@@ -157,7 +170,7 @@ BEGIN
          ORDER BY ' + @cOrderBy
    ELSE
       SET @cSQL = '
-         SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         INSERT INTO #TaskCandidates (TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID)
          SELECT TOP 1
             TaskDetail.TaskDetailKey, TaskDetail.TaskType, TaskDetail.FromLOC, TaskDetail.FromID
             , TaskDetail.StorerKey, TaskDetail.SKU, TaskDetail.LOT, TaskDetail.QTY, TaskDetail.ToLOC, TaskDetail.ToID
@@ -185,7 +198,14 @@ BEGIN
                      AND TST.USERID = ''' + @cUserName + ''')
          ORDER BY ' + @cOrderBy
 
-   EXEC sp_executesql @cSQL, N'@curRPTask CURSOR OUTPUT', @curRPTask = @curRPTask OUTPUT
+   EXEC sp_executesql @cSQL
+
+   -- Iterate through candidates using cursor on temp table
+   DECLARE @curRPTask CURSOR
+   SET @curRPTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT TaskDetailKey, TaskType, FromLOC, FromID, StorerKey, SKU, LOT, QTY, ToLOC, ToID
+      FROM #TaskCandidates
+      ORDER BY RowNum
 
    OPEN @curRPTask
    WHILE (1=1)
@@ -275,6 +295,7 @@ BEGIN
 
    CLOSE @curRPTask
    DEALLOCATE @curRPTask
+   DROP TABLE #TaskCandidates
 
    IF @cNewTaskKey = ''
    BEGIN

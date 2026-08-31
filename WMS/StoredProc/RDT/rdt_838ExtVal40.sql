@@ -1,14 +1,20 @@
-/************************************************************************/
-/* Store procedure: rdt_838ExtVal40                                     */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Customer      : ONBR                                                 */
-/*                                                                      */
-/* Date       Rev  Author  Purposes                                     */
-/* 2026-04-13 1.0  JCH507  Created - Validate B2B Order Type only       */
-/************************************************************************/
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/**********************************************************************************/
+/* Store procedure: rdt_838ExtVal40                                               */
+/* Copyright      : Maersk                                                        */
+/*                                                                                */
+/* Customer      : ONBR                                                         */
+/*                                                                                */
+/* Date       Rev  Author  Purposes                                               */
+/* 2026-04-13 1.0  JCH507  Created - Validate B2B Order Type only               */
+/* 2026-07-28 1.1  NYE018  FCR-13548 B2C Multi UoM6: only option 2              */
+/* 2026-08-26 1.2  PSJ036  UWP-65157 / RITM9083894 Validate Exists rdtPTLPieceLog */
+/**********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_838ExtVal40] (
+CREATE OR ALTER   PROC [RDT].[rdt_838ExtVal40] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -51,7 +57,25 @@ BEGIN
 
    IF @nFunc = 838 -- Pack
    BEGIN
-      IF @nStep = 2 -- Statistic screen
+      IF @nStep IN (1, 2, 99) -- PTL Not Unassigned  PSJ036 Start
+      BEGIN
+       IF ISNULL(@cPickSlipNo, '' ) <> ''
+       BEGIN
+         IF EXISTS (SELECT 1 
+                  FROM RDT.rdtPTLPieceLog RPP WITH(NOLOCK) 
+                  INNER JOIN dbo.PICKHEADER PH WITH(NOLOCK) 
+                     ON RPP.WaveKey = PH.WaveKey 
+                  WHERE PH.PickHeaderKey = @cPickSlipNo
+                     AND PH.StorerKey = @cStorerKey)
+         BEGIN
+            SET @nErrNo = 263953
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PTL Not Unassigned
+            GOTO Quit
+         END
+       END
+     END -- PSJ036 END
+     
+     IF @nStep = 2 -- Statistic screen
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
@@ -66,6 +90,25 @@ BEGIN
                   GOTO Quit 
                END
             END
+
+            -- FCR-13548: B2C-Multi validation - only option 2 allowed
+            IF EXISTS (
+               SELECT 1
+               FROM dbo.PickHeader PH WITH (NOLOCK)
+               INNER JOIN dbo.Orders O WITH (NOLOCK) ON PH.OrderKey = O.OrderKey
+               WHERE PH.PickHeaderKey = @cPickSlipNo
+                  AND O.StorerKey = @cStorerKey
+                  AND O.DocType = 'E'
+                  AND O.ECOM_SINGLE_Flag = 'M'
+            )
+            BEGIN
+               IF @cOption <> '2'
+               BEGIN
+                  SET @nErrNo = 263952
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Only option 2 allowed
+                  GOTO Quit
+               END
+            END
          END
       END
    END
@@ -74,9 +117,11 @@ Quit:
 
 END
 
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdt_838ExtVal40 TO NSQL
-GO
+
+GRANT EXECUTE ON [RDT].[rdt_838ExtVal40] TO [NSQL]
+GO 

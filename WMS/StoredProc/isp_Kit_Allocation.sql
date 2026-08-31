@@ -14,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.6                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -31,7 +31,7 @@ GO
 /* 16-Apr-2025  Ansuman01 1.3 UWP-30689 Pallet Allocation for KIT       */
 /* 23-Apr-2025  Ansuman02 1.4 UWP-33237 PalletType addition             */
 /* 06-May-2025  Ansuman03 1.5 UWP-30689 Partial Pallet Allocation       */
-/* 28-Apr-2026  Preetham1 1.6 FCR-11186 Bypass Pallet Type              */
+/* 25-May-2026  Preetham1 1.6 FCR-11186 Bypass Pallet Type              */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation
 @c_KitKey              NVARCHAR(10)
@@ -96,6 +96,8 @@ BEGIN
         , @n_Otherunit1               INT
         , @n_Otherunit2               INT
         , @n_PackQty                  INT
+        , @c_BypassNullPalletType VARCHAR(1) = 'N'   --Preetham1
+
 
     DECLARE @n_SeqNo                    INT
         , @n_CursorCandidates_Open    INT
@@ -194,6 +196,12 @@ BEGIN
     SELECT @c_ExpectedQtyFlag = dbo.fnc_GetParamValueFromString('@c_ExpectedQtyFlag', @c_Option5, @c_ExpectedQtyFlag)
     SELECT @c_UpdateUsedQty = dbo.fnc_GetParamValueFromString('@c_UpdateUsedQty', @c_Option5, @c_UpdateUsedQty)
     SELECT @c_UpdateExpectedQty = dbo.fnc_GetParamValueFromString('@c_UpdateExpectedQty', @c_Option5, @c_UpdateExpectedQty)  --NJOW02
+                                                            --Preetham1(Start)
+    SELECT @c_BypassNullPalletType = ISNULL(SValue, 'N')
+    FROM STORERCONFIG WITH (NOLOCK)
+    WHERE StorerKey = @c_aStorerKey
+      AND ConfigKey = 'BypassNullPltTypeKitAllocate'
+                                                            --Preetham1(end)
 
     --NJOW01 E
 
@@ -1166,24 +1174,14 @@ BEGIN
                        ELSE IF @c_aUOM = '2' AND @n_Qty % @n_PackQty = 0
                           SET @c_UOM = @c_CaseUOM
                     END*/
-                                                                                             --Preetham1(start)
-                    DECLARE @c_BypassNullPalletType VARCHAR(1) = 'N'
-                    SELECT @c_BypassNullPalletType = ISNULL(SValue, 'N')
-                    FROM STORERCONFIG WITH (NOLOCK)
-                    WHERE StorerKey = @c_aStorerKey
-                    AND ConfigKey = 'BypassNullPltTypeKitAllocate'
 
-                    IF @c_BypassNullPalletType = 'Y' AND @c_PalletType IS NULL
-                    BEGIN
-                          SET @c_PalletType = ''
-                    END
-                                                                                             --Preetham1(end)
                     UPDATE KITDETAIL WITH (ROWLOCK)
                     SET Id = @c_ID,
                         Loc = @c_Loc,
                         Lot = @c_Lot,
                         UOM = @c_UOM,
-                        PalletType = @c_PalletType, --Ansuman02
+              --        PalletType = @c_PalletType, --Ansuman02
+                        PalletType = CASE WHEN @c_PalletType IS NULL AND @c_BypassNullPalletType = 'Y' THEN '' ELSE @c_PalletType END, --Preetham1
                         TrafficCop = NULL
                     WHERE kitkey = @c_aKitkey
                       AND KitLineNumber = @c_KitLineNumber
@@ -1296,7 +1294,8 @@ BEGIN
                         KITDETAIL.Lottable15,
                         KITDETAIL.Channel,
                         KITDETAIL.Channel_ID,
-                        KITDETAIL.PalletType --Ansuman02
+                      --KITDETAIL.PalletType --Ansuman02
+                        CASE WHEN KITDETAIL.PalletType IS NULL AND @c_BypassNullPalletType = 'Y' THEN '' ELSE KITDETAIL.PalletType END  --Preetham1
                     FROM KITDETAIL (NOLOCK)
                     WHERE KITDETAIL.kitkey = @c_aKitkey
                       AND KITDETAIL.KitLineNumber = @c_KitLineNumber
@@ -1331,7 +1330,8 @@ BEGIN
                         Loc = @c_Loc,
                         Lot = @c_Lot,
                         UOM = @c_UOM,
-                        PalletType = @c_PalletType, --Ansuman02
+                        --PalletType = @c_PalletType, --Ansuman02
+                        PalletType = CASE WHEN @c_PalletType IS NULL AND @c_BypassNullPalletType = 'Y' THEN '' ELSE @c_PalletType END, --Preetham1
                         TrafficCop = NULL
                     WHERE KitKey = @c_aKitkey
                       AND KitLineNumber = @c_KitLineNumber

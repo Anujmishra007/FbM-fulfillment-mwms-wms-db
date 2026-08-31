@@ -24,6 +24,7 @@ GO
 /*                            assign cart id to the available groupkey     */
 /*                            Allow different UOM qty input (james04)      */
 /* 2026-04-10   1.6  Dennis   Check status='5' task go to ToLoc screen     */
+/* 2026-06-09   1.7  NYE018   UWP-58460 Check Infield01 in Step_Option     */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_ClusterPick](  
@@ -2047,7 +2048,7 @@ BEGIN
       SET @cOption = @cInField01            
             
       -- Validate blank            
-      IF @cOption = ''            
+      IF @cInField01 = ''            
       BEGIN            
          SET @nErrNo = 148914            
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option required            
@@ -2055,7 +2056,7 @@ BEGIN
       END            
             
       -- Validate option            
-      IF @cOption NOT IN ( '1', '2')--AND @cOption <> '2' AND @cOption <> '3'   
+      IF @cInField01 NOT IN ( '1', '2')--AND @cOption <> '2' AND @cOption <> '3'   
       BEGIN            
          SET @nErrNo = 148915            
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option            

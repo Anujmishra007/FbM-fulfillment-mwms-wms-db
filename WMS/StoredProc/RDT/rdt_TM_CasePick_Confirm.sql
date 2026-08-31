@@ -179,8 +179,8 @@ BEGIN
          SET @nNewTaskQTY = @nSystemQTY - @nQTY
       END
 
-IF @nDebug = 1
-   SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
+      IF @nDebug = 1
+         SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
 
       IF @nNewTaskQTY > 0
       BEGIN
@@ -352,8 +352,8 @@ IF @nDebug = 1
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
       END
 
-IF @nDebug = 1
-   SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
+      IF @nDebug = 1
+         SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
 
       -- Must fully offset
       IF @nOrgTaskQty <> 0 OR @nNewTaskQty <> 0 OR @nShortQTY <> 0
@@ -464,12 +464,12 @@ IF @nDebug = 1
       END
    END
 
-IF @nDebug = 1
-begin
-   select * from taskdetail (NOLOCK) where @cTaskDetailKey in (taskdetailkey, RefTaskKey)
-   select * from pickdetail (NOLOCK) where taskdetailkey = @ctaskdetailkey or (taskdetailkey = @cNewTaskDetailKey and @cNewTaskDetailKey <> '')
-   GOTO RollBackTran
-end
+   IF @nDebug = 1
+   BEGIN
+      select * from taskdetail (NOLOCK) where @cTaskDetailKey in (taskdetailkey, RefTaskKey)
+      select * from pickdetail (NOLOCK) where taskdetailkey = @ctaskdetailkey or (taskdetailkey = @cNewTaskDetailKey and @cNewTaskDetailKey <> '')
+      GOTO RollBackTran
+   END
 
    COMMIT TRAN rdt_TM_CasePick_Confirm -- Only commit change made here
    GOTO Quit

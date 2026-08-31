@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 2024-06-28  1.0  CYU027    UWP-20470 Created                         */
+/* 2026-03-29  1.1  Cuize     FCR-11254. Function id remove              */
 /************************************************************************/
 
 CREATE PROCEDURE rdt.rdt_SSCCGen
@@ -33,8 +34,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   IF @nFunc IN (600,830,838,1770,1812)
-   BEGIN
+--    IF @nFunc IN (600,830,838,1770,1812)
+--    BEGIN
       DECLARE   @cStorerKey        NVARCHAR(15)
                ,@nCounterKey       NVARCHAR(18)
                ,@cNCounter         NVARCHAR(9)
@@ -154,7 +155,7 @@ BEGIN
 
 
       SET @cAutoID = @nCompanyPrefix + @nSerialRef + @nCheckDigit
-   END
+--    END
    
 
 

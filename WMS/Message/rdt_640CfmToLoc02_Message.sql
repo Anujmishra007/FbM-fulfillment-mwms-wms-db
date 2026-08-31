@@ -1,0 +1,5 @@
+--rdt_640CfmToLoc02
+--FCR-14211
+EXECUTE rdt.rdtdropmsg 277601, 277650
+EXECUTE rdt.rdtAddMsg 277601, 10, '277601 ConfirmFail', 'us_english', 640, 0, '277601 Confirm Fail'
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 277601 AND 277650

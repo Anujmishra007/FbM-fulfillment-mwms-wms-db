@@ -586,9 +586,21 @@ BEGIN
                   AND TD2.STATUS = '3'
                   AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID
                   AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP')
-                  OR TD.UserKey = @c_UserID
-                  OR TD.UserKeyOverRide = @c_UserID
+                  OR (
+                     TD.UserKey = @c_UserID
+                     AND (
+                        ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+                        OR TD.PickMethod = 'PP'
+                     )
                   )
+                  OR (
+                     TD.UserKeyOverRide = @c_UserID
+                     AND (
+                        ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+                        OR TD.PickMethod = 'PP'
+                     )
+				  )
+               )
                OR TD.AREAKEY <> 'MOTHERSONS')
       END TRY
       BEGIN CATCH
@@ -643,16 +655,28 @@ BEGIN
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
                            AND (LOC.LocationCategory <> 'PND_OUT' OR LOC1.LocationCategory = 'VNA')
                      ) --V1.0.1(1)
-         AND ((NOT EXISTS (SELECT 1 FROM TaskDetail TD2 WITH (NOLOCK)
+            AND ((NOT EXISTS (SELECT 1 FROM TaskDetail TD2 WITH (NOLOCK)
                WHERE TD2.StorerKey = TD.StorerKey
                   AND TD2.AreaKey = TD.AreaKey
                   AND TD2.FromLoc = TD.FromLOC
                   AND TD2.STATUS = '3'
                   AND TD2.UserKey <> @c_UserID AND TD2.UserKeyOverRide <> @c_UserID
                   AND TD2.TaskType IN ('RPF','RP1')) AND TD.AreaKey = 'MOTHERSONS' AND (ISNULL(@c_TTMPickCode,'') <> 'REPLEN' OR TD.PickMethod = 'PP')
-                  OR TD.UserKey = @c_UserID
-                  OR TD.UserKeyOverRide = @c_UserID
+                  OR (
+                     TD.UserKey = @c_UserID
+                     AND (
+                        ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+                        OR TD.PickMethod = 'PP'
+                     )
                   )
+                  OR (
+                     TD.UserKeyOverRide = @c_UserID
+                     AND (
+                        ISNULL(@c_TTMPickCode,'') <> 'REPLEN'
+                        OR TD.PickMethod = 'PP'
+                     )
+				  )
+               )
                OR TD.AREAKEY <> 'MOTHERSONS')
       END TRY
       BEGIN CATCH

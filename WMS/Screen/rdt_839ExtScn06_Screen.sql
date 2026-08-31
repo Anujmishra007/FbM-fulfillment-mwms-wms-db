@@ -16,10 +16,10 @@ EXECUTE rdt.rdtAddScn 6774, 'ENG'
    ,@cLine04 = '%20d04'
    ,@cLine05 = 'SKU/UPC:'
    ,@cLine06 = '%2000iV_Barcode'
-   ,@cLine07 = '%20d08'    -- Lottablenn
-   ,@cLine08 = '%20d09'    -- Lottablenn
-   ,@cLine09 = '%20d10'    -- Lottablenn
-   ,@cLine10 = '%20d11'    -- Lottablenn
+   ,@cLine07 = '%20d08'    -- Lottable
+   ,@cLine08 = '%20d09'    -- Lottable
+   ,@cLine09 = '%20d10'    -- Lottable
+   ,@cLine10 = '%20d11'    -- Lottable
    ,@cLine11 = 'PICK: %05i07 ACT: %06d06'
    ,@cLine12 = 'BAL QTY: %12d13'
    ,@cLine13 = '%20d12'

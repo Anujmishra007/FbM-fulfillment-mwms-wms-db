@@ -31,6 +31,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument04] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @bIsAutoPrint         BIT               = 0
    , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
@@ -857,3 +858,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_PrintDocument04] TO NSQL
+GO

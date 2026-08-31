@@ -54,14 +54,22 @@ DECLARE
    @nTranCount       INT,
    -- Step 4 variables
    @nQTYExp          INT,            -- QTY Expected = ParentSKUQty * BOMQTY
+   @cRoundLineNumbers NVARCHAR(MAX), -- Comma-separated KITLineNumbers for current round (for FEFO filter)
    @nParentSKUQty    INT,            -- Parent SKU qty from Step 3
    @nChildSKUIndex   INT,            -- Current child SKU index (1st, 2nd, etc.)
    @cExpectedChildSKU NVARCHAR(20),  -- Expected Child SKU from BOM/KITDETAIL
-   @nBOMParentQty    INT,            -- BILLOFMATERIAL.ParentQTY
    @cDYNBOM          NVARCHAR(1),    -- DYNBOM config flag
    @cLottableCode    NVARCHAR(20),   -- SKU.LottableCode
    @nTotalChildSKU   INT,            -- Total number of child SKUs
    @nChildSKUQty     INT,            -- Child SKU qty to update
+   @cKitLineNumber   NVARCHAR(5),    -- Current KITLineNumber for loop
+   @nKitExpectedQty  INT,            -- Current KITDETAIL ExpectedQty
+   @nKitQty          INT,            -- Current KITDETAIL Qty
+   @nQtyRemaining    INT,            -- Remaining qty to distribute
+   @nQtyToUpdate     INT,            -- Qty to update for current line
+   @nLoopID          INT,            -- Loop index for table variable
+   @cBOMUDF01        NVARCHAR(30),   -- BILLOFMATERIAL.UDF01
+   @nScannedQty      INT,            -- Step 6: Scanned qty counter (increments by 1 per scan)
    -- Step 5 Lottable variables
    @cLottable01      NVARCHAR(18),
    @cLottable02      NVARCHAR(18),
@@ -80,7 +88,29 @@ DECLARE
    @dLottable15      DATETIME,
    @nMorePage        INT,
    @bLottableMatch   BIT,            -- Flag to indicate if scanned lottables match KITDETAIL
-   @nKitDetailLineNo INT,            -- KITLineNumber for new entry
+   @cKitDetailLineNo NVARCHAR(5),    -- KITLineNumber for new entry (formatted as 00001)
+   @nSKUTotalQty     INT,            -- Total QTY for current SKU (sum of all lottable combinations)
+   @nSKUTotalExpectedQty INT,        -- Total ExpectedQty for current SKU
+   @nFuncForLottable INT,            -- Function ID for lottable code lookup
+   @dMinExpiryDate   DATETIME,       -- Minimum expiry date among child SKUs
+   @bNeedLottable    INT,            -- Flag to indicate if lottable screen is needed
+   -- Parent SKU Lottable values from FEFO child (Step 6 piece scan)
+   @cParentLottable01 NVARCHAR(18),
+   @cParentLottable02 NVARCHAR(18),
+   @cParentLottable03 NVARCHAR(18),
+   @dParentLottable04 DATETIME,
+   @dParentLottable05 DATETIME,
+   @cParentLottable06 NVARCHAR(30),
+   @cParentLottable07 NVARCHAR(30),
+   @cParentLottable08 NVARCHAR(30),
+   @cParentLottable09 NVARCHAR(30),
+   @cParentLottable10 NVARCHAR(30),
+   @cParentLottable11 NVARCHAR(30),
+   @cParentLottable12 NVARCHAR(30),
+   @dParentLottable13 DATETIME,
+   @dParentLottable14 DATETIME,
+   @dParentLottable15 DATETIME,
+   @cParentPackKey    NVARCHAR(20),
    -- Field attributes for dynamic lottable screen
    @cFieldAttr01     NVARCHAR(5),
    @cFieldAttr02     NVARCHAR(5),
@@ -138,6 +168,13 @@ DECLARE
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),
    @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60)
 
+DECLARE @tKitDetail TABLE (
+   ID INT IDENTITY(1,1) PRIMARY KEY,
+   KITLineNumber NVARCHAR(5),
+   ExpectedQty INT,
+   Qty INT
+)
+
 -- Load RDT.RDTMobRec
 SELECT
    @nFunc               = Func,
@@ -175,6 +212,10 @@ SELECT
    @nQTYExp             = ISNULL(TRY_CAST(NULLIF(V_String19, '') AS INT), 0),
    @nBOMQty             = ISNULL(TRY_CAST(NULLIF(V_String20, '') AS INT), 0),
    @nChildSKUQty        = ISNULL(TRY_CAST(NULLIF(V_String21, '') AS INT), 0),
+   @cBOMUDF01           = V_String22,
+   @nScannedQty         = ISNULL(TRY_CAST(NULLIF(V_String23, '') AS INT), 0),
+   @nExpectedQty        = ISNULL(V_Integer2, 0),
+   @cRoundLineNumbers   = ISNULL(V_Max, ''),
    @cLottable01         = V_Lottable01,
    @cLottable02         = V_Lottable02,
    @cLottable03         = V_Lottable03,
@@ -218,7 +259,8 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 6881. To LOC / To ID
    IF @nStep = 3 GOTO Step_3   -- Scn = 6882. Parent SKU / QTY
    IF @nStep = 4 GOTO Step_4   -- Scn = 6883. Child SKU
-   IF @nStep = 5 GOTO Step_5   -- Scn = 3490. Dynamic Lottables
+   IF @nStep = 5 GOTO Step_5   -- Scn = 3990. Dynamic Lottables
+   IF @nStep = 6 GOTO Step_6   -- Scn = 6884. Child SKU Single Scan (QTY=1, no edit)
 END
 RETURN -- Do nothing if incorrect step
 
@@ -269,10 +311,12 @@ BEGIN
    IF @cConvertQTYSP = '0'
       SET @cConvertQTYSP = ''
 
-   -- Get DYNBOM flag from config (if Y, use KITDETAIL instead of BILLOFMATERIAL)
+   -- Get DYNBOM flag from config (if 1 or Y, use KITDETAIL instead of BILLOFMATERIAL)
    SET @cDYNBOM = rdt.RDTGetConfig( @nFunc, 'DYNBOM', @cStorerKey)
-   IF @cDYNBOM = '0' OR @cDYNBOM = ''
-      SET @cDYNBOM = 'N'
+   IF @cDYNBOM IN ('1', 'Y')
+      SET @cDYNBOM = '1'
+   ELSE
+      SET @cDYNBOM = '0'
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -394,9 +438,13 @@ BEGIN
       -- Prep next screen var
       SET @cOutField01 = '' -- To LOC
       SET @cOutField02 = '' -- To ID
+      SET @cRoundLineNumbers = ''  -- Reset FEFO filter for new Kit
 
       IF @cDefaultToLoc <> ''
+      BEGIN
          SET @cOutField01 = @cDefaultToLoc
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- Focus on To ID
+      END
 
       -- Go to next To LOC/ID screen
       SET @nScn = 6881
@@ -506,16 +554,12 @@ BEGIN
          GOTO Step_2_Fail
       END
 
-      -- TO ID is optional, but if scanned, validate RDT Format
-      IF @cToID <> '' AND @cToID IS NOT NULL
+      IF RDT.rdtIsValidFormat(@nFunc, @cStorerKey, 'TOID', @cToID) = 0
       BEGIN
-         IF RDT.rdtIsValidFormat(@nFunc, @cStorerKey, 'TOID', @cToID) = 0
-         BEGIN
-            SET @nErrNo = 263814
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID format
-            EXEC rdt.rdtSetFocusField @nMobile, 2
-            GOTO Step_2_Fail
-         END
+         SET @nErrNo = 263814
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID format
+         EXEC rdt.rdtSetFocusField @nMobile, 2
+         GOTO Step_2_Fail
       END
 
       -- Extended validate
@@ -584,6 +628,7 @@ BEGIN
          END
       END
 
+      EXEC rdt.rdtSetFocusField @nMobile, 1
       -- Prep next screen var
       SET @cOutField01 = '' -- Parent SKU
       SET @cOutField02 = '' -- QTY
@@ -647,6 +692,11 @@ BEGIN
       SET @cToID = ''
       SET @cOutField01 = '' -- To LOC
       SET @cOutField02 = '' -- To ID
+      IF @cDefaultToLoc <> ''
+      BEGIN
+         SET @cOutField01 = @cDefaultToLoc
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- Focus on To ID
+      END
    END
 END
 GOTO Quit
@@ -741,11 +791,12 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      -- Get ExpectedQty and current Qty from KITDETAIL
+      -- Get ExpectedQty (SUM) and Qty (SUM) from KITDETAIL
+      -- Use SUM for ExpectedQty to handle multiple Parent rows with different Lottables
       SET @nExpectedQty = 0
       SET @nKitDetailQty = 0
-      SELECT @nExpectedQty = ISNULL(ExpectedQty, 0),
-             @nKitDetailQty = ISNULL(Qty, 0)
+      SELECT @nExpectedQty = SUM(ISNULL(ExpectedQty, 0)),
+             @nKitDetailQty = SUM(ISNULL(Qty, 0))
       FROM dbo.KITDETAIL WITH (NOLOCK)
       WHERE KITKey = @cKitKey
       AND   SKU = @cParentSKU
@@ -797,15 +848,23 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM(@cConvertQTYSP) +
-               ' @cParentSKU, @nQTY, @cStorerkey, @nConvertedQty OUTPUT'
+               ' @cStorerKey, @cSKU, @nConvertedQty OUTPUT'
             SET @cSQLParam =
-               '@cParentSKU      NVARCHAR( 20), ' +
-               '@nQTY            INT,           ' +
                '@cStorerKey      NVARCHAR( 15), ' +
+               '@cSKU            NVARCHAR( 20), ' +
                '@nConvertedQty   INT OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @cParentSKU, @nQTY, @cStorerkey, @nConvertedQty OUTPUT
+               @cStorerkey, @cParentSKU, @nConvertedQty OUTPUT
+
+            -- Check if conversion failed
+            IF @nConvertedQty = -1
+            BEGIN
+               SET @nErrNo = 263807
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
+               EXEC rdt.rdtSetFocusField @nMobile, 2
+               GOTO Step_3_Fail
+            END
          END
       END
 
@@ -894,22 +953,35 @@ BEGIN
       -- Get first Child SKU from BOM or KITDETAIL
       SET @cExpectedChildSKU = ''
       SET @nBOMQty = 0
-      SET @nBOMParentQty = 1
 
-      IF @cDYNBOM = 'Y'
+      IF @cDYNBOM = '1'
       BEGIN
-         -- DYNBOM mode: Get from KITDETAIL sorted by KITLineNumber
-         SELECT TOP 1
-            @cExpectedChildSKU = SKU,
-            @nBOMQty = ISNULL(TRY_CAST(Channel AS INT), 1)
-         FROM dbo.KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @cKitKey
-           AND StorerKey = @cStorerKey
-           AND [Type] = 'F'
-         ORDER BY KITLineNumber
+         -- DYNBOM mode: No BILLOFMATERIAL, so no UDF01
+         SET @cBOMUDF01 = ''
 
-         -- Get total child SKU count
-         SELECT @nTotalChildSKU = COUNT(*)
+         -- DYNBOM mode: Get first distinct SKU with SUM(ExpectedQty), BOMQty from Channel
+         -- Ensure BOMQty >= 1 to avoid divide-by-zero
+         ;WITH DistinctSKU AS (
+            SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   CASE WHEN COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) < 1 THEN 1
+                        ELSE COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) END AS BOMQty,
+                   ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND StorerKey = @cStorerKey
+              AND [Type] = 'F'
+            GROUP BY SKU
+         )
+         SELECT @cExpectedChildSKU = SKU,
+                @nBOMQty = BOMQty
+         FROM DistinctSKU
+         WHERE RowNum = 1
+
+         -- Calculate QTY Expected
+         SET @nQTYExp = @nParentSKUQty * @nBOMQty
+
+         -- Get total distinct child SKU count
+         SELECT @nTotalChildSKU = COUNT(DISTINCT SKU)
          FROM dbo.KITDETAIL WITH (NOLOCK)
          WHERE KITKey = @cKitKey
            AND StorerKey = @cStorerKey
@@ -918,16 +990,21 @@ BEGIN
       ELSE
       BEGIN
          -- Standard mode: Get from BILLOFMATERIAL sorted by SEQUENCE
+         -- Use multiply-first-then-divide for @nQTYExp to avoid integer division precision loss
+         -- Ensure ParentQTY >= 1 to avoid divide-by-zero
          SELECT TOP 1
             @cExpectedChildSKU = COMPONENTSKU,
-            @nBOMQty = CASE WHEN ISNULL(ParentQTY, 1) = 1 THEN QTY
-                            ELSE QTY / ParentQTY END,
-            @nBOMParentQty = ISNULL(ParentQTY, 1)
+            @nBOMQty = QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+            @nQTYExp = @nParentSKUQty * QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+            @cBOMUDF01 = ISNULL(UDF01, '')
          FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
          WHERE SKU = @cParentSKU
            AND StorerKey = @cStorerKey
            AND BOMONLY = 'Y'
          ORDER BY SEQUENCE
+
+         -- Ensure @nBOMQty >= 1 to avoid issues from integer division truncation
+         IF @nBOMQty < 1 SET @nBOMQty = 1
 
          -- Get total child SKU count
          SELECT @nTotalChildSKU = COUNT(*)
@@ -937,8 +1014,13 @@ BEGIN
            AND BOMONLY = 'Y'
       END
 
-      -- Calculate QTY Expected
-      SET @nQTYExp = @nParentSKUQty * @nBOMQty
+      -- Validate @nQTYExp is set when there is a child SKU to process
+      IF @cExpectedChildSKU <> '' AND @nQTYExp = 0
+      BEGIN
+         SET @nErrNo = 263822
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO Step_3_Fail
+      END
 
       -- Get Parent SKU description
       SET @cSKUDescr = ''
@@ -954,7 +1036,7 @@ BEGIN
       SET @cChildSKUDescr = ''
       IF @cExpectedChildSKU <> ''
       BEGIN
-         SELECT @cChildSKUDescr = ISNULL(DESCR, '')
+         SELECT @cChildSKUDescr = LEFT(ISNULL(DESCR, ''), 20)
          FROM dbo.SKU WITH (NOLOCK)
          WHERE SKU = @cExpectedChildSKU
            AND StorerKey = @cStorerKey
@@ -967,15 +1049,33 @@ BEGIN
       SET @cOutField04 = @cChildSKUDescr                              -- Child SKU Descr
       SET @cOutField05 = ''                                           -- Child SKU (input)
       SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))               -- QTY Exp
-      SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))               -- BOM QTY
-      SET @cOutField08 = ''                                           -- QTY (input)
 
-      -- Clear barcode before entering Step 4
+      -- Clear barcode before entering next Step
       SET @cBarcode = ''
 
-      -- Go to Child SKU screen
-      SET @nScn = 6883
-      SET @nStep = 4
+      -- Check if single scan mode is required (BOMUDF01 = 'Y')
+      IF @cBOMUDF01 = '1'
+      BEGIN
+         -- Go to Step 6 for single scan mode (QTY = 1 per scan, not editable)
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))            -- BOM QTY
+         SET @cOutField08 = '1'                                        -- QTY (fixed = 1)
+         SET @cOutField09 = '0'                                        -- Scanned QTY (starts at 0)
+         SET @cFieldAttr08 = 'O'                                       -- QTY not editable
+         SET @nScannedQty = 0                                          -- Reset scanned count
+         SET @cBarcode = ''
+         SET @nScn = 6884
+         SET @nStep = 6
+      END
+      ELSE
+      BEGIN
+         SET @cFieldAttr08 = ''                                       -- QTY editable
+         -- Go to Step 4 for normal mode
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))            -- BOM QTY
+         SET @cOutField08 = ''                                         -- QTY (input)
+         SET @cBarcode = ''
+         SET @nScn = 6883
+         SET @nStep = 4
+      END
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -1036,6 +1136,10 @@ BEGIN
       SET @nQTY = 0
       SET @cOutField01 = '' -- Parent SKU
       SET @cOutField02 = '' -- QTY
+      SET @cBarcode = ''
+      IF @cDefaultToQty <> ''
+         SET @cOutField02 = @cDefaultToQty
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
    END
 END
 GOTO Quit
@@ -1118,6 +1222,16 @@ BEGIN
          GOTO Step_4_Fail
       END
 
+      -- Validate Child SKU matches expected Child SKU
+      IF @cChildSKU <> @cExpectedChildSKU
+      BEGIN
+         SET @nErrNo = 263817
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU mismatch
+         SET @cBarcode = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_4_Fail
+      END
+
       -- Validate Child SKU exists in KITDETAIL (Type = 'F')
       IF NOT EXISTS (
          SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
@@ -1127,7 +1241,7 @@ BEGIN
            AND StorerKey = @cStorerKey
       )
       BEGIN
-         SET @nErrNo = 263817
+         SET @nErrNo = 263815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in Kit
          EXEC rdt.rdtSetFocusField @nMobile, 5
          GOTO Step_4_Fail
@@ -1161,15 +1275,23 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConvertQTYSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM(@cConvertQTYSP) +
-               ' @cChildSKU, @nQTY, @cStorerkey, @nConvertedQty OUTPUT'
+               ' @cStorerKey, @cSKU, @nConvertedQty OUTPUT'
             SET @cSQLParam =
-               '@cChildSKU       NVARCHAR( 20), ' +
-               '@nQTY            INT,           ' +
                '@cStorerKey      NVARCHAR( 15), ' +
+               '@cSKU            NVARCHAR( 20), ' +
                '@nConvertedQty   INT OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @cChildSKU, @nQTY, @cStorerkey, @nConvertedQty OUTPUT
+               @cStorerkey, @cChildSKU, @nConvertedQty OUTPUT
+
+            -- Check if conversion failed
+            IF @nConvertedQty = -1
+            BEGIN
+               SET @nErrNo = 263810
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
+               EXEC rdt.rdtSetFocusField @nMobile, 8
+               GOTO Step_4_Fail
+            END
          END
       END
       SET @nChildSKUQty = @nConvertedQty
@@ -1177,20 +1299,20 @@ BEGIN
       -- QTY validation based on Child SKU index
       IF @nChildSKUIndex = 1
       BEGIN
-         -- First child SKU: qty <= QTYExp and must be multiple of BOMQTY
-         IF @nChildSKUQty > @nQTYExp
-         BEGIN
-            SET @nErrNo = 263818
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY cannot exceed expected qty
-            EXEC rdt.rdtSetFocusField @nMobile, 8
-            GOTO Step_4_Fail
-         END
-
          -- Check if qty is multiple of BOMQTY
          IF @nBOMQty > 0 AND (@nChildSKUQty % @nBOMQty) <> 0
          BEGIN
             SET @nErrNo = 263810
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid QTY
+            EXEC rdt.rdtSetFocusField @nMobile, 8
+            GOTO Step_4_Fail
+         END
+
+         -- First child SKU: qty <= QTYExp and must be multiple of BOMQTY
+         IF @nChildSKUQty > @nQTYExp
+         BEGIN
+            SET @nErrNo = 263818
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY cannot exceed expected qty
             EXEC rdt.rdtSetFocusField @nMobile, 8
             GOTO Step_4_Fail
          END
@@ -1203,7 +1325,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         -- Subsequent child SKUs: qty must equal QTYExp
+         -- Subsequent child SKUs: qty must equal expected qty
          IF @nChildSKUQty <> @nQTYExp
          BEGIN
             SET @nErrNo = 263819
@@ -1283,6 +1405,23 @@ BEGIN
 
          IF @nMorePage = 1 -- Yes
          BEGIN
+            -- Clear lottable values before going to Step 5
+            SET @cLottable01 = ''
+            SET @cLottable02 = ''
+            SET @cLottable03 = ''
+            SET @dLottable04 = NULL
+            SET @dLottable05 = NULL
+            SET @cLottable06 = ''
+            SET @cLottable07 = ''
+            SET @cLottable08 = ''
+            SET @cLottable09 = ''
+            SET @cLottable10 = ''
+            SET @cLottable11 = ''
+            SET @cLottable12 = ''
+            SET @dLottable13 = NULL
+            SET @dLottable14 = NULL
+            SET @dLottable15 = NULL
+
             -- Go to dynamic lottable screen
             SET @nScn = 3990
             SET @nStep = 5
@@ -1295,25 +1434,239 @@ BEGIN
       BEGIN TRAN
       SAVE TRAN rdtfnc_KittingScan
 
-      -- Update KITDETAIL for Parent SKU (Type = 'T')
-      UPDATE dbo.KITDETAIL
-      SET LOC = @cToLoc,
-          ID = @cToID,
-          QTY = QTY + @nParentSKUQty
-      WHERE KITKey = @cKitKey
-        AND SKU = @cParentSKU
-        AND [Type] = 'T'
-        AND StorerKey = @cStorerKey
-
       -- Update KITDETAIL for Child SKU (Type = 'F')
-      UPDATE dbo.KITDETAIL
-      SET LOC = @cToLoc,
-          ID = @cToID,
-          QTY = QTY + @nChildSKUQty
+      -- Loop through each KITDETAIL line for this Child SKU and distribute qty based on ExpectedQty
+      SET @nQtyRemaining = @nChildSKUQty
+
+      DELETE FROM @tKitDetail
+
+      INSERT INTO @tKitDetail (KITLineNumber, ExpectedQty, Qty)
+      SELECT KITLineNumber, ISNULL(ExpectedQty, 0), ISNULL(Qty, 0)
+      FROM dbo.KITDETAIL WITH (NOLOCK)
       WHERE KITKey = @cKitKey
         AND SKU = @cChildSKU
         AND [Type] = 'F'
         AND StorerKey = @cStorerKey
+      ORDER BY KITLineNumber
+
+      SET @nLoopID = 0
+      WHILE @nQtyRemaining > 0
+      BEGIN
+         SELECT TOP 1
+            @nLoopID = ID,
+            @cKitLineNumber = KITLineNumber,
+            @nKitExpectedQty = ExpectedQty,
+            @nKitQty = Qty
+         FROM @tKitDetail
+         WHERE ID > @nLoopID
+         ORDER BY ID
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         -- Calculate how much qty this line still needs
+         SET @nQtyToUpdate = @nKitExpectedQty - @nKitQty
+         IF @nQtyToUpdate > @nQtyRemaining
+            SET @nQtyToUpdate = @nQtyRemaining
+
+         IF @nQtyToUpdate > 0
+         BEGIN
+            UPDATE dbo.KITDETAIL
+            SET QTY = QTY + @nQtyToUpdate
+            WHERE KITKey = @cKitKey
+              AND KITLineNumber = @cKitLineNumber
+              AND [Type] = 'F'
+              AND StorerKey = @cStorerKey
+
+            SET @nQtyRemaining = @nQtyRemaining - @nQtyToUpdate
+         END
+      END
+
+      -- Move to next Child SKU
+      SET @nChildSKUIndex = @nChildSKUIndex + 1
+
+      -- Get next Child SKU from BOM or KITDETAIL
+      SET @cExpectedChildSKU = ''
+      SET @nBOMQty = 0
+
+      IF @cDYNBOM = '1'
+      BEGIN
+         -- DYNBOM mode: Get next distinct SKU from KITDETAIL with SUM(ExpectedQty), BOMQty from Channel
+         -- Ensure BOMQty >= 1 to avoid divide-by-zero
+         ;WITH DistinctSKU AS (
+            SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   CASE WHEN COALESCE(MIN(TRY_CAST(NULLIF(Channel, '') AS INT)), 0) < 1 THEN 1
+                        ELSE COALESCE(MIN(TRY_CAST(NULLIF(Channel, '') AS INT)), 0) END AS BOMQty,
+                   ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND StorerKey = @cStorerKey
+              AND [Type] = 'F'
+            GROUP BY SKU
+         )
+         SELECT @cExpectedChildSKU = SKU,
+                @nBOMQty = BOMQty
+         FROM DistinctSKU
+         WHERE RowNum = @nChildSKUIndex
+
+         -- Calculate QTY Expected: multiply first then divide
+         SET @nQTYExp = @nParentSKUQty * @nBOMQty
+      END
+      ELSE
+      BEGIN
+         -- Standard mode: Get next from BILLOFMATERIAL
+         -- Use multiply-first-then-divide for @nQTYExp to avoid integer division precision loss
+         -- Ensure ParentQTY >= 1 to avoid divide-by-zero
+         SELECT
+            @cExpectedChildSKU = COMPONENTSKU,
+            @nBOMQty = QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+            @nQTYExp = @nParentSKUQty * QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END
+         FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
+         WHERE SKU = @cParentSKU
+           AND StorerKey = @cStorerKey
+           AND BOMONLY = 'Y'
+         ORDER BY SEQUENCE
+         OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
+
+         -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+         IF @nBOMQty < 1
+         BEGIN
+            SET @nBOMQty = 1
+            SET @nQTYExp = @nParentSKUQty * @nBOMQty
+         END
+      END
+
+      -- Validate @nQTYExp is set when there is a child SKU to process
+      IF @cExpectedChildSKU <> '' AND @nQTYExp = 0
+      BEGIN
+         ROLLBACK TRAN rdtfnc_KittingScan
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
+         SET @nErrNo = 263822
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO Step_4_Fail
+      END
+
+      SET @cBarcode = ''
+      -- Check if all Child SKUs scanned
+      IF @cExpectedChildSKU = ''
+      BEGIN
+         -- All child SKUs done, update or insert Parent SKU based on LOC/ID
+         -- Check if there's a parent row with matching LOC/ID AND has capacity
+         IF EXISTS (
+            SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+              AND (ISNULL(ID, '') = '' OR ID = @cToID)
+              AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+         )
+         BEGIN
+            -- Matching LOC/ID with capacity found, UPDATE that row
+            UPDATE TOP (1) dbo.KITDETAIL
+            SET LOC = @cToLoc,
+                ID = @cToID,
+                QTY = QTY + @nParentSKUQty
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+              AND (ISNULL(ID, '') = '' OR ID = @cToID)
+              AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+         END
+         ELSE IF EXISTS (
+            SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+              AND (ISNULL(ID, '') = '' OR ID = @cToID)
+         )
+         BEGIN
+            -- Matching LOC/ID found but no capacity, borrow from another row
+            -- 1. Reduce ExpectedQty from donor row (exclude matching row)
+            UPDATE TOP (1) dbo.KITDETAIL
+            SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                EditDate = GETDATE(),
+                EditWho = @cUserName
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+              AND NOT ((ISNULL(LOC, '') = '' OR LOC = @cToLoc) AND (ISNULL(ID, '') = '' OR ID = @cToID))
+
+            -- 2. Add ExpectedQty and Qty to matching LOC/ID row
+            UPDATE TOP (1) dbo.KITDETAIL
+            SET LOC = @cToLoc,
+                ID = @cToID,
+                ExpectedQty = ExpectedQty + @nParentSKUQty,
+                QTY = QTY + @nParentSKUQty,
+                EditDate = GETDATE(),
+                EditWho = @cUserName
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+              AND (ISNULL(ID, '') = '' OR ID = @cToID)
+         END
+         ELSE
+         BEGIN
+            -- No matching LOC/ID, split record: reduce ExpectedQty and INSERT new row
+            UPDATE TOP (1) dbo.KITDETAIL
+            SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                EditDate = GETDATE(),
+                EditWho = @cUserName
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+              AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+
+            -- Get next KITLineNumber and PackKey for INSERT
+            SELECT @cKitDetailLineNo = RIGHT('00000' + CAST(ISNULL(MAX(CAST(KITLineNumber AS INT)), 0) + 1 AS VARCHAR(5)), 5)
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+
+            SELECT TOP 1 @cParentPackKey = PackKey
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND SKU = @cParentSKU
+              AND [Type] = 'T'
+              AND StorerKey = @cStorerKey
+
+            -- INSERT new row with new LOC/ID
+            INSERT INTO dbo.KITDETAIL (
+               KITKey, StorerKey, KITLineNumber, SKU, [Type], ExpectedQty, Qty, LOC, ID, PackKey,
+               AddDate, AddWho, EditDate, EditWho
+            )
+            VALUES (
+               @cKitKey, @cStorerKey, @cKitDetailLineNo, @cParentSKU, 'T', @nParentSKUQty, @nParentSKUQty, @cToLoc, @cToID, @cParentPackKey,
+               GETDATE(), @cUserName, GETDATE(), @cUserName
+            )
+         END
+
+         -- Commit transaction before returning
+         COMMIT TRAN rdtfnc_KittingScan
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
+
+         -- All done, go back to Parent SKU screen for next parent
+         SET @cParentSKU = ''
+         SET @cChildSKU = ''
+         SET @nChildSKUIndex = 1
+         SET @cOutField01 = '' -- Parent SKU
+         SET @cOutField02 = '' -- QTY
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         SET @nScn  = 6882
+         SET @nStep = 3
+         GOTO Quit
+      END
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
@@ -1357,59 +1710,6 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount
          COMMIT TRAN
 
-      -- Move to next Child SKU
-      SET @nChildSKUIndex = @nChildSKUIndex + 1
-
-      -- Get next Child SKU from BOM or KITDETAIL
-      SET @cExpectedChildSKU = ''
-      SET @nBOMQty = 0
-
-      IF @cDYNBOM = 'Y'
-      BEGIN
-         -- DYNBOM mode: Get next from KITDETAIL
-         SELECT
-            @cExpectedChildSKU = SKU,
-            @nBOMQty = ISNULL(TRY_CAST(Channel AS INT), 1)
-         FROM dbo.KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @cKitKey
-           AND StorerKey = @cStorerKey
-           AND [Type] = 'F'
-         ORDER BY KITLineNumber
-         OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
-      END
-      ELSE
-      BEGIN
-         -- Standard mode: Get next from BILLOFMATERIAL
-         SELECT
-            @cExpectedChildSKU = COMPONENTSKU,
-            @nBOMQty = CASE WHEN ISNULL(ParentQTY, 1) = 1 THEN QTY
-                            ELSE QTY / ParentQTY END
-         FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
-         WHERE SKU = @cParentSKU
-           AND StorerKey = @cStorerKey
-           AND BOMONLY = 'Y'
-         ORDER BY SEQUENCE
-         OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
-      END
-
-      -- Check if all Child SKUs scanned
-      IF @cExpectedChildSKU = ''
-      BEGIN
-         -- All done, go back to Parent SKU screen for next parent
-         SET @cParentSKU = ''
-         SET @cChildSKU = ''
-         SET @nChildSKUIndex = 1
-         SET @cBarcode = ''
-         SET @cOutField01 = '' -- Parent SKU
-         SET @cOutField02 = '' -- QTY
-         SET @nScn  = 6882
-         SET @nStep = 3
-         GOTO Quit
-      END
-
-      -- Calculate new QTY Expected
-      SET @nQTYExp = @nParentSKUQty * @nBOMQty
-
       -- Get Parent SKU description (for display on next screen)
       SET @cSKUDescr = ''
       SELECT @cSKUDescr = ISNULL(DESCR, '')
@@ -1418,7 +1718,7 @@ BEGIN
 
       -- Get Child SKU description
       SET @cChildSKUDescr = ''
-      SELECT @cChildSKUDescr = ISNULL(DESCR, '')
+      SELECT @cChildSKUDescr = LEFT(ISNULL(DESCR, ''), 20)
       FROM dbo.SKU WITH (NOLOCK)
       WHERE SKU = @cExpectedChildSKU AND StorerKey = @cStorerKey
 
@@ -1431,7 +1731,11 @@ BEGIN
       SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
       SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
       SET @cOutField08 = ''
+      SET @cFieldAttr08 = ''
       SET @cChildSKU = ''
+      SET @cBarcode = ''
+
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
 
       SET @nScn = 6883
       SET @nStep = 4
@@ -1471,6 +1775,15 @@ BEGIN
 
    IF @nInputKey = 0 -- Esc or No
    BEGIN
+      -- ESC not allowed if already started scanning (ChildSKUIndex > 1)
+      IF @nChildSKUIndex > 1
+      BEGIN
+         SET @nErrNo = 263821
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ESC not allowed
+         EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
+         GOTO Step_4_Fail
+      END
+
       -- Prepare prev screen var
       SET @cBarcode = ''
       SET @cParentSKU = ''
@@ -1494,6 +1807,9 @@ BEGIN
       SET @cChildSKU = ''
       SET @cOutField05 = '' -- Child SKU input
       SET @cOutField08 = '' -- QTY input
+      SET @cFieldAttr08 = ''
+      SET @cBarcode = ''
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode'
    END
 END
 GOTO Quit
@@ -1514,6 +1830,10 @@ Step 5. Scn = 3490. Dynamic Lottables
 ********************************************************************************/
 Step_5:
 BEGIN
+   -- Backup @cOutField15 before calling rdt_Lottable (it may clear the value on error)
+   DECLARE @cOutField15Backup NVARCHAR(60)
+   SET @cOutField15Backup = @cOutField15
+
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
       -- Validate dynamic lottables
@@ -1548,12 +1868,12 @@ BEGIN
 
       -- Check if scanned lottables match existing KITDETAIL entry
       -- Only compare lottables that are configured as Visible in RDTLOTTABLECODE
-      DECLARE @nFuncForLottable INT = @nFunc
+      SET @nFuncForLottable = @nFunc
       -- If function specific lottablecode not setup, use generic one (Function_ID = 0)
       IF NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK)
                      WHERE LottableCode = @cLottableCode AND Function_ID = @nFunc AND StorerKey = @cStorerKey)
          SET @nFuncForLottable = 0
-
+   
       SET @bLottableMatch = 0
       IF EXISTS (
          SELECT 1 FROM dbo.KITDETAIL KD WITH (NOLOCK)
@@ -1582,6 +1902,16 @@ BEGIN
                 OR ISNULL(KD.Lottable09, '') = ISNULL(@cLottable09, ''))
            AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 10 AND Visible = '1')
                 OR ISNULL(KD.Lottable10, '') = ISNULL(@cLottable10, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 11 AND Visible = '1')
+                OR ISNULL(KD.Lottable11, '') = ISNULL(@cLottable11, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 12 AND Visible = '1')
+                OR ISNULL(KD.Lottable12, '') = ISNULL(@cLottable12, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 13 AND Visible = '1')
+                OR ISNULL(KD.Lottable13, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable13, CAST('19000101' AS DATETIME)))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 14 AND Visible = '1')
+                OR ISNULL(KD.Lottable14, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable14, CAST('19000101' AS DATETIME)))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 15 AND Visible = '1')
+                OR ISNULL(KD.Lottable15, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable15, CAST('19000101' AS DATETIME)))
       )
       BEGIN
          SET @bLottableMatch = 1
@@ -1595,11 +1925,14 @@ BEGIN
       IF @bLottableMatch = 1
       BEGIN
          -- Lottables match: Add qty to existing entry
-         -- Use same dynamic lottable matching logic
-         UPDATE dbo.KITDETAIL
-         SET LOC = @cToLoc,
-             ID = @cToID,
-             QTY = QTY + @nChildSKUQty
+         -- Loop through matching KITDETAIL lines and distribute qty based on ExpectedQty
+         SET @nQtyRemaining = @nChildSKUQty
+
+         DELETE FROM @tKitDetail
+
+         INSERT INTO @tKitDetail (KITLineNumber, ExpectedQty, Qty)
+         SELECT KITLineNumber, ISNULL(ExpectedQty, 0), ISNULL(Qty, 0)
+         FROM dbo.KITDETAIL WITH (NOLOCK)
          WHERE KITKey = @cKitKey
            AND SKU = @cChildSKU
            AND [Type] = 'F'
@@ -1624,79 +1957,117 @@ BEGIN
                 OR ISNULL(Lottable09, '') = ISNULL(@cLottable09, ''))
            AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 10 AND Visible = '1')
                 OR ISNULL(Lottable10, '') = ISNULL(@cLottable10, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 11 AND Visible = '1')
+                OR ISNULL(Lottable11, '') = ISNULL(@cLottable11, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 12 AND Visible = '1')
+                OR ISNULL(Lottable12, '') = ISNULL(@cLottable12, ''))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 13 AND Visible = '1')
+                OR ISNULL(Lottable13, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable13, CAST('19000101' AS DATETIME)))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 14 AND Visible = '1')
+                OR ISNULL(Lottable14, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable14, CAST('19000101' AS DATETIME)))
+           AND (NOT EXISTS (SELECT 1 FROM rdt.rdtLottableCode WITH (NOLOCK) WHERE LottableCode = @cLottableCode AND Function_ID = @nFuncForLottable AND StorerKey = @cStorerKey AND LottableNo = 15 AND Visible = '1')
+                OR ISNULL(Lottable15, CAST('19000101' AS DATETIME)) = ISNULL(@dLottable15, CAST('19000101' AS DATETIME)))
+         ORDER BY KITLineNumber
+
+         SET @nLoopID = 0
+         WHILE @nQtyRemaining > 0
+         BEGIN
+            SELECT TOP 1
+               @nLoopID = ID,
+               @cKitLineNumber = KITLineNumber,
+               @nKitExpectedQty = ExpectedQty,
+               @nKitQty = Qty
+            FROM @tKitDetail
+            WHERE ID > @nLoopID
+            ORDER BY ID
+
+            IF @@ROWCOUNT = 0
+               BREAK
+
+            -- Calculate how much qty this line still needs
+            SET @nQtyToUpdate = @nKitExpectedQty - @nKitQty
+            IF @nQtyToUpdate > @nQtyRemaining
+               SET @nQtyToUpdate = @nQtyRemaining
+
+            IF @nQtyToUpdate > 0
+            BEGIN
+               UPDATE dbo.KITDETAIL
+               SET QTY = QTY + @nQtyToUpdate
+               WHERE KITKey = @cKitKey
+                 AND KITLineNumber = @cKitLineNumber
+                 AND [Type] = 'F'
+                 AND StorerKey = @cStorerKey
+
+               SET @nQtyRemaining = @nQtyRemaining - @nQtyToUpdate
+
+               -- Track this KITLineNumber for FEFO filter (Step 6 only)
+               IF @cBOMUDF01 = '1'
+               BEGIN
+                  IF @cRoundLineNumbers = ''
+                     SET @cRoundLineNumbers = @cKitLineNumber
+                  ELSE IF CHARINDEX(@cKitLineNumber, @cRoundLineNumbers) = 0
+                     SET @cRoundLineNumbers = @cRoundLineNumbers + ',' + @cKitLineNumber
+               END
+            END
+         END
       END
       ELSE
       BEGIN
-         -- Lottables don't match: Create new entry
-         -- Get next KITLineNumber
-         SELECT @nKitDetailLineNo = ISNULL(MAX(KITLineNumber), 0) + 1
-         FROM dbo.KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @cKitKey
-
-         INSERT INTO dbo.KITDETAIL (
-            KITKey, StorerKey, KITLineNumber, SKU, [Type], QTY, LOC, ID,
-            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
-            Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
-            AddDate, AddWho, EditDate, EditWho
-         )
-         VALUES (
-            @cKitKey, @cStorerKey, @nKitDetailLineNo, @cChildSKU, 'F', @nChildSKUQty, @cToLoc, @cToID,
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-            GETDATE(), @cUserName, GETDATE(), @cUserName
-         )
-      END
-
-      -- Update KITDETAIL for Parent SKU (Type = 'T')
-      UPDATE dbo.KITDETAIL
-      SET LOC = @cToLoc,
-          ID = @cToID,
-          QTY = QTY + @nParentSKUQty
-      WHERE KITKey = @cKitKey
-        AND SKU = @cParentSKU
-        AND [Type] = 'T'
-        AND StorerKey = @cStorerKey
-
-      -- Check if current Lottable04 is the earliest expiry date among all child SKUs
-      -- If yes, copy all lottable values from this child SKU to parent SKU
-      IF @dLottable04 IS NOT NULL
-      BEGIN
-         DECLARE @dMinExpiryDate DATETIME
-         SELECT @dMinExpiryDate = MIN(Lottable04)
-         FROM dbo.KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @cKitKey
-           AND StorerKey = @cStorerKey
-           AND [Type] = 'F'
-           AND Lottable04 IS NOT NULL
-
-         -- If current child's expiry date is the earliest, update parent SKU with all lottables
-         IF @dMinExpiryDate IS NOT NULL AND @dLottable04 <= @dMinExpiryDate
-         BEGIN
-            UPDATE dbo.KITDETAIL
-            SET Lottable01 = @cLottable01,
-                Lottable02 = @cLottable02,
-                Lottable03 = @cLottable03,
-                Lottable04 = @dLottable04,
-                Lottable05 = @dLottable05,
-                Lottable06 = @cLottable06,
-                Lottable07 = @cLottable07,
-                Lottable08 = @cLottable08,
-                Lottable09 = @cLottable09,
-                Lottable10 = @cLottable10,
-                EditDate = GETDATE(),
-                EditWho = @cUserName
-            WHERE KITKey = @cKitKey
-              AND SKU = @cParentSKU
-              AND [Type] = 'T'
-              AND StorerKey = @cStorerKey
-         END
+         -- Lottables don't match any existing F line: Throw error
+         ROLLBACK TRAN rdtfnc_KittingScan
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
+         SET @nErrNo = 263823
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')  -- Lottable does not match
+         GOTO Step_5_Fail
       END
 
       COMMIT TRAN rdtfnc_KittingScan
       WHILE @@TRANCOUNT > @nTranCount
          COMMIT TRAN
 
-      -- Clear lottable values for next scan
+      -- Check if came from Step 6 (single scan mode)
+      IF @cBOMUDF01 = '1'
+      BEGIN
+         -- If this SKU still needs more scans, return to Step 6
+         IF @nScannedQty < @nQTYExp
+         BEGIN
+            -- Continue scanning same child SKU, return to Step 6
+            SET @cOutField01 = @cParentSKU
+            SET @cOutField03 = @cExpectedChildSKU
+            SET @cOutField05 = ''
+            SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
+            SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
+            SET @cOutField08 = '1'
+            SET @cOutField09 = CAST(@nScannedQty AS NVARCHAR(10))
+            SET @cFieldAttr08 = 'O'
+            SET @cChildSKU = ''
+            SET @cBarcode = ''
+
+            -- Clear lottable values before returning to Step 6
+            SET @cLottable01 = ''
+            SET @cLottable02 = ''
+            SET @cLottable03 = ''
+            SET @dLottable04 = NULL
+            SET @dLottable05 = NULL
+            SET @cLottable06 = ''
+            SET @cLottable07 = ''
+            SET @cLottable08 = ''
+            SET @cLottable09 = ''
+            SET @cLottable10 = ''
+            SET @cLottable11 = ''
+            SET @cLottable12 = ''
+            SET @dLottable13 = NULL
+            SET @dLottable14 = NULL
+            SET @dLottable15 = NULL
+
+            SET @nScn = 6884
+            SET @nStep = 6
+            GOTO Quit
+         END
+      END
+
+      -- Clear lottable values for next child SKU
       SET @cLottable01 = ''
       SET @cLottable02 = ''
       SET @cLottable03 = ''
@@ -1707,44 +2078,500 @@ BEGIN
       SET @cLottable08 = ''
       SET @cLottable09 = ''
       SET @cLottable10 = ''
+      SET @cLottable11 = ''
+      SET @cLottable12 = ''
+      SET @dLottable13 = NULL
+      SET @dLottable14 = NULL
+      SET @dLottable15 = NULL
 
       -- Move to next Child SKU (same logic as Step_4)
       SET @nChildSKUIndex = @nChildSKUIndex + 1
+      SET @nScannedQty = 0  -- Reset for next child SKU
 
-      -- Get next Child SKU from BOM or KITDETAIL
+      -- Get next Child SKU from KITDETAIL or BOM
       SET @cExpectedChildSKU = ''
       SET @nBOMQty = 0
+      SET @nQTYExp = 0
 
-      IF @cDYNBOM = 'Y'
+      -- Step 6 mode or DYNBOM: Get distinct SKU with SUM(ExpectedQty)
+      IF @cBOMUDF01 = '1' OR @cDYNBOM = '1'
       BEGIN
-         SELECT
-            @cExpectedChildSKU = SKU,
-            @nBOMQty = ISNULL(TRY_CAST(Channel AS INT), 1)
-         FROM dbo.KITDETAIL WITH (NOLOCK)
-         WHERE KITKey = @cKitKey
-           AND StorerKey = @cStorerKey
-           AND [Type] = 'F'
-         ORDER BY KITLineNumber
-         OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
+         ;WITH DistinctSKU AS (
+            SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                   COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) AS BOMQty,
+                   ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND StorerKey = @cStorerKey
+              AND [Type] = 'F'
+            GROUP BY SKU
+         )
+         SELECT @cExpectedChildSKU = SKU,
+                @nBOMQty = CASE WHEN @cDYNBOM = '1' THEN BOMQty ELSE @nBOMQty END
+         FROM DistinctSKU
+         WHERE RowNum = @nChildSKUIndex
+
+         -- BOMUDF01='1' but not DYNBOM: Get BOMQty from BILLOFMATERIAL
+         -- Use multiply-first-then-divide for @nQTYExp to avoid integer division precision loss
+         -- Ensure ParentQTY >= 1 to avoid divide-by-zero
+         IF @cDYNBOM <> '1'
+         BEGIN
+            SET @nBOMQty = 0
+            SELECT @nBOMQty = QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+                   @nQTYExp = @nParentSKUQty * QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END
+            FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
+            WHERE SKU = @cParentSKU
+              AND COMPONENTSKU = @cExpectedChildSKU
+              AND StorerKey = @cStorerKey
+              AND BOMONLY = 'Y'
+
+            -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+            IF @nBOMQty < 1
+            BEGIN
+               SET @nBOMQty = 1
+               SET @nQTYExp = @nParentSKUQty * @nBOMQty
+            END
+         END
+         ELSE
+         BEGIN
+            -- DYNBOM mode: no integer division issue (BOMQty from Channel is already computed)
+            SET @nQTYExp = @nParentSKUQty * @nBOMQty
+         END
       END
       ELSE
       BEGIN
+         -- Normal mode: Get from BILLOFMATERIAL
+         -- Use multiply-first-then-divide for @nQTYExp to avoid integer division precision loss
+         -- Ensure ParentQTY >= 1 to avoid divide-by-zero
          SELECT
             @cExpectedChildSKU = COMPONENTSKU,
-            @nBOMQty = CASE WHEN ISNULL(ParentQTY, 1) = 1 THEN QTY
-                            ELSE QTY / ParentQTY END
+            @nBOMQty = QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+            @nQTYExp = @nParentSKUQty * QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+            @cBOMUDF01 = ISNULL(UDF01, '')
          FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
          WHERE SKU = @cParentSKU
            AND StorerKey = @cStorerKey
            AND BOMONLY = 'Y'
          ORDER BY SEQUENCE
          OFFSET (@nChildSKUIndex - 1) ROWS FETCH NEXT 1 ROWS ONLY
+
+         -- Ensure @nBOMQty >= 1 and recalculate @nQTYExp to stay consistent
+         IF @nBOMQty < 1
+         BEGIN
+            SET @nBOMQty = 1
+            SET @nQTYExp = @nParentSKUQty * @nBOMQty
+         END
+      END
+
+      -- Validate @nQTYExp is set when there is a child SKU to process
+      IF @cExpectedChildSKU <> '' AND @nQTYExp = 0
+      BEGIN
+         SET @nErrNo = 263822
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO Step_6_Fail
       END
 
       -- Check if all Child SKUs scanned
       IF @cExpectedChildSKU = ''
       BEGIN
-         -- All done, go back to Parent SKU screen for next parent
+         -- Initialize lottable variables to avoid stale values if SELECT returns 0 rows
+         SELECT @cParentLottable01 = '', @cParentLottable02 = '', @cParentLottable03 = '',
+                @dParentLottable04 = NULL, @dParentLottable05 = NULL,
+                @cParentLottable06 = '', @cParentLottable07 = '', @cParentLottable08 = '',
+                @cParentLottable09 = '', @cParentLottable10 = '', @cParentLottable11 = '',
+                @cParentLottable12 = '', @dParentLottable13 = NULL, @dParentLottable14 = NULL,
+                @dParentLottable15 = NULL
+
+         -- FEFO batch assignment: Get Lottable from Child with earliest expiry (current round only)
+         -- Only applies to Step 6 (single scan mode with Lottable)
+         IF @cBOMUDF01 = '1' AND @cRoundLineNumbers <> ''
+         BEGIN
+            SELECT TOP 1
+               @cParentLottable01 = ISNULL(Lottable01, ''),
+               @cParentLottable02 = ISNULL(Lottable02, ''),
+               @cParentLottable03 = ISNULL(Lottable03, ''),
+               @dParentLottable04 = Lottable04,
+               @dParentLottable05 = Lottable05,
+               @cParentLottable06 = ISNULL(Lottable06, ''),
+               @cParentLottable07 = ISNULL(Lottable07, ''),
+               @cParentLottable08 = ISNULL(Lottable08, ''),
+               @cParentLottable09 = ISNULL(Lottable09, ''),
+               @cParentLottable10 = ISNULL(Lottable10, ''),
+               @cParentLottable11 = ISNULL(Lottable11, ''),
+               @cParentLottable12 = ISNULL(Lottable12, ''),
+               @dParentLottable13 = Lottable13,
+               @dParentLottable14 = Lottable14,
+               @dParentLottable15 = Lottable15
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND StorerKey = @cStorerKey
+              AND [Type] = 'F'
+              AND KITLineNumber IN (SELECT LTRIM(RTRIM(value)) FROM STRING_SPLIT(@cRoundLineNumbers, ','))  -- Only current round's children
+            ORDER BY ISNULL(Lottable04, '9999-12-31') ASC  -- Earliest expiry first (FEFO), NULL last
+
+            -- All child SKUs done, update or insert Parent SKU with FEFO Lottable
+            -- Check if Parent SKU already has Lottable04 value
+            -- Note: NOLOCK is safe here - business rule ensures one KitKey is assigned to one operator only
+            IF EXISTS (
+               SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+            )
+            BEGIN
+               -- Parent has no Lottable yet, check if there's a matching LOC/ID row with capacity
+               IF EXISTS (
+                  SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+               )
+               BEGIN
+                  -- Matching LOC/ID with capacity found, UPDATE that row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET LOC = @cToLoc,
+                      ID = @cToID,
+                      QTY = QTY + @nParentSKUQty,
+                      Lottable01 = @cParentLottable01,
+                      Lottable02 = @cParentLottable02,
+                      Lottable03 = @cParentLottable03,
+                      Lottable04 = @dParentLottable04,
+                      Lottable05 = @dParentLottable05,
+                      Lottable06 = @cParentLottable06,
+                      Lottable07 = @cParentLottable07,
+                      Lottable08 = @cParentLottable08,
+                      Lottable09 = @cParentLottable09,
+                      Lottable10 = @cParentLottable10,
+                      Lottable11 = @cParentLottable11,
+                      Lottable12 = @cParentLottable12,
+                      Lottable13 = @dParentLottable13,
+                      Lottable14 = @dParentLottable14,
+                      Lottable15 = @dParentLottable15
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+               END
+               ELSE IF EXISTS (
+                  SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+               )
+               BEGIN
+                  -- Matching LOC/ID found but no capacity, borrow from another row (exclude matching row)
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+                    AND NOT ((ISNULL(LOC, '') = '' OR LOC = @cToLoc) AND (ISNULL(ID, '') = '' OR ID = @cToID))
+
+                  -- Add ExpectedQty and Qty to matching LOC/ID row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET LOC = @cToLoc,
+                      ID = @cToID,
+                      ExpectedQty = ExpectedQty + @nParentSKUQty,
+                      QTY = QTY + @nParentSKUQty,
+                      Lottable01 = @cParentLottable01,
+                      Lottable02 = @cParentLottable02,
+                      Lottable03 = @cParentLottable03,
+                      Lottable04 = @dParentLottable04,
+                      Lottable05 = @dParentLottable05,
+                      Lottable06 = @cParentLottable06,
+                      Lottable07 = @cParentLottable07,
+                      Lottable08 = @cParentLottable08,
+                      Lottable09 = @cParentLottable09,
+                      Lottable10 = @cParentLottable10,
+                      Lottable11 = @cParentLottable11,
+                      Lottable12 = @cParentLottable12,
+                      Lottable13 = @dParentLottable13,
+                      Lottable14 = @dParentLottable14,
+                      Lottable15 = @dParentLottable15,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+               END
+               ELSE
+               BEGIN
+                  -- No matching LOC/ID, split record: reduce ExpectedQty and INSERT new row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (Lottable04 IS NULL OR Lottable04 = CAST('1900-01-01' AS DATETIME))
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+
+                  -- Get next KITLineNumber and PackKey for INSERT
+                  SELECT @cKitDetailLineNo = RIGHT('00000' + CAST(ISNULL(MAX(CAST(KITLineNumber AS INT)), 0) + 1 AS VARCHAR(5)), 5)
+                  FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+
+                  SELECT TOP 1 @cParentPackKey = PackKey
+                  FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+
+                  -- INSERT new row with new LOC/ID and Lottable
+                  INSERT INTO dbo.KITDETAIL (
+                     KITKey, StorerKey, KITLineNumber, SKU, [Type], ExpectedQty, Qty, LOC, ID, PackKey,
+                     Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+                     Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+                     Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+                     AddDate, AddWho, EditDate, EditWho
+                  )
+                  VALUES (
+                     @cKitKey, @cStorerKey, @cKitDetailLineNo, @cParentSKU, 'T', @nParentSKUQty, @nParentSKUQty, @cToLoc, @cToID, @cParentPackKey,
+                     @cParentLottable01, @cParentLottable02, @cParentLottable03, @dParentLottable04, @dParentLottable05,
+                     @cParentLottable06, @cParentLottable07, @cParentLottable08, @cParentLottable09, @cParentLottable10,
+                     @cParentLottable11, @cParentLottable12, @dParentLottable13, @dParentLottable14, @dParentLottable15,
+                     GETDATE(), @cUserName, GETDATE(), @cUserName
+                  )
+               END
+            END
+            ELSE
+            BEGIN
+               -- Parent already has Lottable, need to split ExpectedQty:
+               -- 1. Find row where ExpectedQty > Qty (has remaining quota)
+               -- 2. Reduce that row's ExpectedQty by @nParentSKUQty
+               -- 3. INSERT new row with ExpectedQty = @nParentSKUQty
+               -- This keeps total ExpectedQty unchanged
+
+               -- Update the row with remaining quota (ExpectedQty > Qty)
+               UPDATE TOP (1) dbo.KITDETAIL
+               SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                   EditDate = GETDATE(),
+                   EditWho = @cUserName
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+
+               -- Get next KITLineNumber and PackKey for INSERT
+               SELECT @cKitDetailLineNo = RIGHT('00000' + CAST(ISNULL(MAX(CAST(KITLineNumber AS INT)), 0) + 1 AS VARCHAR(5)), 5)
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+
+               SELECT TOP 1 @cParentPackKey = PackKey
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+
+               -- INSERT new row with ExpectedQty = @nParentSKUQty
+               INSERT INTO dbo.KITDETAIL (
+                  KITKey, StorerKey, KITLineNumber, SKU, [Type], ExpectedQty, Qty, LOC, ID, PackKey,
+                  Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+                  Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+                  Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+                  AddDate, AddWho, EditDate, EditWho
+               )
+               VALUES (
+                  @cKitKey, @cStorerKey, @cKitDetailLineNo, @cParentSKU, 'T', @nParentSKUQty, @nParentSKUQty, @cToLoc, @cToID, @cParentPackKey,
+                  @cParentLottable01, @cParentLottable02, @cParentLottable03, @dParentLottable04, @dParentLottable05,
+                  @cParentLottable06, @cParentLottable07, @cParentLottable08, @cParentLottable09, @cParentLottable10,
+                  @cParentLottable11, @cParentLottable12, @dParentLottable13, @dParentLottable14, @dParentLottable15,
+                  GETDATE(), @cUserName, GETDATE(), @cUserName
+               )
+            END
+
+         END  -- End of FEFO block (Step 6 only)
+         ELSE
+         BEGIN
+            -- Normal Step 4 -> Step 5 mode: Update Parent SKU
+            -- Get lottable from child with earliest expiry (FEFO)
+            SELECT TOP 1
+               @cParentLottable01 = ISNULL(Lottable01, ''),
+               @cParentLottable02 = ISNULL(Lottable02, ''),
+               @cParentLottable03 = ISNULL(Lottable03, ''),
+               @dParentLottable04 = Lottable04,
+               @dParentLottable05 = Lottable05,
+               @cParentLottable06 = ISNULL(Lottable06, ''),
+               @cParentLottable07 = ISNULL(Lottable07, ''),
+               @cParentLottable08 = ISNULL(Lottable08, ''),
+               @cParentLottable09 = ISNULL(Lottable09, ''),
+               @cParentLottable10 = ISNULL(Lottable10, ''),
+               @cParentLottable11 = ISNULL(Lottable11, ''),
+               @cParentLottable12 = ISNULL(Lottable12, ''),
+               @dParentLottable13 = Lottable13,
+               @dParentLottable14 = Lottable14,
+               @dParentLottable15 = Lottable15
+            FROM dbo.KITDETAIL WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+              AND StorerKey = @cStorerKey
+              AND [Type] = 'F'
+            ORDER BY ISNULL(Lottable04, '9999-12-31') ASC  -- Earliest expiry first (FEFO), NULL last
+
+            -- Check if there's a parent row with matching LOC/ID AND has capacity
+            IF EXISTS (
+               SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                 AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                 AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+            )
+            BEGIN
+               -- Matching LOC/ID with capacity found, UPDATE that row
+               UPDATE TOP (1) dbo.KITDETAIL
+               SET LOC = @cToLoc,
+                   ID = @cToID,
+                   QTY = QTY + @nParentSKUQty,
+                   Lottable01 = @cParentLottable01,
+                   Lottable02 = @cParentLottable02,
+                   Lottable03 = @cParentLottable03,
+                   Lottable04 = @dParentLottable04,
+                   Lottable05 = @dParentLottable05,
+                   Lottable06 = @cParentLottable06,
+                   Lottable07 = @cParentLottable07,
+                   Lottable08 = @cParentLottable08,
+                   Lottable09 = @cParentLottable09,
+                   Lottable10 = @cParentLottable10,
+                   Lottable11 = @cParentLottable11,
+                   Lottable12 = @cParentLottable12,
+                   Lottable13 = @dParentLottable13,
+                   Lottable14 = @dParentLottable14,
+                   Lottable15 = @dParentLottable15
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                 AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                 AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+            END
+            ELSE IF EXISTS (
+               SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                 AND (ISNULL(ID, '') = '' OR ID = @cToID)
+            )
+            BEGIN
+               -- Matching LOC/ID found but no capacity, borrow from another row (exclude matching row)
+               UPDATE TOP (1) dbo.KITDETAIL
+               SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                   EditDate = GETDATE(),
+                   EditWho = @cUserName
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+                 AND NOT ((ISNULL(LOC, '') = '' OR LOC = @cToLoc) AND (ISNULL(ID, '') = '' OR ID = @cToID))
+
+               -- Add ExpectedQty and Qty to matching LOC/ID row
+               UPDATE TOP (1) dbo.KITDETAIL
+               SET LOC = @cToLoc,
+                   ID = @cToID,
+                   ExpectedQty = ExpectedQty + @nParentSKUQty,
+                   QTY = QTY + @nParentSKUQty,
+                   Lottable01 = @cParentLottable01,
+                   Lottable02 = @cParentLottable02,
+                   Lottable03 = @cParentLottable03,
+                   Lottable04 = @dParentLottable04,
+                   Lottable05 = @dParentLottable05,
+                   Lottable06 = @cParentLottable06,
+                   Lottable07 = @cParentLottable07,
+                   Lottable08 = @cParentLottable08,
+                   Lottable09 = @cParentLottable09,
+                   Lottable10 = @cParentLottable10,
+                   Lottable11 = @cParentLottable11,
+                   Lottable12 = @cParentLottable12,
+                   Lottable13 = @dParentLottable13,
+                   Lottable14 = @dParentLottable14,
+                   Lottable15 = @dParentLottable15,
+                   EditDate = GETDATE(),
+                   EditWho = @cUserName
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                 AND (ISNULL(ID, '') = '' OR ID = @cToID)
+            END
+            ELSE
+            BEGIN
+               -- No matching LOC/ID, split record: reduce ExpectedQty and INSERT new row
+               UPDATE TOP (1) dbo.KITDETAIL
+               SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                   EditDate = GETDATE(),
+                   EditWho = @cUserName
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+                 AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+
+               -- Get next KITLineNumber and PackKey for INSERT
+               SELECT @cKitDetailLineNo = RIGHT('00000' + CAST(ISNULL(MAX(CAST(KITLineNumber AS INT)), 0) + 1 AS VARCHAR(5)), 5)
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+
+               SELECT TOP 1 @cParentPackKey = PackKey
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND SKU = @cParentSKU
+                 AND [Type] = 'T'
+                 AND StorerKey = @cStorerKey
+
+               -- INSERT new row with new LOC/ID
+               INSERT INTO dbo.KITDETAIL (
+                  KITKey, StorerKey, KITLineNumber, SKU, [Type], ExpectedQty, Qty, LOC, ID, PackKey,
+                  Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,
+                  Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
+                  Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+                  AddDate, AddWho, EditDate, EditWho
+               )
+               VALUES (
+                  @cKitKey, @cStorerKey, @cKitDetailLineNo, @cParentSKU, 'T', @nParentSKUQty, @nParentSKUQty, @cToLoc, @cToID, @cParentPackKey,
+                  @cParentLottable01, @cParentLottable02, @cParentLottable03, @dParentLottable04, @dParentLottable05,
+                  @cParentLottable06, @cParentLottable07, @cParentLottable08, @cParentLottable09, @cParentLottable10,
+                  @cParentLottable11, @cParentLottable12, @dParentLottable13, @dParentLottable14, @dParentLottable15,
+                  GETDATE(), @cUserName, GETDATE(), @cUserName
+               )
+            END
+         END
+
+         -- Go back to Parent SKU screen for next parent
          SET @cParentSKU = ''
          SET @cChildSKU = ''
          SET @nChildSKUIndex = 1
@@ -1753,17 +2580,15 @@ BEGIN
          SET @cBarcode = ''
          IF @cDefaultToQty <> ''
             SET @cOutField02 = @cDefaultToQty
+         EXEC rdt.rdtSetFocusField @nMobile, 1
          SET @nScn  = 6882
          SET @nStep = 3
          GOTO Quit
       END
 
-      -- Calculate new QTY Expected
-      SET @nQTYExp = @nParentSKUQty * @nBOMQty
-
       -- Get Child SKU description
       SET @cChildSKUDescr = ''
-      SELECT @cChildSKUDescr = ISNULL(DESCR, '')
+      SELECT @cChildSKUDescr = LEFT(ISNULL(DESCR, ''), 20)
       FROM dbo.SKU WITH (NOLOCK)
       WHERE SKU = @cExpectedChildSKU AND StorerKey = @cStorerKey
 
@@ -1780,12 +2605,28 @@ BEGIN
       SET @cOutField04 = @cChildSKUDescr
       SET @cOutField05 = ''
       SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
-      SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
-      SET @cOutField08 = ''
       SET @cChildSKU = ''
 
-      SET @nScn = 6883
-      SET @nStep = 4
+      -- Check if next child SKU needs single scan mode (BOMUDF01 = '1')
+      IF @cBOMUDF01 = '1'
+      BEGIN
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))            -- BOM QTY
+         SET @cOutField08 = '1'
+         SET @cOutField09 = '0'                                        -- Scanned QTY (starts at 0)
+         SET @cFieldAttr08 = 'O'
+         SET @cBarcode = ''
+         SET @nScn = 6884
+         SET @nStep = 6
+      END
+      ELSE
+      BEGIN
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))            -- BOM QTY
+         SET @cOutField08 = ''
+         SET @cFieldAttr08 = ''
+         SET @cBarcode = ''
+         SET @nScn = 6883
+         SET @nStep = 4
+      END
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -1816,25 +2657,598 @@ BEGIN
       IF @nMorePage = 1
          GOTO Quit
 
-      -- Clear barcode before returning to Step 4
+      -- Clear lottable values
+      SET @cLottable01 = ''
+      SET @cLottable02 = ''
+      SET @cLottable03 = ''
+      SET @dLottable04 = NULL
+      SET @dLottable05 = NULL
+      SET @cLottable06 = ''
+      SET @cLottable07 = ''
+      SET @cLottable08 = ''
+      SET @cLottable09 = ''
+      SET @cLottable10 = ''
+      SET @cLottable11 = ''
+      SET @cLottable12 = ''
+      SET @dLottable13 = NULL
+      SET @dLottable14 = NULL
+      SET @dLottable15 = NULL
+
+      -- Clear barcode before returning to Child SKU screen
       SET @cBarcode = ''
-      SET @cFieldAttr08=''
       -- Go back to Child SKU screen
       SET @cOutField01 = @cParentSKU
       SET @cOutField03 = @cExpectedChildSKU
       SET @cOutField05 = ''
-      SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
-      SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
-      SET @cOutField08 = ''
-      SET @nScn  = 6883
-      SET @nStep = 4
+
+      -- Return to Step 6 if came from Step 6, otherwise Step 4
+      IF @cBOMUDF01 = '1'
+      BEGIN
+         SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
+         SET @cOutField08 = '1'
+         SET @cOutField09 = CAST(@nScannedQty AS NVARCHAR(10))
+         SET @cFieldAttr08 = 'O'
+         SET @cBarcode = ''
+         SET @nScn  = 6884
+         SET @nStep = 6
+      END
+      ELSE
+      BEGIN
+         SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
+         SET @cOutField08 = ''
+         SET @cFieldAttr08 = ''
+         SET @cBarcode = ''
+         SET @nScn  = 6883
+         SET @nStep = 4
+      END
    END
    GOTO Quit
 
    Step_5_Fail:
    BEGIN
+      -- Restore @cOutField15 (rdt_Lottable may have cleared it on error)
+      SET @cOutField15 = @cOutField15Backup
+      -- Clear lottable input values
+      SET @cOutField02 = ''
+      SET @cOutField04 = ''
+      SET @cOutField06 = ''
+      SET @cOutField08 = ''
+      SET @cOutField10 = ''
+      EXEC rdt.rdtSetFocusField @nMobile, 2
       -- Stay on lottable screen
       GOTO QUIT
+   END
+END
+GOTO Quit
+
+
+/********************************************************************************
+Step 6. Scn = 6884. Child SKU Single Scan (QTY=1 per scan, not editable)
+   Same screen as Step 4, but:
+   - QTY defaults to 1 and is not editable (FieldAttr08 = 'O')
+   - User scans SKU one at a time
+   - Scanned count increments until it reaches QTY Expected
+   - ESC not allowed until scanned count = QTY Expected
+   - If lottable required, go to Step 5, then Step 5 returns to Step 4
+********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1 -- Yes or Send
+   BEGIN
+      -- Clear round line numbers before first scan of this round (for FEFO filter)
+      -- Only in Step 6 (single scan mode), not Step 4
+      IF @nScannedQty = 0 AND @nChildSKUIndex = 1
+      BEGIN
+         SET @cRoundLineNumbers = ''
+      END
+
+      -- Two-step scan support for Child SKU
+      IF @cBarcode <> '' AND @cBarcode IS NOT NULL
+         SET @cChildSKU = LEFT(@cBarcode, 20)
+
+      -- Decode Child SKU
+      IF @cDecodeSP <> '' AND @cChildSKU <> ''
+      BEGIN
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUPC      = @cChildSKU   OUTPUT,
+               @nErrNo    = @nErrNo      OUTPUT,
+               @cErrMsg   = @cErrMsg     OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               EXEC rdt.rdtSetFocusField @nMobile, 5
+               GOTO Step_6_Fail
+            END
+         END
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode, ' +
+               ' @cChildSKU OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cBarcode        NVARCHAR( 2000), ' +
+               '@cChildSKU       NVARCHAR( 20) OUTPUT, ' +
+               '@nErrNo          INT            OUTPUT, ' +
+               '@cErrMsg         NVARCHAR(1024) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcode,
+               @cChildSKU OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               EXEC rdt.rdtSetFocusField @nMobile, 5
+               GOTO Step_6_Fail
+            END
+         END
+      END
+
+      -- Validate blank - Child SKU
+      IF @cChildSKU = '' OR @cChildSKU IS NULL
+      BEGIN
+         SET @nErrNo = 263808
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Child SKU required
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_6_Fail
+      END
+
+      -- Validate scanned SKU matches expected Child SKU
+      IF @cChildSKU <> @cExpectedChildSKU
+      BEGIN
+         SET @nErrNo = 263817
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Mismatch
+         SET @cBarcode = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_6_Fail
+      END
+
+      -- Validate Child SKU exists in KITDETAIL (Type = 'F')
+      IF NOT EXISTS (
+         SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+         WHERE KITKey = @cKitKey
+           AND SKU = @cChildSKU
+           AND [Type] = 'F'
+           AND StorerKey = @cStorerKey
+      )
+      BEGIN
+         SET @nErrNo = 263815
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in Kit
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_6_Fail
+      END
+
+      -- QTY is always 1 per scan
+      SET @nQTY = 1
+      SET @nChildSKUQty = 1
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cKitKey, @cToLoc, @cToID, @cParentSKU, @cChildSKU, @nQty, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,       '     +
+               '@nFunc           INT,       '     +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,       '     +
+               '@nInputKey       INT,       '     +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cKitKey         NVARCHAR( 10), ' +
+               '@cToLoc          NVARCHAR( 10), ' +
+               '@cToID           NVARCHAR( 18), ' +
+               '@cParentSKU      NVARCHAR( 20), ' +
+               '@cChildSKU       NVARCHAR( 20), ' +
+               '@nQty            INT          , ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR(1024) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cKitKey, @cToLoc, @cToID, @cParentSKU, @cChildSKU, @nChildSKUQty, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_6_Fail
+         END
+      END
+
+      -- Check if Child SKU has LottableCode that requires Lottable screen
+      SET @cLottableCode = ''
+      SELECT @cLottableCode = ISNULL(LottableCode, '')
+      FROM dbo.SKU WITH (NOLOCK)
+      WHERE SKU = @cChildSKU AND StorerKey = @cStorerKey
+
+      SET @bNeedLottable = 0
+      IF @cLottableCode <> '' AND EXISTS (
+         SELECT 1 FROM rdt.RDTLOTTABLECODE WITH (NOLOCK)
+         WHERE LottableCode = @cLottableCode
+           AND StorerKey = @cStorerKey
+           AND Function_ID IN (0, @nFunc)
+      )
+         SET @bNeedLottable = 1
+
+      -- Validate scanned qty does not exceed expected qty
+      IF @nScannedQty >= @nQTYExp
+      BEGIN
+         SET @nErrNo = 263818
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY cannot exceed expected qty
+         SET @cBarcode = ''
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_6_Fail
+      END
+
+      -- Increment scanned qty
+      SET @nScannedQty = @nScannedQty + 1
+
+      -- For SKU with lottable requirement, go to Step 5 for each scan (qty=1)
+      IF @bNeedLottable = 1
+      BEGIN
+         -- Set @nChildSKUQty = 1 for Step 5 update (per scan)
+         SET @nChildSKUQty = 1
+
+         -- Navigate to Lottable screen (Step 5), Step 5 will do the update
+         EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cChildSKU, @cLottableCode, 'CAPTURE', 'POPULATE', 5, 1,
+            @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+            @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+            @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+            @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+            @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+            @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+            @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+            @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+            @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+            @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+            @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+            @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+            @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+            @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+            @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+            @nMorePage   OUTPUT,
+            @nErrNo      OUTPUT,
+            @cErrMsg     OUTPUT,
+            @cKitKey,
+            @nFunc
+         IF @nErrNo <> 0
+            GOTO Quit
+
+         IF @nMorePage = 1
+         BEGIN
+            -- Clear lottable values before going to Step 5
+            SET @cLottable01 = ''
+            SET @cLottable02 = ''
+            SET @cLottable03 = ''
+            SET @dLottable04 = NULL
+            SET @dLottable05 = NULL
+            SET @cLottable06 = ''
+            SET @cLottable07 = ''
+            SET @cLottable08 = ''
+            SET @cLottable09 = ''
+            SET @cLottable10 = ''
+            SET @cLottable11 = ''
+            SET @cLottable12 = ''
+            SET @dLottable13 = NULL
+            SET @dLottable14 = NULL
+            SET @dLottable15 = NULL
+
+            -- Go to dynamic lottable screen, Step 5 will do the update and return to Step 6
+            SET @nScn = 3990
+            SET @nStep = 5
+            GOTO QUIT
+         END
+      END
+      ELSE
+      BEGIN
+         -- For SKU without lottable requirement, update immediately per scan
+         SET @nTranCount = @@TRANCOUNT
+         BEGIN TRAN
+         SAVE TRAN rdtfnc_KittingScan_Step6
+
+         -- Update KITDETAIL for Child SKU (Type = 'F') - add 1 qty per scan
+         -- Update first record where Qty < ExpectedQty
+         UPDATE dbo.KITDETAIL
+         SET QTY = QTY + 1
+         WHERE KITKey = @cKitKey
+           AND StorerKey = @cStorerKey
+           AND [Type] = 'F'
+           AND KITLineNumber = (
+              SELECT TOP 1 KITLineNumber
+              FROM dbo.KITDETAIL WITH (NOLOCK)
+              WHERE KITKey = @cKitKey
+                AND SKU = @cChildSKU
+                AND [Type] = 'F'
+                AND StorerKey = @cStorerKey
+                AND ISNULL(Qty, 0) < ISNULL(ExpectedQty, 0)
+              ORDER BY KITLineNumber
+           )
+
+         -- Extended update
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cKitKey, @cToLoc, @cToID, @cParentSKU, @cChildSKU, @nQty, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,       '     +
+                  '@nFunc           INT,       '     +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,       '     +
+                  '@nInputKey       INT,       '     +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cKitKey         NVARCHAR( 10), ' +
+                  '@cToLoc          NVARCHAR( 10), ' +
+                  '@cToID           NVARCHAR( 18), ' +
+                  '@cParentSKU      NVARCHAR( 20), ' +
+                  '@cChildSKU       NVARCHAR( 20), ' +
+                  '@nQty            INT          , ' +
+                  '@nErrNo         INT           OUTPUT, ' +
+                  '@cErrMsg        NVARCHAR(1024) OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cKitKey, @cToLoc, @cToID, @cParentSKU, @cChildSKU, 1,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+               BEGIN
+                  ROLLBACK TRAN rdtfnc_KittingScan_Step6
+                  WHILE @@TRANCOUNT > @nTranCount
+                     COMMIT TRAN
+                  GOTO Step_6_Fail
+               END
+            END
+         END
+
+         COMMIT TRAN rdtfnc_KittingScan_Step6
+         WHILE @@TRANCOUNT > @nTranCount
+            COMMIT TRAN
+
+         -- Check if this SKU is complete, move to next child SKU
+         IF @nScannedQty >= @nQTYExp
+         BEGIN
+            SET @nChildSKUIndex = @nChildSKUIndex + 1
+            SET @nScannedQty = 0  -- Reset for next child SKU
+
+            -- Get next distinct Child SKU from KITDETAIL with SUM(ExpectedQty), BOMQty from Channel
+            SET @cExpectedChildSKU = ''
+            SET @nQTYExp = 0
+            SET @nBOMQty = 0
+
+            -- Ensure BOMQty >= 1 to avoid divide-by-zero
+            ;WITH DistinctSKU AS (
+               SELECT SKU, SUM(ISNULL(ExpectedQty, 0)) AS TotalExpectedQty,
+                      CASE WHEN COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) < 1 THEN 1
+                           ELSE COALESCE(MIN(TRY_CAST(Channel AS INT)), 0) END AS BOMQty,
+                      ROW_NUMBER() OVER (ORDER BY MIN(KITLineNumber)) AS RowNum
+               FROM dbo.KITDETAIL WITH (NOLOCK)
+               WHERE KITKey = @cKitKey
+                 AND StorerKey = @cStorerKey
+                 AND [Type] = 'F'
+               GROUP BY SKU
+            )
+            SELECT @cExpectedChildSKU = SKU,
+                   @nBOMQty = BOMQty
+            FROM DistinctSKU
+            WHERE RowNum = @nChildSKUIndex
+
+            -- Non-DYNBOM mode: Get BOMQty from BILLOFMATERIAL
+            -- Use multiply-first-then-divide for @nQTYExp to avoid integer division precision loss
+            -- Ensure ParentQTY >= 1 to avoid divide-by-zero
+            IF @cDYNBOM <> '1'
+            BEGIN
+               SET @nBOMQty = 0
+               SELECT @nBOMQty = QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END,
+                      @nQTYExp = @nParentSKUQty * QTY / CASE WHEN ISNULL(ParentQTY, 1) < 1 THEN 1 ELSE ISNULL(ParentQTY, 1) END
+               FROM dbo.BILLOFMATERIAL WITH (NOLOCK)
+               WHERE SKU = @cParentSKU
+                 AND COMPONENTSKU = @cExpectedChildSKU
+                 AND StorerKey = @cStorerKey
+                 AND BOMONLY = 'Y'
+
+               -- Ensure @nBOMQty >= 1 to avoid issues from integer division truncation
+               IF @nBOMQty < 1 SET @nBOMQty = 1
+            END
+            ELSE
+            BEGIN
+               -- DYNBOM mode: no integer division issue
+               SET @nQTYExp = @nParentSKUQty * @nBOMQty
+            END
+
+            -- Validate @nQTYExp is set when there is a child SKU to process
+            IF @cExpectedChildSKU <> '' AND @nQTYExp = 0
+            BEGIN
+               SET @nErrNo = 263822
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO Step_6_Fail
+            END
+
+            -- Check if all Child SKUs scanned
+            IF @cExpectedChildSKU = ''
+            BEGIN
+               -- All child SKUs done, update or insert Parent SKU based on LOC/ID
+               -- Check if there's a parent row with matching LOC/ID AND has capacity
+               IF EXISTS (
+                  SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+               )
+               BEGIN
+                  -- Matching LOC/ID with capacity found, UPDATE that row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET LOC = @cToLoc,
+                      ID = @cToID,
+                      QTY = QTY + @nParentSKUQty
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+               END
+               ELSE IF EXISTS (
+                  SELECT 1 FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+               )
+               BEGIN
+                  -- Matching LOC/ID found but no capacity, borrow from another row (exclude matching row)
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+                    AND NOT ((ISNULL(LOC, '') = '' OR LOC = @cToLoc) AND (ISNULL(ID, '') = '' OR ID = @cToID))
+
+                  -- Add ExpectedQty and Qty to matching LOC/ID row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET LOC = @cToLoc,
+                      ID = @cToID,
+                      ExpectedQty = ExpectedQty + @nParentSKUQty,
+                      QTY = QTY + @nParentSKUQty,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND (ISNULL(LOC, '') = '' OR LOC = @cToLoc)
+                    AND (ISNULL(ID, '') = '' OR ID = @cToID)
+               END
+               ELSE
+               BEGIN
+                  -- No matching LOC/ID, split record: reduce ExpectedQty and INSERT new row
+                  UPDATE TOP (1) dbo.KITDETAIL
+                  SET ExpectedQty = ExpectedQty - @nParentSKUQty,
+                      EditDate = GETDATE(),
+                      EditWho = @cUserName
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+                    AND ISNULL(ExpectedQty, 0) >= ISNULL(Qty, 0) + @nParentSKUQty
+
+                  -- Get next KITLineNumber and PackKey for INSERT
+                  SELECT @cKitDetailLineNo = RIGHT('00000' + CAST(ISNULL(MAX(CAST(KITLineNumber AS INT)), 0) + 1 AS VARCHAR(5)), 5)
+                  FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+
+                  SELECT TOP 1 @cParentPackKey = PackKey
+                  FROM dbo.KITDETAIL WITH (NOLOCK)
+                  WHERE KITKey = @cKitKey
+                    AND SKU = @cParentSKU
+                    AND [Type] = 'T'
+                    AND StorerKey = @cStorerKey
+
+                  -- INSERT new row with new LOC/ID
+                  INSERT INTO dbo.KITDETAIL (
+                     KITKey, StorerKey, KITLineNumber, SKU, [Type], ExpectedQty, Qty, LOC, ID, PackKey,
+                     AddDate, AddWho, EditDate, EditWho
+                  )
+                  VALUES (
+                     @cKitKey, @cStorerKey, @cKitDetailLineNo, @cParentSKU, 'T', @nParentSKUQty, @nParentSKUQty, @cToLoc, @cToID, @cParentPackKey,
+                     GETDATE(), @cUserName, GETDATE(), @cUserName
+                  )
+               END
+
+               -- Go back to Parent SKU screen for next parent
+               SET @cParentSKU = ''
+               SET @cChildSKU = ''
+               SET @nChildSKUIndex = 1
+               SET @cBarcode = ''
+               SET @cOutField01 = '' -- Parent SKU
+               SET @cOutField02 = '' -- QTY
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+               SET @nScn  = 6882
+               SET @nStep = 3
+               GOTO Quit
+            END
+
+            -- Get Child SKU description for next child
+            SET @cChildSKUDescr = ''
+            SELECT @cChildSKUDescr = LEFT(ISNULL(DESCR, ''), 20)
+            FROM dbo.SKU WITH (NOLOCK)
+            WHERE SKU = @cExpectedChildSKU AND StorerKey = @cStorerKey
+
+         END
+
+         -- Stay on Step 6, set screen fields
+         SET @cOutField01 = @cParentSKU
+         SET @cOutField03 = @cExpectedChildSKU
+         SET @cOutField04 = @cChildSKUDescr
+         SET @cOutField05 = ''
+         SET @cOutField06 = CAST(@nQTYExp AS NVARCHAR(10))
+         SET @cOutField07 = CAST(@nBOMQty AS NVARCHAR(10))
+         SET @cOutField08 = '1'
+         SET @cOutField09 = CAST(@nScannedQty AS NVARCHAR(10))
+         SET @cFieldAttr08 = 'O'
+         SET @cChildSKU = ''
+         SET @cBarcode = ''
+
+         SET @nScn = 6884
+         SET @nStep = 6
+      END
+   END
+
+   IF @nInputKey = 0 -- Esc or No
+   BEGIN
+      -- ESC not allowed until scanned qty matches expected qty
+      IF @nScannedQty < @nQTYExp
+      BEGIN
+         SET @nErrNo = 263819
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY mismatch
+         EXEC rdt.rdtSetFocusField @nMobile, 5
+         GOTO Step_6_Fail
+      END
+
+      -- If scanned qty matches, allow ESC to go back
+      SET @cBarcode = ''
+      SET @cParentSKU = ''
+      SET @cChildSKU = ''
+      SET @nQTY = 0
+      SET @nChildSKUIndex = 1
+      SET @nScannedQty = 0
+      SET @cOutField01 = '' -- Parent SKU
+      SET @cOutField02 = '' -- QTY
+      SET @cFieldAttr08 = ''
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+
+      -- Go back to Parent SKU screen
+      SET @nScn  = 6882
+      SET @nStep = 3
+   END
+   GOTO Quit
+
+   Step_6_Fail:
+   BEGIN
+      SET @cChildSKU = ''
+      SET @cOutField05 = '' -- Child SKU input
+      SET @cOutField08 = '1' -- Keep QTY = 1
+      SET @cFieldAttr08 = 'O' -- Keep QTY not editable
    END
 END
 GOTO Quit
@@ -1878,6 +3292,10 @@ BEGIN
       V_String19     = CAST(@nQTYExp AS NVARCHAR(10)),
       V_String20     = CAST(@nBOMQty AS NVARCHAR(10)),
       V_String21     = CAST(@nChildSKUQty AS NVARCHAR(10)),
+      V_String22     = @cBOMUDF01,
+      V_String23     = CAST(@nScannedQty AS NVARCHAR(10)),
+      V_Integer2     = @nExpectedQty,
+      V_Max          = @cRoundLineNumbers,
       V_Lottable01   = @cLottable01,
       V_Lottable02   = @cLottable02,
       V_Lottable03   = @cLottable03,

@@ -105,7 +105,8 @@ BEGIN
             END
             ELSE
             BEGIN
-               SET @cLottable01 = @cBarcode
+               -- Truncate to 16 chars max to prevent overflow when adding braces (NVARCHAR(18))
+               SET @cLottable01 = '{' + LEFT(@cLottable01, 16) + '}'
             END
 
             

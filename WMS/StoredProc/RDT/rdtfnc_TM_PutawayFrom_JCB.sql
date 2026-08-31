@@ -22,6 +22,7 @@ GO
 /*                                and aisle in use not checked in step 5       */
 /* 2026-01-05  2.0.2  PPA374   Changing aisle in use to C_String28             */
 /* 2026-02-05  2.0.3  Dennis   Fix Bug                                         */
+/* 2026-07-16  2.1.0  NickT    FCR-14640 JCBUS - TM Putaway Task               */
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -89,12 +90,19 @@ DECLARE
    @cNewIDAreaKey       NVARCHAR( 10),
    @cNewIDPutawayZone   NVARCHAR( 10),
    @fNewIDGrossWeight   FLOAT,
+   @fNewIDHeight        FLOAT,
+   @fNewLocLevel        FLOAT,
    @fMaximumWeight      FLOAT,
+   @fMaximumLevel       FLOAT,
+   @fMaximumHeight      FLOAT,
    @nRowCount           INT,
    @nLoopIndex          INT,
    @cReasonCode         NVARCHAR(10),
    @cLOCHoldKey         NVARCHAR(10),
    @cLocAisle           NVARCHAR(10),
+   @cChkLevelHeight     NVARCHAR(1),
+   @cChkLocMaxPallet    NVARCHAR(1),
+   @cChkLocHold         NVARCHAR(1),
 
    @cOldIDAreaKey       NVARCHAR( 10),
    @cOldIDPutawayZone   NVARCHAR( 10),
@@ -104,6 +112,8 @@ DECLARE
    @cNewTaskDetailKey   NVARCHAR( 10),
    @cCheckDigitLOC      NVARCHAR( 20),
    @cLocCategory              NVARCHAR( 10),
+   @cLocationGroup            NVARCHAR( 30),
+   @cPutawayZone              NVARCHAR( 10),
    @cMsg01                    NVARCHAR(20),
    @cMsg02                    NVARCHAR(20),
    @cMsg03                    NVARCHAR(20),
@@ -114,6 +124,7 @@ DECLARE
    @cMsg08                    NVARCHAR(20),
    @cMsg09                    NVARCHAR(20),
    @cMsg10                    NVARCHAR(20),
+   @nMaximumValue             INT,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -143,8 +154,7 @@ DECLARE
    DECLARE @tCandidateLoc TABLE
    (
       RowIndex INT IDENTITY(1,1) PRIMARY KEY,
-      Loc NVARCHAR(20) NOT NULL,
-      Qty INT NOT NULL
+      Loc NVARCHAR(20) NOT NULL
    )
    DECLARE @tAisleInUsed TABLE
    (
@@ -153,6 +163,7 @@ DECLARE
       Userkey                  NVARCHAR(30)
    )
 
+   SET @nMaximumValue = 999999999
 -- Getting waiting time
 SELECT TOP 1 @nWaitSecondsS = Short, @nWaitSecondsL = Long FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBVNAWAIT'
 
@@ -190,6 +201,13 @@ SELECT
    @cToLoc              = C_String28,
    @cExtScnSP           = V_String10,
    @cEquipmentProfileKey= V_String11,
+   @cChkLevelHeight     = V_String12,
+   @cChkLocMaxPallet    = V_String13,
+   @cChkLocHold         = V_String14,
+
+   @fMaximumWeight      = ISNULL(TRY_CAST(V_String15 AS FLOAT), 0),
+   @fMaximumLevel       = ISNULL(TRY_CAST(V_String16 AS FLOAT), 0),
+   @fMaximumHeight      = ISNULL(TRY_CAST(V_String17 AS FLOAT), 0),
 
    @cAreakey            = V_String32,
 
@@ -220,6 +238,10 @@ SELECT
 
 FROM   rdt.RDTMOBREC WITH(NOLOCK)
 WHERE  Mobile = @nMobile
+
+SET @fMaximumWeight = IIF(ISNULL(@fMaximumWeight,0) <= 0, @nMaximumValue, @fMaximumWeight)
+SET @fMaximumLevel = IIF(ISNULL(@fMaximumLevel,0) <= 0, @nMaximumValue, @fMaximumLevel)
+SET @fMaximumHeight = IIF(ISNULL(@fMaximumHeight,0) <= 0, @nMaximumValue, @fMaximumHeight)
    
 -- Redirect to respective screen
 IF @nFunc = 1871
@@ -247,6 +269,9 @@ BEGIN
    
    -- Get storer config
    SET @cSwapTask = rdt.rdtGetConfig( @nFunc, 'SwapTask', @cStorerKey)
+   SET @cChkLevelHeight = rdt.rdtGetConfig( @nFunc, 'ChkLevelHeight', @cStorerKey)
+   SET @cChkLocMaxPallet = rdt.rdtGetConfig( @nFunc, 'ChkLocMaxPallet', @cStorerKey)
+   SET @cChkLocHold = rdt.rdtGetConfig( @nFunc, 'ChkLocHold', @cStorerKey)
    SET @cDefaultFromLOC = rdt.rdtGetConfig( @nFunc, 'DefaultFromLOC', @cStorerKey)
    IF @cDefaultFromLOC = '0'
       SET @cDefaultFromLOC = ''
@@ -428,6 +453,16 @@ BEGIN
          WHERE UserKey = @cUserName
       END
 
+      SELECT @fMaximumWeight = MaximumWeight,
+         @fMaximumLevel = MaximumLevel,
+         @fMaximumHeight = MaximumHeight
+      FROM dbo.EquipmentProfile EP WITH(NOLOCK) 
+      WHERE EquipmentProfileKey = @cEquipmentProfileKey
+
+      SET @fMaximumWeight = IIF(ISNULL(@fMaximumWeight,0) <= 0, @nMaximumValue, @fMaximumWeight)
+      SET @fMaximumLevel = IIF(ISNULL(@fMaximumLevel,0) <= 0, @nMaximumValue, @fMaximumLevel)
+      SET @fMaximumHeight = IIF(ISNULL(@fMaximumHeight,0) <= 0, @nMaximumValue, @fMaximumHeight)
+
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -575,9 +610,6 @@ BEGIN
       -- Get pending task, if no pending task is found, find a new task
       -- If a task is found, update the task to be assigned to current user, go to ID screen
       -- If no task is found, prompt an error message "No Task Found"
-      SELECT @fMaximumWeight = MaximumWeight 
-      FROM dbo.EquipmentProfile EP WITH(NOLOCK) 
-      WHERE EquipmentProfileKey = @cEquipmentProfileKey
 
       SET @cTaskdetailKey = ''
       SET @cSuggFromLoc = ''
@@ -590,88 +622,110 @@ BEGIN
       (
          LocAisle, UserKey
       )
-   -- TaskDetail aisles
-   SELECT 
-      L.LocAisle,
-      IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
-   FROM dbo.TaskDetail TD WITH(NOLOCK)
-      CROSS APPLY (VALUES
-         (TD.FromLoc),
-         (TD.ToLoc)
-      ) AS loc(L)
-      LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
-   WHERE LocAisle IS NOT NULL
-      AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
-      AND TD.Status IN ('0','3')
-      AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
-      AND TD.Storerkey = @cStorerKey
+      -- TaskDetail aisles
+      SELECT 
+         L.LocAisle,
+         IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) AS UserKey
+      FROM dbo.TaskDetail TD WITH(NOLOCK)
+         CROSS APPLY (VALUES
+            (TD.FromLoc),
+            (TD.ToLoc)
+         ) AS loc(L)
+         LEFT JOIN dbo.LOC L WITH(NOLOCK) ON loc.L = L.Loc AND L.LocationCategory = 'VNA' AND L.Facility = @cFacility
+      WHERE LocAisle IS NOT NULL
+         AND (TD.UserKey <> '' OR TD.UserKeyOverRide <> '')
+         AND TD.Status IN ('0','3')
+         AND IIF(TD.UserKey = '', TD.UserKeyOverRide, TD.UserKey) <> @cUserName
+         AND TD.Storerkey = @cStorerKey
 
-   UNION ALL
+      UNION ALL
 
-   -- RDTMOBREC aisles
-   SELECT 
-      IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
-      R.UserName AS UserKey
-   FROM RDT.RDTMOBREC R WITH(NOLOCK)
-      LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
-      LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
-   WHERE R.StorerKey = @cStorerKey
-      AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
-      AND R.UserName <> @cUserName
-      AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
+      -- RDTMOBREC aisles
+      SELECT 
+         IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) AS LocAisle,
+         R.UserName AS UserKey
+      FROM RDT.RDTMOBREC R WITH(NOLOCK)
+         LEFT JOIN dbo.LOC L1 WITH(NOLOCK) ON R.V_LOC = L1.Loc AND L1.Facility = @cFacility AND L1.LocationCategory = 'VNA'
+         LEFT JOIN dbo.LOC L2 WITH(NOLOCK) ON R.C_String28 = L2.Loc AND L2.Facility = @cFacility AND L2.LocationCategory = 'VNA'
+      WHERE R.StorerKey = @cStorerKey
+         AND ((R.Func IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsL, R.EditDate) >= GETDATE()) OR (R.Func NOT IN (1756,1764,1812,1871) AND DATEADD(SECOND, @nWaitSecondsS, ISNULL(R.C_DateTime1,0)) >= GETDATE()))
+         AND R.UserName <> @cUserName
+         AND IIF(ISNULL(L1.LocAisle,'')='',L2.LocAisle,L1.LocAisle) <> ''
 
-      /*SELECT DISTINCT v.LocAisle, Td.UserKey
-      FROM TaskDetail TD WITH (NOLOCK)
-      LEFT JOIN LOC FromLoc WITH (NOLOCK)
-         ON TD.FromLOC = FromLoc.Loc
-         AND FromLoc.LocationCategory = 'VNA'
-         AND FromLOC.Facility = @cFacility
-      LEFT JOIN LOC ToLoc WITH (NOLOCK)
-         ON TD.ToLOC = ToLoc.Loc
-         AND ToLoc.LocationCategory = 'VNA'
-         AND ToLoc.Facility = @cFacility
-      CROSS APPLY (
-         SELECT FromLoc.LocAisle WHERE ISNULL(FromLoc.LocAisle,'') <> ''
-         UNION ALL
-         SELECT ToLoc.LocAisle WHERE ISNULL(ToLoc.LocAisle,'') <> ''
-      ) v(LocAisle)
-      WHERE TD.UserKey <> @cUsername
-      AND TD.Status = '3'
-      AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)*/
-
-      SELECT TOP 1 @cTaskdetailKey = TD.TaskDetailKey,
-         @cSuggFromLoc = TD.FromLoc,
-         @cSuggID = TD.FromID,
-         @cSuggToLoc = TD.ToLoc,
-         @cSKU = LLI.SKU
-      FROM dbo.TaskDetail TD WITH(NOLOCK) 
-      INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
-      INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
-      INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
-      INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
-      INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON TD.StorerKey = LLI.StorerKey AND TD.FromID = LLI.ID
-      LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
-      LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
-      WHERE TD.StorerKey = @cStorerKey
-         AND TD.TaskType IN ('PAF', 'PA1')
-         AND TD.Status IN ('0', '3' )
-         AND TD.UserKey IN ('', @cUserName)
-         AND TD.UserKeyOverRide IN (@cUserName, '')
-         AND AD.AreaKey = @cAreakey
-         AND LOC1.Status = 'OK'
-         AND LOC1.LocationFlag IN ('','NONE')
-         AND PL.GrossWgt <= @fMaximumWeight
-         AND LLI.Qty - LLI.QtyPicked > 0
-         AND NOT EXISTS(SELECT 1 
-                        FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                        WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                           AND PAE.PutawayZone = LOC1.PutawayZone
-                     )
-         AND (NOT EXISTS(SELECT 1 
-                        FROM @tAisleInUsed AIU
-                        WHERE AIU.LocAisle = LOC1.LocAisle
-                     ) OR LOC1.LocationCategory <> 'VNA')
-      ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+      IF @cChkLevelHeight = '1'
+      BEGIN
+         SELECT TOP 1 @cTaskdetailKey = TD.TaskDetailKey,
+            @cSuggFromLoc = TD.FromLoc,
+            @cSuggID = TD.FromID,
+            @cSuggToLoc = TD.ToLoc,
+            @cSKU = LLI.SKU
+         FROM dbo.TaskDetail TD WITH(NOLOCK) 
+         INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+         INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
+         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+         INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
+         INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON TD.StorerKey = LLI.StorerKey AND TD.FromID = LLI.ID
+         LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
+         LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.TaskType IN ('PAF', 'PA1')
+            AND TD.Status IN ('0', '3' )
+            AND TD.UserKey IN ('', @cUserName)
+            AND TD.UserKeyOverRide IN (@cUserName, '')
+            AND AD.AreaKey = @cAreakey
+            AND LOC1.Status = 'OK'
+            AND LOC1.LocationFlag IN ('','NONE')
+            AND PL.GrossWgt <= @fMaximumWeight
+            AND PL.Height <= @fMaximumHeight
+            AND LOC1.LocLevel <= @fMaximumLevel
+            AND LLI.Qty - LLI.QtyPicked > 0
+            AND NOT EXISTS(SELECT 1 
+                           FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                           WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                              AND PAE.PutawayZone = LOC1.PutawayZone
+                        )
+            AND (NOT EXISTS(SELECT 1 
+                           FROM @tAisleInUsed AIU
+                           WHERE AIU.LocAisle = LOC1.LocAisle
+                        ) OR LOC1.LocationCategory <> 'VNA')
+         ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @cTaskdetailKey = TD.TaskDetailKey,
+            @cSuggFromLoc = TD.FromLoc,
+            @cSuggID = TD.FromID,
+            @cSuggToLoc = TD.ToLoc,
+            @cSKU = LLI.SKU
+         FROM dbo.TaskDetail TD WITH(NOLOCK) 
+         INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+         INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
+         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+         INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
+         INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON TD.StorerKey = LLI.StorerKey AND TD.FromID = LLI.ID
+         LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
+         LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.TaskType IN ('PAF', 'PA1')
+            AND TD.Status IN ('0', '3' )
+            AND TD.UserKey IN ('', @cUserName)
+            AND TD.UserKeyOverRide IN (@cUserName, '')
+            AND AD.AreaKey = @cAreakey
+            AND LOC1.Status = 'OK'
+            AND LOC1.LocationFlag IN ('','NONE')
+            AND PL.GrossWgt <= @fMaximumWeight
+            AND LLI.Qty - LLI.QtyPicked > 0
+            AND NOT EXISTS(SELECT 1 
+                           FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                           WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                              AND PAE.PutawayZone = LOC1.PutawayZone
+                        )
+            AND (NOT EXISTS(SELECT 1 
+                           FROM @tAisleInUsed AIU
+                           WHERE AIU.LocAisle = LOC1.LocAisle
+                        ) OR LOC1.LocationCategory <> 'VNA')
+         ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+      END
 
      IF EXISTS (
          SELECT 1 
@@ -708,22 +762,43 @@ BEGIN
       SET @nErrNo = 0
 
       BEGIN TRY
-         UPDATE rdt.RDTUser WITH(ROWLOCK)
-         SET AreaKey = @cAreaKey
-         WHERE UserName = @cUserName
+         BEGIN TRY
+            UPDATE rdt.RDTUser WITH(ROWLOCK)
+            SET AreaKey = @cAreaKey
+            WHERE UserName = @cUserName
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 237131
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update User Area Failed
+            GOTO Step_2_ROLLBACK_TRAN
+         END CATCH
 
-         UPDATE dbo.TaskDetail WITH (ROWLOCK)
-         SET Status = '3',
-            ReasonKey = '',
-            UserKey = @cUserName,
-            EditDate = GETDATE(),
-            EditWho = @cUserName
-         WHERE TaskDetailKey = @cTaskdetailKey
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH (ROWLOCK)
+            SET Status = '3',
+               ReasonKey = '',
+               UserKey = @cUserName,
+               EditDate = GETDATE(),
+               EditWho = @cUserName
+            WHERE TaskDetailKey = @cTaskdetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 237132
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update taskdetail to 3 Failed
+            GOTO Step_2_ROLLBACK_TRAN
+         END CATCH
 
          --Remove records from TaskManagerSkipTasks
-         DELETE FROM dbo.TaskManagerSkipTasks
-         WHERE USERID = @cUserName
-            AND TaskType IN ('PAF', 'PA1')
+         BEGIN TRY
+            DELETE FROM dbo.TaskManagerSkipTasks
+            WHERE USERID = @cUserName
+               AND TaskType IN ('PAF', 'PA1')
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 237137
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete TaskManagerSkipTasks Failed
+            GOTO Step_2_ROLLBACK_TRAN
+         END CATCH
 
          -- Extended update
          IF @cExtendedUpdateSP <> ''
@@ -763,28 +838,36 @@ BEGIN
          ELSE
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Get the error message from the error number
 
-         ROLLBACK TRAN rdt_1871Step2 -- Only rollback change made here
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-            COMMIT TRAN
-
-         GOTO Step_2_Fail
+         GOTO Step_2_ROLLBACK_TRAN
       END CATCH
+
+       IF EXISTS(SELECT 1 
+               FROM dbo.CODELKUP WITH(NOLOCK) 
+               WHERE Short = 1 
+               AND Storerkey = @cStorerKey 
+               AND LISTNAME = 'JCBPAAREAR'
+               AND Code = @cAreaKey)
+      BEGIN
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH (ROWLOCK)
+               SET Status = '0',
+                  ReasonKey = '',
+                  UserKey = '',
+                  EditDate = GETDATE(),
+                  EditWho = 'RDTPA'
+               WHERE TaskDetailKey = @cTaskdetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 237133
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update TaskDetail's Status to 0 Failed
+            GOTO Step_2_ROLLBACK_TRAN
+         END CATCH
+
+         SET @cSuggID = ''
+      END
 
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
-
-     IF @cAreaKey IN (SELECT Code FROM dbo.CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
-      BEGIN
-        UPDATE dbo.TaskDetail WITH (ROWLOCK)
-         SET Status = '0',
-            ReasonKey = '',
-            UserKey = '',
-            EditDate = GETDATE(),
-            EditWho = 'RDTPA'
-         WHERE TaskDetailKey = @cTaskdetailKey
-
-        SET @cSuggID = ''
-     END
 
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -803,9 +886,16 @@ BEGIN
       SET @cOutField15 = '' -- Extended Info
 
       --Remove records from TaskManagerSkipTasks
-      DELETE FROM dbo.TaskManagerSkipTasks
-      WHERE USERID = @cUserName
-         AND TaskType IN ('PAF', 'PA1')
+      BEGIN TRY
+         DELETE FROM dbo.TaskManagerSkipTasks
+         WHERE USERID = @cUserName
+            AND TaskType IN ('PAF', 'PA1')
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 237134
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Delete TaskManagerSkipTasks Failed
+         GOTO Quit
+      END CATCH
 
       -- go to previous screen
       SET @nScn = @nScn - 1      -- MHE Screen
@@ -813,6 +903,11 @@ BEGIN
    END
 
    GOTO Quit
+
+   Step_2_ROLLBACK_TRAN:
+   ROLLBACK TRAN rdt_1871Step2 -- Only rollback change made here
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 
    Step_2_Fail:
    BEGIN
@@ -848,7 +943,9 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      SELECT @fNewIDGrossWeight = PL.GrossWgt
+      SELECT 
+         @fNewIDGrossWeight = PL.GrossWgt,
+         @fNewIDHeight = PL.Height
       FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
       INNER JOIN dbo.PALLET PL WITH(NOLOCK)
          ON LLI.ID = PL.PalletKey
@@ -876,10 +973,14 @@ BEGIN
       BEGIN
          --New ID should be in same area, ID suitable for the MHE, 
          --MHE is not excluded from the putaway zone (Message01 in the TaskDetail table)
-         SELECT @cNewIDAreaKey = AD.AreaKey
+         SELECT
+            @cNewIDAreaKey = AD.AreaKey,
+            @fNewLocLevel = LOC1.LocLevel
          FROM dbo.TaskDetail TD WITH(NOLOCK)
          INNER JOIN dbo.LOC LOC WITH(NOLOCK)
             ON TD.FromLoc = LOC.Loc
+         INNER JOIN dbo.LOC LOC1 WITH(NOLOCK)
+            ON TD.ToLoc = LOC1.Loc
          INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
             ON LOC.PutawayZone = AD.PutawayZone
          WHERE TD.FromID = @cFromID
@@ -928,15 +1029,28 @@ BEGIN
             GOTO Step_3_Fail
          END
 
-         SELECT @fMaximumWeight = MaximumWeight
-         FROM dbo.EquipmentProfile WITH(NOLOCK)
-         WHERE EquipmentProfileKey = @cEquipmentProfileKey
-
          IF @fMaximumWeight < @fNewIDGrossWeight
          BEGIN
             SET @nErrNo = 237116
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Scanned Pallet is Over Weight
             GOTO Step_3_Fail
+         END
+
+         IF @cChkLevelHeight = '1'
+         BEGIN
+            IF @fMaximumHeight < @fNewIDHeight
+            BEGIN
+               SET @nErrNo = 237135
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Scanned Pallet is Over Height
+               GOTO Step_3_Fail
+            END
+
+            IF @fMaximumLevel < @fNewLocLevel
+            BEGIN
+               SET @nErrNo = 237136
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --  ToLoc level is Over Equipment Level
+               GOTO Step_3_Fail
+            END
          END
 
          SELECT @cNewIDPutawayZone = AD.PutawayZone
@@ -1033,7 +1147,9 @@ BEGIN
          @cTaskDetailMsg01 = TD.Message01,  -- PutawayZone
          @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
          @cTaskDetailMsg03 = TD.Message03,  -- LocationCategory
-         @cLocCategory = LOC.LocationCategory
+         @cLocationGroup = LOC.LocationGroup,
+         @cLocCategory = LOC.LocationCategory,
+         @cPutawayZone = LOC.PutawayZone
       FROM dbo.TaskDetail TD WITH(NOLOCK)
       INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
       INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = TD.StorerKey AND LLI.ID = TD.FromID
@@ -1057,27 +1173,68 @@ BEGIN
       BEGIN
          DELETE FROM @tCandidateLoc
 
-         INSERT INTO @tCandidateLoc (Loc, Qty)
-         SELECT TOP 5 LOC.Loc, SUM(LLI.Qty - LLI.QtyPicked) AS TotalQty
-         FROM dbo.LOC WITH(NOLOCK)
-         INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-            ON LLI.Loc = LOC.Loc
-         WHERE Facility = @cFacility
-            AND LLI.StorerKey = @cStorerKey
-            AND LLI.Sku = @cSKU
-            AND LOC.Loc <> @cToLoc
-            AND LOC.Status = 'OK'
-            AND LOC.PutawayZone = @cTaskDetailMsg01
-            AND LOC.LocationGroup = @cTaskDetailMsg02
-            AND LOC.LocationCategory = @cTaskDetailMsg03
-            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
-            AND NOT EXISTS(SELECT 1 
-                        FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                        WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                           AND PAE.PutawayZone = LOC.PutawayZone
-                     )
-         GROUP BY LOC.Loc
-         ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+         IF @cChkLocMaxPallet = '1'
+         BEGIN
+            INSERT INTO @tCandidateLoc (Loc)
+            SELECT TOP 5 Loc
+            FROM
+               (SELECT
+                  LOC.Loc, 
+                  CASE WHEN ISNULL(LOC.MaxPallet, 0) = 0 THEN @nMaximumValue ELSE LOC.MaxPallet END AS MaxPallet, 
+                  (SELECT COUNT(DISTINCT NULLIF(LLI2.ID, ''))
+                   FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
+                   WHERE LLI2.Loc = LOC.Loc
+                     AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
+                  COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
+               FROM dbo.LOC WITH(NOLOCK)
+               LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
+                  ON RP.StorerKey = @cStorerKey
+                     AND LOC.Loc = RP.SuggestedLoc
+                     AND RP.ID <> ''
+               WHERE LOC.Facility = @cFacility
+                  AND LOC.Loc <> @cToLoc
+                  AND LOC.Status = 'OK'
+                  AND LOC.LocationGroup = @cLocationGroup
+                  AND LOC.LocationCategory = @cLocCategory
+                  AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                  AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
+                  AND NOT EXISTS(SELECT 1 
+                              FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                              WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                 AND PAE.PutawayZone = LOC.PutawayZone
+                           )
+                  AND (@cChkLocHold <> '1' OR NOT EXISTS(SELECT 1
+                              FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+                              WHERE IH.Loc = LOC.Loc
+                                 AND IH.Hold = '1'))
+               GROUP BY LOC.Loc, LOC.MaxPallet) AS T
+            WHERE T.PendingMoveIn + TotalID < T.MaxPallet
+            ORDER BY T.Loc
+         END
+         ELSE
+         BEGIN
+            INSERT INTO @tCandidateLoc (Loc)
+            SELECT TOP 5 LOC.Loc
+            FROM dbo.LOC WITH(NOLOCK)
+            INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+               ON LLI.Loc = LOC.Loc
+            WHERE Facility = @cFacility
+               AND LLI.StorerKey = @cStorerKey
+               AND LLI.Sku = @cSKU
+               AND LOC.Loc <> @cToLoc
+               AND LOC.Status = 'OK'
+               AND LOC.PutawayZone = @cTaskDetailMsg01
+               AND LOC.LocationGroup = @cTaskDetailMsg02
+               AND LOC.LocationCategory = @cTaskDetailMsg03
+               AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+               AND NOT EXISTS(SELECT 1 
+                           FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                           WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                              AND PAE.PutawayZone = LOC.PutawayZone
+                        )
+            GROUP BY LOC.Loc
+            ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+         END
 
          DECLARE 
             @cSuggestToLoc       NVARCHAR(10),
@@ -1301,6 +1458,8 @@ BEGIN
          @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
          @cTaskDetailMsg03 = TD.Message03,  -- LocationCategory
          @cLocCategory = LOC.LocationCategory,
+         @cLocationGroup = LOC.LocationGroup,
+         @cPutawayZone = LOC.PutawayZone,
          @cSuggFinalLoc = TD.FinalLoc
       FROM dbo.TaskDetail TD WITH(NOLOCK)
       INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
@@ -1360,22 +1519,65 @@ BEGIN
                         AND StorerKey = @cStorerKey
                         AND Short = @cLocCategory)
             BEGIN
-               SELECT @nRowCount = COUNT(1)
+               IF @cChkLocMaxPallet = '1'
+               BEGIN
+                  -- Check if the location is full
+                  SELECT TOP 1 Loc
+                  FROM
+                     (SELECT
+                        LOC.Loc,
+                        CASE WHEN ISNULL(LOC.MaxPallet, 0) = 0 THEN @nMaximumValue ELSE LOC.MaxPallet END AS MaxPallet,
+                        (SELECT COUNT(DISTINCT NULLIF(LLI2.ID, ''))
+                         FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
+                         WHERE LLI2.Loc = LOC.Loc
+                           AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
+                        COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
+                     FROM dbo.LOC WITH(NOLOCK)
+                     LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
+                        ON RP.StorerKey = @cStorerKey
+                        AND LOC.Loc = RP.SuggestedLoc
+                        AND RP.ID <> ''
+                     WHERE Facility = @cFacility
+                        AND LOC.Loc = @cToLoc
+                        AND LOC.Status = 'OK'
+                        AND LOC.LocationGroup = @cLocationGroup
+                        AND LOC.LocationCategory = @cLocCategory
+                        AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
+                        AND NOT EXISTS(SELECT 1
+                                    FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                    WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                       AND PAE.PutawayZone = LOC.PutawayZone
+                                 )
+                        AND (@cChkLocHold <> '1' OR NOT EXISTS(SELECT 1
+                              FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+                              WHERE IH.Loc = LOC.Loc
+                                 AND IH.Hold = '1'))
+                        GROUP BY LOC.Loc, LOC.MaxPallet
+                     ) AS T
+                  WHERE T.PendingMoveIn + T.TotalID < T.MaxPallet
+                  ORDER BY Loc
+
+                  SELECT @nRowCount = @@ROWCOUNT
+               END
+               ELSE
+               BEGIN
+                  SELECT @nRowCount = COUNT(1)
                   FROM dbo.LOC WITH(NOLOCK)
-               LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                  ON LLI.Loc = LOC.Loc AND LLI.Sku = @cSKU AND LLI.StorerKey = @cStorerKey
-               WHERE Facility = @cFacility
-                  AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.Qty IS NULL)
-                  AND LOC.Loc = @cToLoc
-                  AND LOC.Status = 'OK'
-                  AND LOC.PutawayZone = @cTaskDetailMsg01
-                  AND LOC.LocationGroup = @cTaskDetailMsg02
-                  AND LOC.LocationCategory = @cTaskDetailMsg03
-                  AND NOT EXISTS(SELECT 1 
-                              FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                              WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                                 AND PAE.PutawayZone = LOC.PutawayZone
-                           )
+                  LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                     ON LLI.Loc = LOC.Loc AND LLI.Sku = @cSKU AND LLI.StorerKey = @cStorerKey
+                  WHERE Facility = @cFacility
+                     AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.Qty IS NULL)
+                     AND LOC.Loc = @cToLoc
+                     AND LOC.Status = 'OK'
+                     AND LOC.PutawayZone = @cTaskDetailMsg01
+                     AND LOC.LocationGroup = @cTaskDetailMsg02
+                     AND LOC.LocationCategory = @cTaskDetailMsg03
+                     AND NOT EXISTS(SELECT 1 
+                                 FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                 WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                    AND PAE.PutawayZone = LOC.PutawayZone
+                              )
+               END
 
                IF @nRowCount = 0
                BEGIN
@@ -1438,7 +1640,9 @@ BEGIN
          END
       END
 
-      SELECT @cLocCategory = LocationCategory
+      SELECT @cLocCategory = LocationCategory,
+         @cLocationGroup = LocationGroup,
+         @cPutawayZone = PutawayZone
       FROM dbo.Loc WITH(NOLOCK)
       WHERE Facility = @cFacility
          AND Loc = @cToLoc
@@ -1693,10 +1897,6 @@ BEGIN
       WHERE Facility = @cFacility
          AND Loc = @cSuggFromLoc
 
-      SELECT @fMaximumWeight = MaximumWeight 
-      FROM dbo.EquipmentProfile EP WITH(NOLOCK) 
-      WHERE EquipmentProfileKey = @cEquipmentProfileKey
-
       -- If last task is from PND location, then next task should be from PND location
       -- Sequence: 1. same aisle but opposite side to be given 2. Next aisle in the same AreaKey
       IF @cLocCategory IN  ('PNDIN', 'PND', 'PND_IN')
@@ -1742,39 +1942,80 @@ BEGIN
          -- Get pending task, if no pending task is found, find a new task
          -- If a task is found, update the task to be assigned to current user, go to ID screen
          -- If no task is found, prompt an error message "No More Found", go back to Area screen
-         SELECT TOP 1 @cNextTaskDetailKey = TD.TaskDetailKey,
-            @cSuggFromLoc = TD.FromLoc,
-            @cSuggID = TD.FromID,
-            @cSKU = TD.SKU
-         FROM dbo.TaskDetail TD WITH(NOLOCK) 
-         INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
-         INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
-         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
-         INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
-         LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
-         LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
-         WHERE TD.StorerKey = @cStorerKey
-            AND TD.TaskType IN ('PAF', 'PA1')
-            AND TD.Status IN ('0', '3' )
-            AND TD.UserKey IN ('', @cUserName)
-            AND TD.UserKeyOverRide IN (@cUserName, '')
-            AND AD.AreaKey = @cAreakey
-            AND PL.GrossWgt <= @fMaximumWeight
-            AND LOC1.Status = 'OK'
-            AND LOC1.LocationFlag IN ('','NONE')
-            AND NOT EXISTS(SELECT 1 
-                           FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                           WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                              AND PAE.PutawayZone = LOC1.PutawayZone)
-            AND NOT EXISTS(SELECT 1 
-                           FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
-                           WHERE TST.TaskDetailKey = TD.TaskDetailKey
-                              AND TST.TaskType = TD.TaskType)
-            AND (NOT EXISTS(SELECT 1 
-                        FROM @tAisleInUsed AIU
-                        WHERE AIU.LocAisle = LOC1.LocAisle
-                     ) OR LOC1.LocationCategory <> 'VNA')
-         ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+         IF @cChkLevelHeight = '1'
+         BEGIN
+            SELECT TOP 1 @cNextTaskDetailKey = TD.TaskDetailKey,
+               @cSuggFromLoc = TD.FromLoc,
+               @cSuggID = TD.FromID,
+               @cSKU = TD.SKU
+            FROM dbo.TaskDetail TD WITH(NOLOCK) 
+            INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+            INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
+            INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+            INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
+            LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
+            LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
+            WHERE TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('PAF', 'PA1')
+               AND TD.Status IN ('0', '3' )
+               AND TD.UserKey IN ('', @cUserName)
+               AND TD.UserKeyOverRide IN (@cUserName, '')
+               AND AD.AreaKey = @cAreakey
+               AND PL.GrossWgt <= @fMaximumWeight
+               AND PL.Height <= @fMaximumHeight
+               AND LOC1.LocLevel <= @fMaximumLevel
+               AND LOC1.Status = 'OK'
+               AND LOC1.LocationFlag IN ('','NONE')
+               AND NOT EXISTS(SELECT 1 
+                              FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                              WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                 AND PAE.PutawayZone = LOC1.PutawayZone)
+               AND NOT EXISTS(SELECT 1 
+                              FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
+                              WHERE TST.TaskDetailKey = TD.TaskDetailKey
+                                 AND TST.TaskType = TD.TaskType)
+               AND (NOT EXISTS(SELECT 1 
+                           FROM @tAisleInUsed AIU
+                           WHERE AIU.LocAisle = LOC1.LocAisle
+                        ) OR LOC1.LocationCategory <> 'VNA')
+            ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1 @cNextTaskDetailKey = TD.TaskDetailKey,
+               @cSuggFromLoc = TD.FromLoc,
+               @cSuggID = TD.FromID,
+               @cSKU = TD.SKU
+            FROM dbo.TaskDetail TD WITH(NOLOCK) 
+            INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc
+            INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc
+            INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+            INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
+            LEFT JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) ON RTD.StorerKey = TD.StorerKey AND RTD.ToId = TD.FromID
+            LEFT JOIN dbo.RECEIPT RT WITH(NOLOCK) ON RTD.StorerKey = RT.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
+            WHERE TD.StorerKey = @cStorerKey
+               AND TD.TaskType IN ('PAF', 'PA1')
+               AND TD.Status IN ('0', '3' )
+               AND TD.UserKey IN ('', @cUserName)
+               AND TD.UserKeyOverRide IN (@cUserName, '')
+               AND AD.AreaKey = @cAreakey
+               AND PL.GrossWgt <= @fMaximumWeight
+               AND LOC1.Status = 'OK'
+               AND LOC1.LocationFlag IN ('','NONE')
+               AND NOT EXISTS(SELECT 1 
+                              FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                              WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                 AND PAE.PutawayZone = LOC1.PutawayZone)
+               AND NOT EXISTS(SELECT 1 
+                              FROM dbo.TaskManagerSkipTasks TST WITH(NOLOCK)
+                              WHERE TST.TaskDetailKey = TD.TaskDetailKey
+                                 AND TST.TaskType = TD.TaskType)
+               AND (NOT EXISTS(SELECT 1 
+                           FROM @tAisleInUsed AIU
+                           WHERE AIU.LocAisle = LOC1.LocAisle
+                        ) OR LOC1.LocationCategory <> 'VNA')
+            ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
+         END
       END
 
       SET @cTaskDetailKey = @cNextTaskDetailKey
@@ -2088,6 +2329,8 @@ BEGIN
                      -- Find a new ToLoc 
                      SELECT
                         @cLocCategory = LOC.LocationCategory,
+                        @cPutawayZone = LOC.PutawayZone,
+                        @cLocationGroup = LOC.LocationGroup,
                         @cLocAisle = LOC.LocAisle,
                         @cTaskDetailMsg01 = TD.Message01,  -- PutawayZone
                         @cTaskDetailMsg02 = TD.Message02,  -- LocationGroup
@@ -2106,26 +2349,69 @@ BEGIN
                                  AND StorerKey = @cStorerKey
                                  AND Short = @cLocCategory)
                      BEGIN
-                        SELECT TOP 1 @cNewToLoc = LOC.Loc
-                           FROM dbo.LOC WITH(NOLOCK)
-                        INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                           ON LLI.Loc = LOC.Loc
-                        WHERE Facility = @cFacility
-                           AND LLI.StorerKey = @cStorerKey
-                           AND LLI.Sku = @cSKU
-                           AND LLI.Qty - LLI.QtyPicked > 0
-                           AND LOC.Status = 'OK'
-                           --AND LOC.LocAisle = @cLocAisle
-                           AND LOC.PutawayZone = @cTaskDetailMsg01
-                           AND LOC.LocationGroup = @cTaskDetailMsg02
-                           AND LOC.LocationCategory = @cTaskDetailMsg03
-                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
-                           AND LOC.CommingleSku = '1'
-                           AND NOT EXISTS(SELECT 1 
-                                       FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                                       WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                                          AND PAE.PutawayZone = LOC.PutawayZone
-                                    )
+                        IF @cChkLocMaxPallet = '1'
+                        BEGIN
+                           SELECT TOP 1 @cNewToLoc = Loc
+                           FROM
+                              (SELECT 
+                                 LOC.Loc, 
+                                 CASE WHEN ISNULL(LOC.MaxPallet, 0) = 0 THEN @nMaximumValue ELSE LOC.MaxPallet END AS MaxPallet, 
+                                 (SELECT COUNT(DISTINCT NULLIF(LLI2.ID, ''))
+                                  FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
+                                  WHERE LLI2.Loc = LOC.Loc
+                                    AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
+                                 COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
+                              FROM dbo.LOC WITH(NOLOCK)
+                              LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
+                                 ON RP.StorerKey = @cStorerKey
+                                    AND LOC.Loc = RP.SuggestedLoc
+                                    AND RP.ID <> ''
+                              WHERE LOC.Facility = @cFacility
+                                 AND LOC.Status = 'OK'
+                                 AND LOC.PutawayZone = @cPutawayZone
+                                 AND LOC.LocationGroup = @cLocationGroup
+                                 AND LOC.LocationCategory = @cLocCategory
+                                 AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                                 AND LOC.CommingleSku = '1'
+                                 AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
+                                 AND NOT EXISTS(SELECT 1 
+                                             FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                             WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                                AND PAE.PutawayZone = LOC.PutawayZone
+                                          )
+                                 AND (@cChkLocHold <> '1' OR NOT EXISTS(SELECT 1
+                                                FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+                                                WHERE IH.Loc = LOC.Loc
+                                                   AND IH.Hold = '1'))
+                              GROUP BY LOC.Loc, LOC.MaxPallet
+                              ) AS T
+                           WHERE T.TotalID + T.PendingMoveIn < T.MaxPallet
+                           ORDER BY T.Loc
+                        END
+                        ELSE
+                        BEGIN
+                           SELECT TOP 1 @cNewToLoc = LOC.Loc
+                              FROM dbo.LOC WITH(NOLOCK)
+                           INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                              ON LLI.Loc = LOC.Loc
+                           WHERE Facility = @cFacility
+                              AND LLI.StorerKey = @cStorerKey
+                              AND LLI.Sku = @cSKU
+                              AND LLI.Qty - LLI.QtyPicked > 0
+                              AND LOC.Status = 'OK'
+                              --AND LOC.LocAisle = @cLocAisle
+                              AND LOC.PutawayZone = @cTaskDetailMsg01
+                              AND LOC.LocationGroup = @cTaskDetailMsg02
+                              AND LOC.LocationCategory = @cTaskDetailMsg03
+                              AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                              AND LOC.CommingleSku = '1'
+                              AND NOT EXISTS(SELECT 1 
+                                          FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                          WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                             AND PAE.PutawayZone = LOC.PutawayZone
+                                       )
+                           ORDER BY LOC.Loc
+                        END
                      END
                      -- b) If ToLoc is a PND location, search candidate location
                      ELSE IF @cLocCategory IN ('PND', 'PNDIN', 'PND_IN')
@@ -2138,6 +2424,7 @@ BEGIN
                            AND LOC.LocAisle = @cLocAisle
                            AND LOC.Loc <> @cSuggToLoc
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                        ORDER BY LOC.Loc
                      END
                      -- c) If ToLoc is neither in the list of JCBBKTOLOC nor a PND location, search candidate location
                      -- Get a ToLoc, same Area, PutawayZone, Level ,Aisle
@@ -2179,31 +2466,74 @@ BEGIN
                         WHERE ISNULL(T1.QTY, 0) = 0
                         ORDER BY LocationRoom
 
-                        SELECT TOP 1 @cNewToLoc = LOC.Loc
-                        FROM dbo.LOC WITH(NOLOCK)
-                        INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
-                        LEFT JOIN dbo.PALLET P WITH(NOLOCK) ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
-                        LEFT JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
-                        WHERE Facility = @cFacility
-                           AND LOC.Loc <> @cSuggToLoc
-                           AND AD.AreaKey = @cToLocAreaKey
-                           AND LOC.CommingleSku = '1'
-                           AND Loc.PutawayZone = @cToLocPutawayZone
-                           AND LOC.LocLevel <= @nToLocLevel
-                           AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
-                           AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
-                           AND LOC.Status = 'OK'
-                           AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
-                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
-                           AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
-                           WHERE LLI.Loc = LOC.Loc AND QTY-QtyPicked+PendingMoveIN > 0
-                           GROUP BY LLI.Loc HAVING COUNT(DISTINCT LLI.Id) >= LOC.MaxPallet)
+                        IF @cChkLocMaxPallet = '1'
+                        BEGIN
+                           SELECT TOP 1 @cNewToLoc = Loc
+                           FROM
+                           (
+                              SELECT 
+                                 LOC.Loc, 
+                                 CASE WHEN ISNULL(LOC.MaxPallet, 0) = 0 THEN @nMaximumValue ELSE LOC.MaxPallet END AS MaxPallet, 
+                                 (SELECT COUNT(DISTINCT NULLIF(LLI2.ID, ''))
+                                  FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
+                                  WHERE LLI2.Loc = LOC.Loc
+                                    AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
+                                 COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
+                              FROM dbo.LOC WITH(NOLOCK)
+                              INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+                              LEFT JOIN dbo.PALLET P WITH(NOLOCK) ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
+                              LEFT JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
+                              LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK) ON RP.StorerKey = @cStorerKey AND LOC.Loc = RP.SuggestedLoc AND RP.ID <> ''
+                              WHERE Facility = @cFacility
+                                 AND LOC.Loc <> @cSuggToLoc
+                                 AND AD.AreaKey = @cToLocAreaKey
+                                 AND LOC.CommingleSku = '1'
+                                 AND Loc.PutawayZone = @cToLocPutawayZone
+                                 AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
+                                 AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
+                                 AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
+                                 AND LOC.Status = 'OK'
+                                 AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
+                                 AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                                 AND (@cChkLocHold <> '1' OR NOT EXISTS(SELECT 1
+                                                FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+                                                WHERE IH.Loc = LOC.Loc
+                                                   AND IH.Hold = '1'))
+                              GROUP BY LOC.Loc, LOC.MaxPallet
+                           ) AS T
+                           WHERE T.TotalID + T.PendingMoveIn < T.MaxPallet
+                           ORDER BY T.Loc
+                        END
+                        ELSE
+                        BEGIN
+                           SELECT TOP 1 @cNewToLoc = LOC.Loc
+                           FROM dbo.LOC WITH(NOLOCK)
+                           INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
+                           LEFT JOIN dbo.PALLET P WITH(NOLOCK) ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
+                           LEFT JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
+                           WHERE Facility = @cFacility
+                              AND LOC.Loc <> @cSuggToLoc
+                              AND AD.AreaKey = @cToLocAreaKey
+                              AND LOC.CommingleSku = '1'
+                              AND Loc.PutawayZone = @cToLocPutawayZone
+                              AND LOC.LocLevel <= @nToLocLevel
+                              AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
+                              AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
+                              AND LOC.Status = 'OK'
+                              AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
+                              AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                              AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
+                                             WHERE LLI.Loc = LOC.Loc AND QTY - QtyPicked + PendingMoveIn > 0
+                                             GROUP BY LLI.Loc HAVING COUNT(DISTINCT LLI.Id) >= LOC.MaxPallet)
+                           ORDER BY LOC.Loc
+                        END
                      END
 
                      -- i). If a location is found, go to ToLoc screen 
                      -- ii). If no location is found, prompt a new dialog to ask him to put the Pallet to QA location, find a new task
                      IF ISNULL(@cNewToLoc, '') <> ''
                      BEGIN
+                        FOUND_NEW_LOC:
                         SET @cSuggToLoc = @cNewToLoc
                         SET @cNewToLocIsFound = '1'
 
@@ -2242,6 +2572,48 @@ BEGIN
                      ELSE
                      BEGIN -- No location found, prompt a new dialog to ask him to put the Pallet to QA location
                         SET @cNewToLocIsFound = '0'
+
+                        --Get location from CODELKUP.Long WHERE CODELKUP.ListName = ‘JCBQALOC' AND CODELKUP.Short = 'PA' 
+                        --and that will be the new TASKDETAIL.ToLoc
+                        SET @cNewToLoc = ''
+                        SELECT TOP 1 @cNewToLoc = Long
+                        FROM dbo.CODELKUP WITH(NOLOCK)
+                        WHERE ListName = 'JCBQALOC'
+                           AND Short = 'PA'
+                           AND StorerKey = @cStorerKey
+                        SELECT @nRowCount = @@ROWCOUNT
+                        SET @cNewToLoc = ISNULL(@cNewToLoc, '')
+
+                        IF @nRowCount > 0 AND @cNewToLoc <> ''
+                        BEGIN
+                           IF @cChkLocMaxPallet = '1'
+                              AND EXISTS(SELECT 1
+                                    FROM
+                                       (SELECT
+                                          LOC.Loc, 
+                                          CASE WHEN ISNULL(LOC.MaxPallet, 0) = 0 THEN @nMaximumValue ELSE LOC.MaxPallet END AS MaxPallet, 
+                                          (SELECT COUNT(DISTINCT NULLIF(LLI2.ID, ''))
+                                           FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
+                                           WHERE LLI2.Loc = LOC.Loc
+                                             AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
+                                          COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
+                                       FROM dbo.LOC WITH(NOLOCK)
+                                       LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK) ON RP.StorerKey = @cStorerKey AND LOC.Loc = RP.SuggestedLoc AND RP.ID <> ''
+                                       WHERE LOC.Loc = @cNewToLoc 
+                                          AND LOC.Facility = @cFacility
+                                          AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
+                                          AND (@cChkLocHold <> '1' OR NOT EXISTS (SELECT 1
+                                                         FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+                                                         WHERE IH.Loc = LOC.Loc
+                                                            AND IH.Hold = '1'))
+                                       GROUP BY LOC.Loc, LOC.MaxPallet
+                                       ) AS T
+                                    WHERE T.TotalID + T.PendingMoveIn < T.MaxPallet
+                                    )
+                           BEGIN
+                              GOTO FOUND_NEW_LOC
+                           END
+                        END
 
                         SET @cMsg01 = 'No suitable location'
                         SET @cMsg02 = 'is found, move it '
@@ -2373,28 +2745,56 @@ BEGIN
                   BEGIN
                      DELETE FROM @tCandidateLoc
 
-                     INSERT INTO @tCandidateLoc (Loc, Qty)
-                     SELECT TOP 5 LOC.Loc, SUM(LLI.Qty - LLI.QtyPicked) AS TotalQty
-                     FROM dbo.LOC WITH(NOLOCK)
-                     INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                        ON LLI.Loc = LOC.Loc
-                     WHERE Facility = @cFacility
-                        AND LLI.StorerKey = @cStorerKey
-                        AND LLI.Sku = @cSKU
-                        AND LOC.Loc <> @cSuggToLoc
-                        AND LOC.Status = 'OK'
-                        AND LOC.PutawayZone = @cTaskDetailMsg01
-                        AND LOC.LocationGroup = @cTaskDetailMsg02
-                        AND LOC.LocationCategory = @cTaskDetailMsg03
-                        AND LOC.LocAisle = @cLocAisle
-                        AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
-                        AND NOT EXISTS(SELECT 1 
-                                    FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                                    WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                                       AND PAE.PutawayZone = LOC.PutawayZone
-                                 )
-                     GROUP BY LOC.Loc
-                     ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     IF @cChkLocMaxPallet = '1'
+                     BEGIN
+                        INSERT INTO @tCandidateLoc (Loc)
+                        SELECT TOP 5 LOC.Loc
+                        FROM dbo.LOC WITH(NOLOCK)
+                        INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                           ON LLI.Loc = LOC.Loc
+                        WHERE Facility = @cFacility
+                           AND LLI.StorerKey = @cStorerKey
+                           AND LLI.Sku = @cSKU
+                           AND LOC.Loc <> @cSuggToLoc
+                           AND LOC.Status = 'OK'
+                           AND LOC.PutawayZone = @cPutawayZone
+                           AND LOC.LocationGroup = @cLocationGroup
+                           AND LOC.LocationCategory = @cLocCategory
+                           AND LOC.LocAisle = @cLocAisle
+                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                           AND NOT EXISTS(SELECT 1 
+                                       FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                       WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                          AND PAE.PutawayZone = LOC.PutawayZone
+                                    )
+                        GROUP BY LOC.Loc
+                        ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     END
+                     ELSE
+                     BEGIN
+                        INSERT INTO @tCandidateLoc (Loc)
+                        SELECT TOP 5 LOC.Loc
+                        FROM dbo.LOC WITH(NOLOCK)
+                        INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                           ON LLI.Loc = LOC.Loc
+                        WHERE Facility = @cFacility
+                           AND LLI.StorerKey = @cStorerKey
+                           AND LLI.Sku = @cSKU
+                           AND LOC.Loc <> @cSuggToLoc
+                           AND LOC.Status = 'OK'
+                           AND LOC.PutawayZone = @cTaskDetailMsg01
+                           AND LOC.LocationGroup = @cTaskDetailMsg02
+                           AND LOC.LocationCategory = @cTaskDetailMsg03
+                           AND LOC.LocAisle = @cLocAisle
+                           AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
+                           AND NOT EXISTS(SELECT 1 
+                                       FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+                                       WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                                          AND PAE.PutawayZone = LOC.PutawayZone
+                                    )
+                        GROUP BY LOC.Loc
+                        ORDER BY SUM(LLI.Qty - LLI.QtyPicked) DESC, LOC.Loc
+                     END
 
                      DECLARE 
                         @cSuggestToLocTemp       NVARCHAR(10),
@@ -2510,7 +2910,6 @@ END
 GOTO Quit
 
 
-
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -2548,6 +2947,13 @@ BEGIN
       C_String28     = @cToLoc,
       V_String10     = @cExtScnSP,
       V_String11     = @cEquipmentProfileKey,
+      V_String12     = @cChkLevelHeight,
+      V_String13     = @cChkLocMaxPallet,
+      V_String14     = @cChkLocHold,
+
+      V_String15     = ISNULL(TRY_CAST(@fMaximumWeight AS NVARCHAR(20)), 0),
+      V_String16     = ISNULL(TRY_CAST(@fMaximumLevel AS NVARCHAR(20)), 0),
+      V_String17     = ISNULL(TRY_CAST(@fMaximumHeight AS NVARCHAR(20)), 0),
       
       V_String32     = @cAreakey,
 

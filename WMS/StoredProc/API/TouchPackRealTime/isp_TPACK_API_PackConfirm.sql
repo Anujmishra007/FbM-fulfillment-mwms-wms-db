@@ -17,6 +17,7 @@ GO
 /* 2026-02-06   4.1  Sean01     ADD Logic @cType = 'pickslip' and @bIsCustom = 1 */
 /* 2026-03-19   4.2  Sean02     UWP-42468: ToteID for multi orders               */
 /* 2026-04-02   4.3  JWF011     UWP-52777: update pickQty when by order          */
+/* 2026-07-16   4.4  GCH225     UWP-61629: Restructure the Get Total Pick Qty    */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PackConfirm] (
@@ -129,18 +130,10 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   IF @b_sp_ExecuteAs = 1
    BEGIN
       EXECUTE AS LOGIN = @DBUserName
       SET @c_UserID = @DBUserName
-
-      IF OBJECT_ID('dbo.fnc_GetUserName', 'FN') IS NOT NULL
-      BEGIN
-         IF dbo.fnc_GetUserName() NOT IN ('WMConnect', '')
-         BEGIN
-            SET @c_UserID = dbo.fnc_GetUserName()
-         END
-      END
    END
 
    --Decode Json Format
@@ -225,47 +218,7 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @bIsDiscrete = 0 OR (@cType <> 'pickslip' AND @cLoadKey <> '')
-   BEGIN
-      --Sean01 S
-      IF @cType = 'toteid' AND @cLoadKey = ''
-      BEGIN
-         SELECT @nCntOrder = 1
-            , @nCntPICKLine = COUNT(PickDetailKey)
-            , @nTtlPickQty = SUM(Qty)
-         FROM PICKDETAIL PD WITH (NOLOCK)
-         WHERE PD.StorerKey = @cStorerKey
-         AND PD.OrderKey = @cOrderKey
-         AND PD.DropID = @cDropID
-         AND PD.[Status] <= '5'
-      END
-      --Sean01 E
-      ELSE IF @cType = 'order' AND @bIsDiscrete = 1
-      BEGIN
-         SELECT  @nCntOrder = 1
-               , @nCntPICKLine = COUNT(PickDetailKey)
-               , @nTtlPickQty = SUM(Qty)
-         FROM PICKDETAIL PD WITH (NOLOCK)
-         WHERE PD.StorerKey = @cStorerKey
-         AND PD.OrderKey = @cOrderKey
-         AND PD.[Status] <= '5'
-      END
-      ELSE
-      BEGIN
-         SELECT @nCntOrder = COUNT(DISTINCT PD.Orderkey)
-               , @nCntPICKLine = COUNT(PickDetailKey)
-               , @nTtlPickQty = SUM(Qty)
-            FROM PICKDETAIL PD WITH (NOLOCK)
-            WHERE PD.StorerKey = @cStorerKey
-            AND EXISTS (SELECT 1 
-                        FROM LOADPLANDETAIL LPD (NOLOCK)
-                        WHERE LPD.LoadKey = @cLoadKey
-                        AND LPD.OrderKey = PD.OrderKey
-            )
-            AND PD.[Status] <= '5'
-      END
-   END
-   ELSE
+   IF @cOrderKey <> ''
    BEGIN
       SELECT @nCntOrder = 1
            , @nCntPICKLine = COUNT(PickDetailKey)
@@ -274,6 +227,20 @@ BEGIN
       WHERE PD.StorerKey = @cStorerKey
       AND PD.OrderKey = @cOrderKey
       AND PD.[Status] <= '5'
+   END
+   ELSE IF @cLoadKey <> ''
+   BEGIN
+      SELECT  @nCntOrder = COUNT(DISTINCT PD.Orderkey)
+            , @nCntPICKLine = COUNT(PickDetailKey)
+            , @nTtlPickQty = SUM(Qty)
+         FROM PICKDETAIL PD WITH (NOLOCK)
+         WHERE PD.StorerKey = @cStorerKey
+         AND EXISTS (SELECT 1 
+                     FROM LOADPLANDETAIL LPD (NOLOCK)
+                     WHERE LPD.LoadKey = @cLoadKey
+                     AND LPD.OrderKey = PD.OrderKey
+         )
+         AND PD.[Status] <= '5'
    END
 
    SELECT @nTtlPackQty = SUM(Qty)
@@ -567,3 +534,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_PackConfirm] TO NSQL
+GO

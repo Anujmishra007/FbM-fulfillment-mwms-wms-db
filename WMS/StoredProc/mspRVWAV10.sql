@@ -13,7 +13,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave                                                       */    
 /*                                                                       */    
-/* Version: 1.6                                                          */    
+/* Version: 1.7                                                          */    
 /*                                                                       */    
 /* Data Modifications:                                                   */    
 /*                                                                       */    
@@ -28,6 +28,7 @@ GO
 /*                            (WL04)                                     */
 /* 16-Mar-2026 WLChooi  1.5   FCR-11584 Clear Shipperkey (WL05)          */
 /* 13-Apr-2026 WLChooi  1.6   FCR-12448 Remove RPF task (WL06)           */
+/* 04-Jun-2026 WLChooi  1.7   FCR-13901 Remove rdtRPFLog (WL07)          */
 /*************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV10]
       @c_Wavekey      NVARCHAR(10)
@@ -62,6 +63,8 @@ BEGIN
          , @c_Shipperkey      NVARCHAR(15)   = ''
          --WL05 E
          , @b_RemoveRPF       BIT            = 1   --WL06
+         , @c_TaskType        NVARCHAR(10)   = ''  --WL07
+         , @c_UCCNo           NVARCHAR(20)   = ''  --WL07
  
    -- Reject if wave not yet release
    IF @n_Continue = 1 OR @n_Continue = 2
@@ -132,7 +135,7 @@ BEGIN
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT Taskdetailkey
+      SELECT Taskdetailkey, TaskType, Caseid   --WL07
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND Sourcetype IN ('mspRLWAV10')
@@ -140,7 +143,7 @@ BEGIN
       AND [Status] IN ('0', 'H')
       --WL06 S
       UNION ALL
-      SELECT Taskdetailkey
+      SELECT Taskdetailkey, TaskType, Caseid   --WL07
       FROM TASKDETAIL (NOLOCK)
       WHERE Wavekey = @c_Wavekey
       AND (@b_RemoveRPF = 1 AND TaskType = 'RPF')
@@ -149,24 +152,40 @@ BEGIN
 
       OPEN CUR_TASK
 
-      FETCH NEXT FROM CUR_TASK INTO @c_Taskdetailkey
+      FETCH NEXT FROM CUR_TASK INTO @c_Taskdetailkey, @c_TaskType, @c_UCCNo   --WL07
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
       BEGIN
-         DELETE FROM TASKDETAIL 
-         WHERE Taskdetailkey = @c_Taskdetailkey
-
-         SELECT @n_Err = @@ERROR
-
-         IF @n_Err <> 0
+         --WL07 S
+         IF (@b_RemoveRPF = 1 AND @c_TaskType = 'RPF' AND @c_UCCNo > '')
          BEGIN
-            SELECT @n_Continue = 3
-            SELECT @c_Errmsg = CONVERT(NVARCHAR(250),@n_Err), @n_Err = 67030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err) + ': Delete Taskdetail Table Failed. (mspRVWAV10)' 
-                             + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_Errmsg) + ' ) '
+            BEGIN TRY
+               DELETE FROM rdt.rdtRPFLog
+               WHERE TaskDetailKey = @c_Taskdetailkey
+               AND UCCNo = @c_UCCNo
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @n_Err = ERROR_NUMBER()
+               SET @c_Errmsg = ERROR_MESSAGE()
+            END CATCH
          END
+         
+         IF @n_Continue IN (1, 2)
+         BEGIN
+            BEGIN TRY
+               DELETE FROM TASKDETAIL 
+               WHERE Taskdetailkey = @c_Taskdetailkey
+            END TRY
+            BEGIN CATCH
+               SET @n_Continue = 3
+               SET @n_Err = ERROR_NUMBER()
+               SET @c_Errmsg = ERROR_MESSAGE()
+            END CATCH
+         END
+         --WL07 E
       	         	  
-         FETCH NEXT FROM CUR_TASK INTO @c_Taskdetailkey 	
+         FETCH NEXT FROM CUR_TASK INTO @c_Taskdetailkey, @c_TaskType, @c_UCCNo   --WL07
       END
       CLOSE CUR_TASK
       DEALLOCATE CUR_TASK    	        	        	        	        	 

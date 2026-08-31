@@ -6,7 +6,7 @@ GO
 /***************************************************************************/
 /* Stored Procedure: nspALCFG01                                            */
 /* Creation Date: 18-APR-2018                                              */
-/* Copyright: LF                                                           */
+/* Copyright: Maersk Logistics                                             */
 /* Written by:                                                             */
 /*                                                                         */
 /* Purpose: WMS-4344 Allocation Configure by codelkup                      */
@@ -49,6 +49,9 @@ GO
 /* 14-Aug-2025 WLChooi  2.7  UWP-36187-Support Multi Facilities(WL01)      */
 /* 03-Oct-2025 WLChooi  2.8  FCR-7828 Exclude UCC Hold - Status = H (WL03) */
 /* 14-Oct-2025 WLChooi  2.9  FCR-8009 Fix partial UCC Qty calculation(WL04)*/
+/* 25-May-2026 Wan03    3.0  FCR-8009 FCR-13242 - ID - MICHELIN - Allocation*/
+/* 03-Jun-2026               FULLPALLETBYID and FDOTFOBYMULTIUOM           */
+/* 20-Jul-2026               CR v2.0                                       */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG01]
@@ -91,7 +94,7 @@ BEGIN
    ALLOCATEHOLD         Allow allocate from Hold Inventory(default N)                          Y/N
    FROMPBULKLOC         Allocate from bulk only (default N)                                    Y/N
    FROMPICKLOC          Allocate from pick only (default N)                                    Y/N
-   FULLPALLETBYLOC      Allocate as full pallet if no remain qty at the loc (default N)        Y/N
+   FULLPALLETBYLOC      Allocate as full pallet if no remain qty at the loc (default N)        Y/N             Y/N (Allocate Multi Lot)
    CONDITION            Additional allocation retrieve condition                          SQL
    SORTING              Custom sorting (default FIFO)                                     SQL  <BLANK>/DYNAMICSQL
    LOCTYPESEQ           Custom allocate by locationtype and sequence                           Locationtype by sequence (UDF01-05)
@@ -100,6 +103,7 @@ BEGIN
    ALLOCATEQTYREPLEN    Allow allocate qty reserved for replenish at bulk loc                  Y/N
    SKIPLOTTABLEFILTER   Allow skip filtering for certain lottable 01-15                        01-15
    FIFOBYMULTIUOM       Enforce FIFO by multiple UOM. (Default N)                         SQL  Y/N
+   FDTFOBYMULTIUOM      Enforce First Date Of Trade First Out by multiple UOM. (Default N)SQL  Y/N             LACol
    FORCELOTTABLEFILTER  Force filtering for certain lottable 01-05 to include empty lottable   01-15
    ALLOCATEBYUCC        Allocate by UCC (default N)                                            Y/N             Y/N (From partial Allocated UCC)
    SKIPDISCRETE         Skip when discrete allocation (default N)                              Y/N
@@ -132,8 +136,8 @@ BEGIN
    8.  Storerkey - storer. The setup only apply to the same storer of the sku.
        If Short is defined, storer is optional. if key-in storerkey, the setup apply to the same storer and allocationstrategykey
        if key-in allocationstrageykey, the setup apply to the same allocationstrategykey of all storer.
-   9.  FULLPALLETBYLOC is only work for Pallet(UOM 1).
-   10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking.
+   9.  FULLPALLETBYLOC is only work for Pallet(UOM 1). FullPalletMultiLot(UDF02='Y') is additional for UOM 1 LPN with multiple Lot.
+   10. For SHELFLIFE. Set E to enable check shelflife by expiry date in lottable04, M to check by manufacturing date, N is no checking. Setup UDF02=Y for Conso Consignee
    11. For LISTNAME. Only need to provide storerkey and UDF01. This option only can apply to listname 'nspALCFG01'
    12. For SKIPLOTTABLEFILTER, include the lottable need to skip filtering in the list delimited by comman from 01 to 15. e.g. 02,04,08
    13. For FIFOBYMULTIUOM, Must complete pick a batch before proceed to next irregardless different UOM. The sorting must be Lottable05. 
@@ -150,12 +154,13 @@ BEGIN
    19. For SKIPDISCRETE, SKIPLOADCONSO, SKIPWAVECONSO usually it work with storerconfig DiscreteAllocB4LoadConso, DiscreteAllocB4LoadConso, LoadConsoAllocB4WaveConso,
        DiscreteAllocAfterLoadConso, DiscreteAllocAfterWaveConso, LoadConsoAllocation and WaveConsoAllocation. By this config the strategy will execute two times in different mode, 
        hence we can skip certain step by the code. 
+   20. For FDTFOBYMULTIUOM, Similar to FIFOBYMULTIUOM but apply to Tyre Date of Trade with WWYY format
    
    Shelflife logic and sequence
    ----------------------------
    1. Order detail shelflife (orderdetail.Minshelflife)  - if Orderinfo4Allocation turn on with discrete allocation
-   2. Consignee+Sku shelflife ((Consingneekey=Storer.MinShelflife/100) * Sku.Shelflife) - if Orderinfo4Allocation turn on with discrete allocation
-   3. Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup) - if Orderinfo4Allocation turn on with discrete allocation
+   2. Consignee+Sku shelflife ((Consingneekey=Storer.MinShelflife/100) * Sku.Shelflife) - if Orderinfo4Allocation turn on with discrete allocation. Allow Conso if UDF02=Y
+   3. Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup) - if Orderinfo4Allocation turn on with discrete allocation. Allow Conso if UDF02=Y
    4. Sku outgoing shelflife (Sku.SUSR2)
    5. Storer+Sku shelflife ((Storer.MinShelflife/100) * Sku.Shelflife)
 */
@@ -196,6 +201,7 @@ BEGIN
            @c_AllocateStrategyKey NVARCHAR(10),
            @c_FullPalletByLocFlag NCHAR(1),
            @c_ShelfLifeFlag       NCHAR(1),
+           @c_ShelfLifeConsoFlag  NCHAR(1) = 'N',                                   --(Wan03)
            @c_FIFOByMultiUOM      NCHAR(1)='N', --NJOW07
            @c_SQL                 NVARCHAR(MAX),
            @n_QtyAvailable     INT,
@@ -203,7 +209,7 @@ BEGIN
            @c_LOC              NVARCHAR(10),
            @c_OtherValue       NVARCHAR(500),  --NJOW09
            @n_QtyToTake        INT,
-           @n_LocQty           INT,
+           @n_LocIDQty         INT,                                                 --(Wan03)
            @n_NoOfLot          INT,
            @c_ListName         NVARCHAR(10),
            @c_AllocateGetCasecntFrLottable NVARCHAR(30),
@@ -222,8 +228,19 @@ BEGIN
            @n_PrevLotQtyAvailable INT = 0, --NJOW09
            @c_ConditionForLot     NVARCHAR(MAX) = '', --NJOW09
            @c_CLKConditionForLot  NVARCHAR(MAX) = ''  --NJOW09
-         , @c_FromPartialAllocUCCFlag  NVARCHAR(1) = 'N'   --(Wan02)
-           
+         , @c_FromPartialAllocUCCFlag  NVARCHAR(1) = 'N'    --(Wan02)
+         , @c_FullPalletMultiLot       NCHAR(1)    = 'N'    --(Wan03)
+         , @c_FDTFOByMultiUOM          NCHAR(1)    = 'N'    --(Wan03)
+         , @c_LAXMultiUOM              NVARCHAR(30)= ''     --(Wan03)
+         , @c_CLKConditionForLot_FDTF  NVARCHAR(MAX)=''     --(Wan03)         
+         , @c_DOT                      NVARCHAR(4)= ''      --(Wan03)      --Tyre Date Of Trade WWYY
+         , @c_Loc_Prev                 NVARCHAR(10)= ''     --(Wan03)     
+         , @c_ID_Prev                  NVARCHAR(18)= ''     --(Wan03)
+         , @b_GetLocID                 BIT         = 0      --(Wan03)
+         , @c_Consigneekey             NVARCHAR(15)= ''     --(Wan03) CR v2.0
+         , @c_ConsigneeOrd             NVARCHAR(20)= ''     --(Wan03) CR v2.0         
+         , @c_OParms                   NVARCHAR(200)= ''    --(Wan03) CR v2.0
+            
     SET @c_LocTypeList = ''
     SET @c_LocTypeSort = ''
     SET @c_CLKCondition = ''
@@ -291,7 +308,12 @@ BEGIN
       BEGIN
           SELECT @c_Wavekey = LEFT(@c_OtherParms, 10) --Wave conso
       END   
-      --NJOW06 E   
+      --NJOW06 E 
+      
+      IF LEN(@c_OtherParms) > 16                                                                   --(Wan03)
+      BEGIN 
+         SET @c_OParms = RIGHT(@c_OtherParms,LEN(@c_OtherParms)-16)
+      END        
    END
 
    DECLARE  @TMP_CODELKUP TABLE (
@@ -312,7 +334,9 @@ BEGIN
        )
 
    CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
-                          QtyAvailable INT NULL DEFAULT(0))                                     
+                          QtyAvailable INT NULL DEFAULT(0)
+                         ,LAValueXMultiUOM NVARCHAR(10) NULL DEFAULT('')                           --(Wan03)
+                         )                                     
 
   --NJOW06 S                   
    IF ISNULL(@c_Wavekey,'') <> ''
@@ -475,6 +499,7 @@ BEGIN
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
 
    SELECT TOP 1 @c_FullPalletByLocFlag = ISNULL(UDF01,'')
+               ,@c_FullPalletMultiLot  = ISNULL(UDF02,'')                                          --(Wan03)
    FROM @TMP_CODELKUP
    WHERE Code = 'FULLPALLETBYLOC' --Allocate as Full pallet if the loc no remain qty. default is by packkey.
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
@@ -493,6 +518,7 @@ BEGIN
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
 
    SELECT TOP 1 @c_ShelfLifeFlag = ISNULL(UDF01,'')
+            , @c_ShelfLifeConsoflag = ISNULL(UDF02,'')                              --(Wan03)
    FROM @TMP_CODELKUP
    WHERE Code = 'SHELFLIFE' --allocation check shelflife. default is no checking.
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
@@ -508,6 +534,14 @@ BEGIN
                 @c_CLKConditionForLot = ISNULL(Notes,'') --NJOW09
    FROM @TMP_CODELKUP
    WHERE Code = 'FIFOBYMULTIUOM' --FIFO by Multi UOM.
+   AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   SELECT TOP 1 @c_FDTFOByMultiUOM = ISNULL(UDF01,'')                                               --(Wan03)                                
+              , @c_LAXMultiUOM     = ISNULL(UDF02,'') 
+              , @c_CLKConditionForLot_FDTF = ISNULL(Notes,'')  
+   FROM @TMP_CODELKUP
+   WHERE Code = 'FDTFOBYMULTIUOM' --Fisrt DOT of Tyre First Out by Multi UOM.
    AND (Code2 = @c_UOM OR ISNULL(Code2,'') = '')
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
 
@@ -698,7 +732,71 @@ BEGIN
       SET @c_ContinueChkShelfLife = 'N'
    END
 
-   IF ISNULL(@c_OrderKey,'') <> '' AND @c_ContinueChkShelfLife = 'Y'
+   IF @c_ContinueChkShelfLife = 'Y' AND @c_ShelfLifeConsoflag = 'Y' AND @c_Orderkey = ''           --(Wan03) - START   
+   BEGIN
+      IF @c_Loadkey > ''
+      BEGIN
+         IF @c_OParms > ''
+         BEGIN 
+            IF EXISTS ( SELECT 1 
+                        FROM dbo.Fnc_GetRight2(@c_Facility, @c_Storerkey, ''
+                                             , 'LoadConsoAllocationOParms') gr2
+                        WHERE gr2.Authority = '1'
+                        AND Option5 = 'ORDERS.Consigneekey'
+                      )
+            BEGIN            
+               SELECT @c_Consigneekey = o.ConsigneeKey
+                     ,@c_ConsigneeOrd = o.Orderkey               
+               FROM LoadPlanDetail lpd (NOLOCK)
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey
+               WHERE lpd.Loadkey = @c_Loadkey
+               AND   o.ConsigneeKey = @c_OParms
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_Consigneekey = MIN(o.ConsigneeKey)
+                  ,@c_ConsigneeOrd = MIN(o.Orderkey)               
+            FROM LoadPlanDetail lpd (NOLOCK)
+            JOIN ORDERS o (NOLOCK) ON o.Orderkey = lpd.Orderkey
+            WHERE lpd.Loadkey = @c_Loadkey
+            GROUP BY lpd.LoadKey
+            HAVING COUNT(DISTINCT o.ConsigneeKey) = 1
+         END
+      END
+      ELSE IF @c_Wavekey > ''
+      BEGIN
+         IF @c_OParms > ''
+         BEGIN 
+            IF EXISTS ( SELECT 1 
+                        FROM dbo.Fnc_GetRight2(@c_Facility, @c_Storerkey, ''
+                                             , 'WaveConsoAllocationOParms') gr2
+                        WHERE gr2.Authority = '1'
+                        AND Option5 = 'ORDERS.Consigneekey'
+                        )
+            BEGIN
+               SELECT @c_Consigneekey = o.ConsigneeKey
+                     ,@c_ConsigneeOrd = o.Orderkey               
+               FROM Wavedetail wd (NOLOCK)
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.Orderkey
+               WHERE wd.WaveKey = @c_Wavekey
+               AND   o.ConsigneeKey = @c_OParms
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_Consigneekey = MIN(o.ConsigneeKey)
+                  ,@c_ConsigneeOrd = MIN(o.Orderkey)          
+            FROM Wavedetail wd (NOLOCK)
+            JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.Orderkey
+            WHERE wd.WaveKey = @c_Wavekey
+            GROUP BY wd.Wavekey
+            HAVING COUNT(DISTINCT o.ConsigneeKey) = 1
+         END
+      END
+   END                                                                                             --(Wan03) - END
+
+   IF (ISNULL(@c_OrderKey,'') <> '' OR @c_Consigneekey <> '') AND @c_ContinueChkShelfLife = 'Y'    --(Wan03)  
    BEGIN
       ------Consignee shelflife (Storer.MinShelfLife)
       /*
@@ -714,13 +812,23 @@ BEGIN
       END
       */
       ------Consignee+Sku shelflife (Storer.MinShelflife * Sku.Shelflife)
-      SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
-      FROM ORDERS O (NOLOCK)
-      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
-      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
-      JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
-      WHERE O.Orderkey = @c_Orderkey
-      AND OD.OrderLineNumber = @c_OrderLineNumber
+      IF @c_Orderkey > ''                                                                          --(Wan03) - START
+      BEGIN
+         SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
+         FROM ORDERS O (NOLOCK)
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
+         WHERE O.Orderkey = @c_Orderkey
+         AND OD.OrderLineNumber = @c_OrderLineNumber
+      END
+      ELSE IF @c_Consigneekey > ''
+      BEGIN
+         SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
+         FROM STORER (NOLOCK) 
+         JOIN SKU (NOLOCK) ON SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
+         WHERE STORER.StorerKey = @c_Consigneekey
+      END                                                                                          --(Wan03) - END
 
       IF ISNULL(@n_ConsigneeSkuMinShelfLife,0) > 0
       BEGIN
@@ -741,14 +849,26 @@ BEGIN
       ------Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup)
       IF @c_ContinueChkShelfLife = 'Y'
       BEGIN
-         SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
-         FROM ORDERS O (NOLOCK)
-         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
-         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
-         JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
-         JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup AND SKU.Skugroup = DOCLKUP.Skugroup
-         WHERE O.Orderkey = @c_Orderkey
-         AND OD.OrderLineNumber = @c_OrderLineNumber
+         IF @c_Orderkey > ''                                                                       --(Wan03) - START
+         BEGIN
+            SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
+            FROM ORDERS O (NOLOCK)
+            JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+            JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+            JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
+            JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup AND SKU.Skugroup = DOCLKUP.Skugroup
+            WHERE O.Orderkey = @c_Orderkey
+            AND OD.OrderLineNumber = @c_OrderLineNumber
+         END
+         ELSE IF @c_Consigneekey > ''
+         BEGIN
+            SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
+            FROM SKU (NOLOCK)
+            JOIN STORER (NOLOCK)  ON STORER.StorerKey = @c_Consigneekey
+            JOIN DOCLKUP (NOLOCK) ON STORER.Secondary = DOCLKUP.ConsigneeGroup 
+                                 AND SKU.Skugroup = DOCLKUP.Skugroup 
+            WHERE SKU.Storerkey = @c_Storerkey AND SKU.Sku = @c_Sku
+         END                                                                                       --(Wan03) - END
 
          IF ISNULL(@n_ConsigneeSkuGroupMinShelfLife,0) > 0
          BEGIN
@@ -766,6 +886,11 @@ BEGIN
             SET @c_ContinueChkShelfLife = 'N'
          END
       END
+      
+      IF @c_ContinueChkShelfLife = 'N' AND @c_Consigneekey > ''
+      BEGIN
+         SET @c_Orderkey = @c_ConsigneeOrd
+      END      
    END
 
    ------Sku outgoing shelflife (Sku.SUSR2)
@@ -834,7 +959,20 @@ BEGIN
    
    --NJOW09 S
    IF @c_FIFOByMultiUOM = 'Y' 
-      SET @c_ConditionForLot = @c_Condition 
+      SET @c_ConditionForLot = @c_Condition
+   ELSE IF @c_FDTFOByMultiUOM = 'Y'                                                                --(Wan03) - START
+   BEGIN
+      SET @c_ConditionForLot = @c_Condition
+      SET @c_CLKConditionForLot = @c_CLKConditionForLot_FDTF
+
+      IF (@c_LAXMultiUOM NOT Like 'LOTATTRIBUTE.Lottable0[1-3]%' AND
+      @c_LAXMultiUOM NOT Like 'LOTATTRIBUTE.Lottable0[6-9]%' AND
+      @c_LAXMultiUOM NOT Like 'LOTATTRIBUTE.Lottable1[0-2]%'  
+         )
+      BEGIN
+         SET @c_LAXMultiUOM = 'LOTATTRIBUTE.Lottable02'
+      END
+   END                                                                                             --(Wan03) - START
 
    IF ISNULL(@c_CLKConditionForLot,'') <> ''
    BEGIN
@@ -968,13 +1106,15 @@ BEGIN
 
    IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y') 
       OR (@c_FIFOByMultiUOM = 'Y')  --NJOW07
+      OR (@c_FDTFOByMultiUOM = 'Y'   )                                                             --(Wan03) 
       OR (@c_AllocateByUCCFlag = 'Y')   --WL02
    BEGIN
       SET @c_SQL = ''
       
-      IF @c_FIFOByMultiUOM = 'Y'  --NJOW09
+      IF @c_FIFOByMultiUOM = 'Y' OR --NJOW09                                                       --(Wan03)   
+         @c_FDTFOByMultiUOM = 'Y'                                                                  --(Wan03)
       BEGIN
-         SELECT @c_SQLStatement = ' INSERT INTO #TMP_LOT (Lot, QtyAvailable) ' +
+          SELECT @c_SQLStatement =' INSERT INTO #TMP_LOT (Lot, QtyAvailable, LAValueXMultiUOM) ' + --(Wan03)
                                   ' SELECT LOTxLOCxID.LOT, ' +
                                   CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'N' THEN  --(Wan02)--NJOW10 
                                      ' SUM(CASE WHEN UCC.UCCNo IS NOT NULL AND UCC.Status < ''3'' THEN UCC.Qty 
@@ -991,7 +1131,12 @@ BEGIN
                                   WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
                                      ' SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) '
                                   ELSE
-                                     ' SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) ' END +                                  
+                                     ' SUM(LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) ' END + 
+                                  CASE WHEN @c_LAXMultiUOM > ''                                    --(Wan03)
+                                       THEN ', RIGHT(' + @c_LAXMultiUOM + ',2)' +
+                                            '+ LEFT (' + @c_LAXMultiUOM + ',2)'
+                                       ELSE ', '''''
+                                       END +
                                   ' FROM LOTxLOCxID (NOLOCK) ' +
                                   ' JOIN LOTATTRIBUTE (NOLOCK) ON (LOTxLOCxID.Lot = LOTATTRIBUTE.Lot) ' +
                                   ' JOIN LOT (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot) ' +
@@ -1027,7 +1172,11 @@ BEGIN
                                   END  +                                    
                                   ISNULL(RTRIM(@c_ConditionForLot),'') + ' ' + ISNULL(RTRIM(@c_CLKConditionForLot),'') +
                                   CASE WHEN @c_AllocateByUCCFlag = 'Y' THEN ' AND UCC.Status <> ''H'' ' ELSE '' END +   --WL03
-                                  ' GROUP BY LOTxLOCxID.LOT'                    
+                                  ' GROUP BY LOTxLOCxID.LOT'   
+                                  + CASE WHEN @c_LAXMultiUOM > ''                                  --(Wan03)
+                                       THEN ', RIGHT(' + @c_LAXMultiUOM + ',2)' +
+                                            '+ LEFT (' + @c_LAXMultiUOM + ',2)'
+                                       END
 
          SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
              +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5), @c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
@@ -1139,13 +1288,17 @@ BEGIN
                                    ELSE ''
                                    END +                                                                       --(Wan02) - END
                               CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') THEN --NJOW07 --NJOW11
+                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1')      --NJOW07 --NJOW11 
+                                       OR  @c_FDTFOByMultiUOM= 'Y'                                             --(Wan03)
+                                 THEN 
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= 1 '
                                  ELSE
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase '
                                  END 
                               ELSE
-                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') THEN --NJOW07 --NJOW11                                
+                                 CASE WHEN @c_FIFOByMultiUOM = 'Y' OR (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1')      --NJOW07 --NJOW11
+                                       OR  @c_FDTFOByMultiUOM= 'Y'                                             --(Wan03) 
+                                 THEN                                
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= 1 ' 
                                  ELSE
                                     ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase ' 
@@ -1170,6 +1323,7 @@ BEGIN
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
           +',@c_ID NVARCHAR(18)'
           +',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'
+          +',@c_OParms NVARCHAR(200)'                                                              --(Wan03)
       --(Wan01) - END
  
       EXEC sp_executesql @c_SQLStatement, @c_SQLParms,   --(Wan01)
@@ -1210,7 +1364,7 @@ BEGIN
         ,@c_UDF03                                        --(Wan01)
         ,@c_UDF04                                        --(Wan01)
         ,@c_UDF05                                        --(Wan01)
-
+        ,@c_OParms                                       --(Wan03)
       --EXEC sp_ExecuteSQL @c_SQLStatement
 
       OPEN CURSOR_AVAILABLECFG
@@ -1222,29 +1376,52 @@ BEGIN
  
           SET @n_PrevLotQtyAvailable = 0 --NJOW09  For @c_FIFOByMultiUOM=Y only
           
-         IF @c_FIFOByMultiUOM = 'Y' --NJOW07
+         IF @c_FIFOByMultiUOM = 'Y' OR --NJOW07
+            @c_FDTFOByMultiUOM= 'Y'                                                 --(Wan03)
          BEGIN
-             SELECT @dt_CurrLottable05 = Lottable05
-             FROM LOTATTRIBUTE (NOLOCK)
-             WHERE Lot = @c_Lot
+            IF @c_FIFOByMultiUOM = 'Y' 
+            BEGIN
+               SELECT @dt_CurrLottable05 = Lottable05
+               FROM LOTATTRIBUTE (NOLOCK)
+               WHERE Lot = @c_Lot
                          
-           SELECT @n_PrevLotQtyAvailable = SUM(TL.QtyAvailable)
-           FROM #TMP_LOT TL 
-           JOIN LOTATTRIBUTE LA (NOLOCK) ON TL.Lot = LA.Lot
-           WHERE DATEDIFF(Day, LA.Lottable05, @dt_CurrLottable05) > 0 --NJOW09
-           AND TL.QtyAvailable > 0
+               SELECT @n_PrevLotQtyAvailable = SUM(TL.QtyAvailable)
+               FROM #TMP_LOT TL 
+               JOIN LOTATTRIBUTE LA (NOLOCK) ON TL.Lot = LA.Lot
+               WHERE DATEDIFF(Day, LA.Lottable05, @dt_CurrLottable05) > 0 --NJOW09
+               AND TL.QtyAvailable > 0
+            END
+            ELSE IF @c_FDTFOByMultiUOM= 'Y' 
+            BEGIN
+               SET @c_SQL = N'SELECT @c_DOT = RIGHT(' + @c_LAXMultiUOM + ',2)'  
+                          +                '+ LEFT('  + @c_LAXMultiUOM + ',2)'                  
+                          + ' FROM LOTATTRIBUTE (NOLOCK)'
+                          + ' WHERE LOTATTRIBUTE.Lot = @c_Lot'
+
+               SET @c_SQLParms = N'@c_DOT NVARCHAR(4) OUTPUT'
+                               + ',@c_Lot NVARCHAR(10)'
+
+               EXEC sp_ExecuteSQL @c_SQL
+                                 ,@c_SQLParms
+                                 ,@c_DOT  OUTPUT
+                                 ,@c_Lot
+
+               SELECT @n_PrevLotQtyAvailable = SUM(TL.QtyAvailable)                                   
+               FROM #TMP_LOT TL 
+               WHERE TL.LAValueXMultiUOM < @c_DOT   
+            END
            
-           SET @n_PrevLotQtyAvailable = ISNULL(@n_PrevLotQtyAvailable,0) --NJOW09
+            SET @n_PrevLotQtyAvailable = ISNULL(@n_PrevLotQtyAvailable,0) --NJOW09
            
-           IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill --NJOW09          
-           BEGIN
-              --IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill --Previous batch can fulfill in next UOM and not to proceed next batch for current UOM
-                 BREAK 
-              --ELSE IF @n_PrevLotQtyAvailable < @n_QtyLeftToFulfill --proceed next batch with the remaining qtylefttofulfill
-              --BEGIN
-              --    SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_PrevLotQtyAvailable 
-              --END  
-           END         
+            IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill --NJOW09          
+            BEGIN
+               --IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill --Previous batch can fulfill in next UOM and not to proceed next batch for current UOM
+                  BREAK 
+               --ELSE IF @n_PrevLotQtyAvailable < @n_QtyLeftToFulfill --proceed next batch with the remaining qtylefttofulfill
+               --BEGIN
+               --    SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_PrevLotQtyAvailable 
+               --END  
+            END         
          END           
          
          IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
@@ -1287,21 +1464,46 @@ BEGIN
 
          IF @c_UOM = '1' AND @c_FullPalletByLocFlag = 'Y' --Pallet
          BEGIN
-            SELECT @n_LocQty = 0, @n_NoOfLot = 0
+            SET @b_GetLocID = 1                                                                    --(Wan03) - START
+            IF @c_FullPalletMultiLot = 'Y' 
+            BEGIN
+               IF @c_Loc_Prev = @c_Loc AND @c_ID_Prev = @c_ID
+               BEGIN
+                  SET @b_GetLocID = 0
+               END
 
-            SELECT @n_LocQty = SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen),
-                   @n_NoOfLot = COUNT(DISTINCT LLI.Lot)
-            FROM LOTXLOCXID LLI (NOLOCK)
-            WHERE LLI.Loc = @c_LOC
-            AND LLI.ID = @c_ID
-            AND LLI.Storerkey = @c_Storerkey
-            AND LLI.Sku = @c_Sku
-            AND LLI.Qty > 0
+                SET @c_Loc_Prev = @c_Loc
+               SET @c_ID_Prev  = @c_ID
+             END
+         
+            IF @b_GetLocID = 1
+            BEGIN
+               SELECT @n_LocIDQty = 0, @n_NoOfLot = 0
+
+               SELECT @n_LocIDQty = SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen),
+                     @n_NoOfLot = COUNT(DISTINCT LLI.Lot)
+               FROM LOTXLOCXID LLI (NOLOCK)
+               WHERE LLI.Loc = @c_LOC
+               AND LLI.ID = @c_ID
+               AND LLI.Storerkey = @c_Storerkey
+               AND LLI.Sku = @c_Sku
+               AND LLI.Qty > 0
+            END                              
+
+            IF @c_FullPalletMultiLot= 'Y' AND  (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_LocIDQty 
+            BEGIN
+               SET @n_NoOfLot = 1    -- To force alloc multi LPN
+            END                                                                                    --(Wan03) - END
 
             IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable  --NJOW09
                AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton
             BEGIN
                SET @n_QtyToTake = @n_QtyAvailable
+               
+               IF @c_FullPalletMultiLot= 'Y'                                                       --(Wan03)                                 
+               BEGIN
+                  SET @n_LocIDQty = @n_LocIDQty - @n_QtyAvailable
+               END               
             END
             ELSE
             BEGIN
@@ -1312,7 +1514,7 @@ BEGIN
          BEGIN
               IF @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2','6','7')  --NJOW09
               BEGIN
-                IF @c_FIFOByMultiUOM = 'Y'
+                IF @c_FIFOByMultiUOM = 'Y' OR @c_FDTFOByMultiUOM= 'Y'               --(Wan03)
                 BEGIN
                    IF(@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) <= 0             
                       SET @n_QtyToTake = 0 
@@ -1335,7 +1537,7 @@ BEGIN
                          SET @n_QtyToTake = @n_QtyLeftToFulfill     
                    ELSE 
                       SET @n_QtyToTake = 0               
-                	
+                  
                    --SET @n_QtyToTake = @n_QtyAvailable
                    --WL02 E
                 END
@@ -1345,6 +1547,7 @@ BEGIN
                IF @n_UOMBase > 0       --(Wan01) Fixed divide by zero
                BEGIN
                     IF @c_FIFOByMultiUOM = 'Y'  --NJOW09
+                    OR @c_FDTFOByMultiUOM= 'Y'                                      --(Wan03)
                     BEGIN
                      IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable  
                      BEGIN
@@ -1518,6 +1721,7 @@ BEGIN
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
           +',@c_ID NVARCHAR(18)'
           +',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'
+          +',@c_OParms NVARCHAR(200)'                                                              --(Wan03)
       --(Wan01) - END
  
       EXEC sp_executesql @c_SQLStatement, @c_SQLParms,   --(Wan01)
@@ -1558,7 +1762,7 @@ BEGIN
         ,@c_UDF03                                        --(Wan01)
         ,@c_UDF04                                        --(Wan01)
         ,@c_UDF05                                        --(Wan01)
-
+        ,@c_OParms                                       --(Wan03)
       --EXEC sp_ExecuteSQL @c_SQLStatement
    END
    

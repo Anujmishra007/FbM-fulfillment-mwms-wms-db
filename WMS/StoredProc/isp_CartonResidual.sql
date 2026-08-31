@@ -16,7 +16,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author    Ver.  Purposes                                */
+/* Date                     Author    Ver.  Purposes                                */
+/* 11-MAY-2026      SSA01     1.1    Added  ResidualQty > 0  validation */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo]. [isp_CartonResidual]
@@ -84,12 +85,11 @@ BEGIN
        FROM LOTxLOCxID(NOLOCK) L
        WHERE L.StorerKey = @c_StorerKey and SKU= @c_Sku and L.Loc = @c_CLK_Long and Lot= @c_Lot
 
-       IF @n_Qty < @n_ResidualQty
+       IF @n_ResidualQty <= 0 OR @n_Qty < @n_ResidualQty
        BEGIN
           SELECT @n_continue = 3
           SELECT @c_ErrMsg = CONVERT(CHAR(250),@n_err), @n_Err = 30101
 			    SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Invalid ResidualQty. (isp_CartonResidual)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
-
        END
        IF @n_continue IN (1, 2)
        BEGIN

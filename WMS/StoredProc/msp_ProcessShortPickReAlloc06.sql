@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 12-Mar-2026 JihHaur  1.0   Initial Version                           */
+/* 27-Apr-2026 JihHaur  1.1   Add config to udpate Pickslipno (JH01)    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc06] (    
@@ -55,7 +56,8 @@ BEGIN
          , @c_SourceType               NVARCHAR(50) = ''
          , @c_Facility                 NVARCHAR(5)  = ''
          , @c_PickCondition_SQL        NVARCHAR(MAX) = ''  
-         , @c_Loc                      NVARCHAR(10) = ''  
+         , @c_Loc                      NVARCHAR(10) = ''          
+         , @c_PickSlipNo               NVARCHAR(10) = ''   /*JH01*/
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -73,13 +75,13 @@ BEGIN
             OrderKey    NVARCHAR(10) PRIMARY KEY
       )
 
-      CREATE TABLE #T_ORDERSKU (
-            Orderkey    NVARCHAR(10)
-          , Storerkey   NVARCHAR(15)
-          , SKU         NVARCHAR(20)
-          , WCS         NVARCHAR(10) DEFAULT 0
-          , PRIMARY KEY (Orderkey, Storerkey, SKU)
-      )
+      --CREATE TABLE #T_ORDERSKU (
+      --      Orderkey    NVARCHAR(10)
+      --    , Storerkey   NVARCHAR(15)
+      --    , SKU         NVARCHAR(20)
+      --    , WCS         NVARCHAR(10) DEFAULT 0
+      --    , PRIMARY KEY (Orderkey, Storerkey, SKU)
+      --)
 
       CREATE TABLE #PickDetail_WIP
       (
@@ -133,18 +135,18 @@ BEGIN
       CREATE INDEX IX_PickDetail_WIP_WaveKey_UOM_Status ON #PickDetail_WIP (WaveKey, UOM, [Status]) INCLUDE (OrderKey, Storerkey, SKU, TaskDetailKey)
       CREATE INDEX IX_PickDetail_WIP_TaskUpdate ON #PickDetail_WIP (UOM, PickMethod, Lot, Loc, ID, DropID) INCLUDE (PickDetailKey)
 
-      CREATE TABLE #T_CaseID (
-            Storerkey   NVARCHAR(15)
-          , CaseID      NVARCHAR(20)
-          , SKU         NVARCHAR(20)
-          , PRIMARY KEY (Storerkey, CaseID, SKU)
-      )
+      --CREATE TABLE #T_CaseID (
+      --      Storerkey   NVARCHAR(15)
+      --    , CaseID      NVARCHAR(20)
+      --    , SKU         NVARCHAR(20)
+      --    , PRIMARY KEY (Storerkey, CaseID, SKU)
+      --)
 
-      CREATE TABLE #T_Packdetail (
-            PickSlipNo  NVARCHAR(10)
-          , CartonNo    INT
-         PRIMARY KEY (PickSlipNo, CartonNo)
-      )
+      --CREATE TABLE #T_Packdetail (
+      --      PickSlipNo  NVARCHAR(10)
+      --    , CartonNo    INT
+      --   PRIMARY KEY (PickSlipNo, CartonNo)
+      --)
 
       CREATE TABLE #T_PICKDETAIL_CURRENT (
             Pickdetailkey NVARCHAR(18) PRIMARY KEY
@@ -154,7 +156,7 @@ BEGIN
             Pickdetailkey     NVARCHAR(18) PRIMARY KEY
           , Orderkey          NVARCHAR(10)
           , Qty               INT
-          , SourceType        NVARCHAR(50)
+          , SourceType        NVARCHAR(50)          
       )
    END
 
@@ -170,16 +172,16 @@ BEGIN
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       SELECT @c_StorerKey  = OH.StorerKey
-           , @c_Facility   = OH.Facility           
+           , @c_Facility   = OH.Facility            
+           , @c_PickSlipNo = PD.PickSlipNo  /*JH01*/
       FROM WAVE W WITH (NOLOCK)
       JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.WaveKey = W.WaveKey
-      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey   
+      JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = OH.OrderKey  
       WHERE W.WaveKey = @c_Wavekey    
-
-
+      
       SET @c_PickCondition_SQL = 'AND PICKDETAIL.Storerkey = ' + QUOTENAME(TRIM(ISNULL(@c_Storerkey, '')), '''')
                                + ' AND PICKDETAIL.SKU = ' + QUOTENAME(TRIM(ISNULL(@c_SKU, '')), '''')
-
    END
 
    --Get Storerconfig setup
@@ -252,7 +254,7 @@ BEGIN
    --Get Orderkeys that have being shorted
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      INSERT INTO #T_ShortPick (Pickdetailkey, Orderkey, Qty, SourceType)
+      INSERT INTO #T_ShortPick (Pickdetailkey, Orderkey, Qty, SourceType) 
       SELECT PD.PickDetailKey, PD.OrderKey, PD.QtyMoved, PD.SourceType
       FROM PICKDETAIL PD WITH (NOLOCK)
       WHERE PD.Storerkey = @c_StorerKey    
@@ -314,9 +316,49 @@ BEGIN
          ROLLBACK TRAN
       END CATCH   
       
+      --Check reallocation success or not  /*JH01 start*/
+      IF (@n_Continue = 1 OR @n_Continue = 2) AND EXISTS (SELECT 1  
+         FROM WAVEDETAIL WD   
+         JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = WD.OrderKey  
+         WHERE WD.WaveKey = @c_Wavekey  
+               --AND ISNULL(PD.PickSlipNo,'') = ''   
+               AND PD.Storerkey = @c_StorerKey  
+               AND PD.Sku = @c_SKU  
+               AND PD.STATUS = '0'  
+               AND PD.PickDetailKey NOT IN (SELECT PickDetailKey FROM #PickDetail_WIP))  
+         AND EXISTS (SELECT 1 FROM STORERCONFIG WITH (NOLOCK)     
+                                WHERE Configkey = 'ReallocUpdPickSlipNo'     
+                                AND Storerkey = @c_StorerKey AND sValue = '1')    
+      BEGIN  
+         --Add into current active PickSlipNo  
+         BEGIN TRY  
+            UPDATE PD SET PD.PickSlipNo = @c_PickSlipNo  
+            FROM WAVEDETAIL WD WITH (NOLOCK)   
+                  JOIN PICKDETAIL PD WITH (NOLOCK) ON PD.OrderKey = WD.OrderKey  
+            WHERE WD.WaveKey = @c_Wavekey  
+               AND ISNULL(PD.PickSlipNo,'') = ''   
+               AND PD.Storerkey = @c_StorerKey  
+               AND PD.Sku = @c_SKU  
+               AND PD.STATUS = '0'  
+               AND PD.PickDetailKey NOT IN (SELECT PickDetailKey FROM #PickDetail_WIP)             
+         END TRY  
+         BEGIN CATCH  
+            SET @n_Continue = 3  
+            SET @c_ErrMsg = ERROR_MESSAGE()  
+            SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': Error update into active PickSlipNo (msp_ProcessShortPickReAlloc06)'  
+                             + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '    
+         END CATCH  
+  
+         --IF (@n_Continue = 1 OR @n_Continue = 2)  
+         --BEGIN  
+         --   DELETE FROM PICKDETAIL  
+         --   WHERE PickDetailKey IN (SELECT PickDetailKey FROM #TMP_SHORTED)  
+         --END         
+      END  
+
       -- Update PickDetail.SourceType back to original one
       UPDATE P
-      SET P.SourceType = T.SourceType 
+      SET P.SourceType = T.SourceType         
         , P.TrafficCop = NULL
       FROM PICKDETAIL P
       JOIN #T_ShortPick T ON T.Pickdetailkey = P.PickDetailKey
@@ -329,7 +371,7 @@ BEGIN
             COMMIT TRAN
          END
       END
-   END
+   END /*JH01 end*/
    
    --IF (@n_Continue = 1 OR @n_Continue = 2)
    --BEGIN
@@ -444,15 +486,18 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#T_ShortPick ','u') IS NOT NULL 
       DROP TABLE #T_ShortPick
+   
+   IF OBJECT_ID('tempdb..#T_PICKDETAIL_CURRENT ','u') IS NOT NULL 
+      DROP TABLE #T_PICKDETAIL_CURRENT
 
-   IF OBJECT_ID('tempdb..#T_ORDERSKU ','u') IS NOT NULL 
-      DROP TABLE #T_ORDERSKU
+   --IF OBJECT_ID('tempdb..#T_ORDERSKU ','u') IS NOT NULL 
+   --   DROP TABLE #T_ORDERSKU
 
-   IF OBJECT_ID('tempdb..#T_CaseID ','u') IS NOT NULL 
-      DROP TABLE #T_CaseID
+   --IF OBJECT_ID('tempdb..#T_CaseID ','u') IS NOT NULL 
+   --   DROP TABLE #T_CaseID
 
-   IF OBJECT_ID('tempdb..#T_Packdetail ','u') IS NOT NULL 
-      DROP TABLE #T_Packdetail
+   --IF OBJECT_ID('tempdb..#T_Packdetail ','u') IS NOT NULL 
+   --   DROP TABLE #T_Packdetail
       
    IF (XACT_STATE()) = -1 
    BEGIN

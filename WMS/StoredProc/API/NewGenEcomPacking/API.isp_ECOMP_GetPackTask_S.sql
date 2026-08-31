@@ -20,7 +20,9 @@
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 15-Nov-2023    Alex02   #JIRA PAC-140 Gift Wrapping                  */
 /* 10-Oct-2024    Alex03   #JIRA PAC-355 CCTV Integration               */
-/************************************************************************/    
+/* 14-Apr-2026    Sean01   #FCR-12417 Display UPC instead of SKU        */
+/* 24-Jun-2026    Sean02   #FCR-12417 Add PackingRules to resp */
+/************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTask_S](
      @b_Debug            INT            = 0
    , @c_UserID           NVARCHAR(256)  = ''
@@ -63,6 +65,7 @@ BEGIN
          , @c_sc_EPackTakeOver            NVARCHAR(5)    = ''
          , @c_sc_MultiPackMode            NVARCHAR(5)    = ''
          , @c_sc_CtnTypeInput             NVARCHAR(5)    = ''
+         , @c_sc_DisplayUPCMode           NVARCHAR(1)    = '' -- #FCR-12417
 
          , @n_sc_Success                  INT
          , @n_sc_err                      INT
@@ -81,6 +84,7 @@ BEGIN
 
    DECLARE @c_InnerJson                   NVARCHAR(MAX)  = NULL
          , @c_OrderStatusJson             NVARCHAR(MAX)  = NULL
+         , @c_CartonPackedSKUJson         NVARCHAR(MAX)  = NULL  -- FCR-12417
          , @c_EPACKConfigJSON             NVARCHAR(4000) = ''        --Alex03
          , @c_DefaultCartonType           NVARCHAR(10)   = ''
          , @c_DefaultCartonGroup          NVARCHAR(10)   = ''
@@ -290,27 +294,12 @@ BEGIN
       SELECT TOP 1 
           @c_SKU = PD.SKU
       FROM PACKDETAIL PD WITH (NOLOCK)
-      WHERE PD.PickSlipNo = @c_PickSlipNo      AND PD.CartonNo = 1
+      WHERE PD.PickSlipNo = @c_PickSlipNo
+      AND PD.CartonNo = 1
 
       SET @n_sc_Success = 0
       SET @n_sc_err = 0
       SET @c_sc_errmsg = ''
-
-      --EXEC [API].[isp_ECOMP_GetPackRules]
-      --     @c_StorerKey                = @c_StorerKey
-      --   , @c_Facility                 = @c_Facility
-      --   , @c_SKU                      = @c_SKU
-      --   , @b_IsSerialNoMandatory      = @b_IsSerialNoMandatory      OUTPUT
-      --   , @b_IsPackQRFMandatory       = @b_IsPackQRFMandatory       OUTPUT
-      --   , @c_PackQRF_RegEx            = @c_PackQRF_RegEx            OUTPUT
-      --   , @b_IsTrackingNoMandatory    = @b_IsTrackingNoMandatory    OUTPUT
-      --   , @b_IsCartonTypeMandatory    = @b_IsCartonTypeMandatory    OUTPUT
-      --   , @b_IsWeightMandatory        = @b_IsWeightMandatory        OUTPUT
-      --   , @b_IsAutoWeightCalc         = @b_IsAutoWeightCalc         OUTPUT
-      --   , @b_IsAutoPackConfirm        = @b_IsAutoPackConfirm        OUTPUT
-      --   , @b_Success                  = @n_sc_Success               OUTPUT
-      --   , @n_ErrNo                    = @n_sc_err                   OUTPUT
-      --   , @c_ErrMsg                   = @c_sc_errmsg                OUTPUT
 
       INSERT INTO @t_PackingRules
       EXEC [API].[isp_ECOMP_GetPackingRules]
@@ -321,9 +310,9 @@ BEGIN
          , @n_ErrNo                    = @n_sc_err                   OUTPUT
          , @c_ErrMsg                   = @c_sc_errmsg                OUTPUT
 
-      IF @n_sc_Success <> 1   
-      BEGIN   
-         SET @n_Continue = 3 
+      IF @n_sc_Success <> 1
+      BEGIN
+         SET @n_Continue = 3
          SET @n_ErrNo = 51009
          SET @c_ErrMsg = CONVERT(CHAR(5),@n_sc_err) + '. ' + ISNULL(RTRIM(@c_sc_errmsg), '')
          GOTO QUIT
@@ -392,29 +381,91 @@ BEGIN
             , @c_PickSlipNo               = @c_PickSlipNo       
             , @b_IsLabelNoCaptured        = @b_IsLabelNoCaptured  OUTPUT
 
-         SET @c_OrderStatusJson = (
-                                    SELECT PTD.Orderkey As 'OrderKey'
-                                          ,PTD.Storerkey As 'StorerKey'
-                                          ,PTD.Sku  As 'SKU'
-                                          ,PTD.QtyAllocated As 'QtyAllocated' 
-                                          ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
-                                          ,CASE WHEN  PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
-                                          ,S.Descr As 'Description' 
-                                    FROM PACKTASKDETAIL  PTD WITH (NOLOCK)   
-                                    LEFT JOIN PACKDETAIL PD  WITH (NOLOCK) ON  (PTD.PickSlipNo = PD.PickSlipNo)   
-                                                                           AND (PTD.Storerkey = PD.Storerkey)  
-                                                                           AND (PTD.Sku = PD.Sku)  
-                                    JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU 
-                                    WHERE PTD.TaskBatchNo = CASE WHEN @c_TaskBatchID = '' THEN PTD.TaskBatchNo ELSE @c_TaskBatchID END
-                                    AND   PTD.Orderkey = @c_PackOrderKey    
-                                    GROUP  BY PTD.Orderkey  
-                                          ,PTD.Storerkey  
-                                          ,PTD.Sku  
-                                          ,PTD.QtyAllocated  
-                                          ,S.Descr
-                                    FOR JSON PATH
-                                  )
-         
+         SET @c_sc_DisplayUPCMode = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'EPACKDisplayUPCMode') -- FCR-12417
+
+         IF @c_sc_DisplayUPCMode = '1'
+         BEGIN
+            SET @c_OrderStatusJson = (
+               SELECT PTD.Orderkey      As 'OrderKey'
+                     ,PTD.Storerkey     As 'StorerKey'
+                     ,ISNULL(
+                          (SELECT TOP 1 U.UPC
+                           FROM dbo.UPC U WITH (NOLOCK)
+                           INNER JOIN dbo.PACK P WITH (NOLOCK)
+                              ON P.PackKey   = U.PackKey
+                              AND U.UOM      = P.PackUOM3  
+                           WHERE U.StorerKey  = PTD.Storerkey
+                             AND U.SKU        = PTD.SKU),
+                          ''
+                      )                As 'SKU'
+                     ,PTD.QtyAllocated As 'QtyAllocated'
+                     ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
+                     ,CASE WHEN PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
+                     ,S.Descr          As 'Description'
+               FROM PACKTASKDETAIL PTD WITH (NOLOCK)
+               LEFT JOIN PACKDETAIL PD WITH (NOLOCK) ON (PTD.PickSlipNo = PD.PickSlipNo)
+                                                    AND (PTD.Storerkey  = PD.Storerkey)
+                                                    AND (PTD.Sku        = PD.Sku)
+               JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU
+               WHERE PTD.TaskBatchNo = CASE WHEN @c_TaskBatchID = '' THEN PTD.TaskBatchNo ELSE @c_TaskBatchID END
+               AND   PTD.Orderkey    = @c_PackOrderKey
+               GROUP BY PTD.Orderkey, PTD.Storerkey, PTD.Sku, PTD.QtyAllocated, S.Descr
+               FOR JSON PATH
+            )
+         END
+         ELSE
+         BEGIN
+            SET @c_OrderStatusJson = (
+               SELECT PTD.Orderkey      As 'OrderKey'
+                     ,PTD.Storerkey     As 'StorerKey'
+                     ,PTD.Sku           As 'SKU'
+                     ,PTD.QtyAllocated  As 'QtyAllocated'
+                     ,ISNULL(SUM(PD.Qty),0) As 'QtyPacked'
+                     ,CASE WHEN PTD.QtyAllocated = ISNULL(SUM(PD.Qty),0) THEN 1 ELSE 0 END As 'Packed'
+                     ,S.Descr           As 'Description'
+               FROM PACKTASKDETAIL PTD WITH (NOLOCK)
+               LEFT JOIN PACKDETAIL PD WITH (NOLOCK) ON (PTD.PickSlipNo = PD.PickSlipNo)
+                                                    AND (PTD.Storerkey  = PD.Storerkey)
+                                                    AND (PTD.Sku        = PD.Sku)
+               JOIN SKU S WITH (NOLOCK) ON S.Storerkey = PTD.Storerkey AND S.SKU = PTD.SKU
+               WHERE PTD.TaskBatchNo = CASE WHEN @c_TaskBatchID = '' THEN PTD.TaskBatchNo ELSE @c_TaskBatchID END
+               AND   PTD.Orderkey    = @c_PackOrderKey
+               GROUP BY PTD.Orderkey, PTD.Storerkey, PTD.Sku, PTD.QtyAllocated, S.Descr
+               FOR JSON PATH
+            )
+         END
+
+         -- FCR-12417: Build CartonPackedSKUJson based on DisplayUPCMode
+         IF @c_sc_DisplayUPCMode = '1'
+         BEGIN
+            SET @c_CartonPackedSKUJson = (
+               SELECT ISNULL(RTRIM(PD.UPC), '')  AS 'SKU'
+                     ,PD.QTY
+                     ,PD.LOTTABLEVALUE  As 'LottableValue'
+                     ,SKU.STDGROSSWGT   As 'STDGrossWeight'
+               FROM [dbo].[PackDetail] PD WITH (NOLOCK)
+               JOIN [dbo].[SKU] SKU WITH (NOLOCK)
+                   ON SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU
+               WHERE PickSlipNo = @c_PickSlipNo
+               FOR JSON PATH
+            )
+         END
+         ELSE
+         BEGIN
+            -- Original SKU mode (unchanged)
+            SET @c_CartonPackedSKUJson = (
+               SELECT PD.SKU
+                     ,PD.QTY
+                     ,PD.LOTTABLEVALUE  As 'LottableValue'
+                     ,SKU.STDGROSSWGT   As 'STDGrossWeight'
+               FROM [dbo].[PackDetail] PD WITH (NOLOCK)
+               JOIN [dbo].[SKU] SKU WITH (NOLOCK)
+                   ON SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU
+               WHERE PickSlipNo = @c_PickSlipNo
+               FOR JSON PATH
+            )
+         END
+
          SELECT @c_PackQRF_QRCode = ISNULL([QRCode], '')
          FROM [dbo].[PACKQRF] WITH (NOLOCK)
          WHERE PickSlipNo = @c_PickSlipNo 
@@ -482,15 +533,7 @@ BEGIN
                                     FOR JSON PATH
                                  ) AS 'PackingRules'
                                  ,( 
-                                    SELECT PD.SKU
-                                          ,PD.QTY
-                                          ,PD.LOTTABLEVALUE    As 'LottableValue'
-                                          ,SKU.STDGROSSWGT     As 'STDGrossWeight'
-                                    FROM [dbo].[PackDetail] PD WITH (NOLOCK)
-                                    JOIN [dbo].[SKU] SKU WITH (NOLOCK) 
-                                    ON (SKU.StorerKey = PD.StorerKey AND SKU.SKU = PD.SKU)
-                                    WHERE PickSlipNo = @c_PickSlipNo
-                                    FOR JSON PATH 
+                                    JSON_QUERY(@c_CartonPackedSKUJson)  -- ★ FCR-12417
                                   ) AS 'CartonPackedSKU'
                                  ,(
                                     JSON_QUERY((SELECT TOP 1
@@ -521,7 +564,31 @@ BEGIN
    --Get Pending PackHeader/Detail (End)
 
    QUERYRULES:
-   
+
+   IF NOT EXISTS (SELECT 1 FROM @t_PackingRules)
+   BEGIN
+      SET @n_sc_Success = 0
+      SET @n_sc_err = 0
+      SET @c_sc_errmsg = ''
+
+      INSERT INTO @t_PackingRules
+      EXEC [API].[isp_ECOMP_GetPackingRules]
+           @c_StorerKey                = @c_StorerKey
+         , @c_Facility                 = @c_Facility
+         , @c_SKU                      = @c_SKU
+         , @b_Success                  = @n_sc_Success               OUTPUT
+         , @n_ErrNo                    = @n_sc_err                   OUTPUT
+         , @c_ErrMsg                   = @c_sc_errmsg                OUTPUT
+
+      IF @n_sc_Success <> 1
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_ErrNo = 51009
+         SET @c_ErrMsg = CONVERT(CHAR(5),@n_sc_err) + '. ' + ISNULL(RTRIM(@c_sc_errmsg), '')
+         GOTO QUIT
+      END
+   END
+
    --Alex02 Begin
    --Get EcomPrePackMsg(gift Wrapping)
    
@@ -695,10 +762,16 @@ BEGIN
                                     ,NonEPackSO     As 'NonEPackSO'
                                     ,InProgOrderKey As 'LastOrderID'
                                     ,@c_PrePackMsg  As 'PrePackMeassage'
-                                    ,( 
+                                    ,(
                                        SELECT CartonType, CartonWeight FROM @t_Carton
-                                       FOR JSON PATH 
+                                       FOR JSON PATH
                                      ) As 'CartonTypeList'
+                                    ,(
+                                       SELECT ISNULL(RTRIM(RuleName), '')  As 'RuleName'
+                                             ,ISNULL(RTRIM([Value]), '')   As 'Value'
+                                       FROM @t_PackingRules
+                                       FOR JSON PATH
+                                     ) AS 'PackingRules'
                                     ,(
                                        JSON_QUERY(@c_InnerJson)
                                      ) As 'PackTask'

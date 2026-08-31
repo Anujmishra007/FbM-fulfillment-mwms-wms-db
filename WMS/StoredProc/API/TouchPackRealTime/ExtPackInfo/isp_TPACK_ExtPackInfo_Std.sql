@@ -51,6 +51,7 @@ BEGIN
    FROM PACKINFO (NOLOCK)
    WHERE PickSlipNo = @cPickSlipNo
    AND CartonNo = @nCartonNo
+   AND CartonType <> ''
    
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      
@@ -79,3 +80,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_ExtPackInfo_Std] TO NSQL
+GO

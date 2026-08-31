@@ -363,7 +363,7 @@ BEGIN
 
    SET @cPackDetailList = @oDynamicJson
 
-   IF @cPackDetailList = ''
+   IF @cPackDetailList = '' AND @nPageIndex = 0
    BEGIN
       SET @n_Continue = 3
       SET @n_ErrNo = 10951      
@@ -398,6 +398,10 @@ EXIT_SP:
       RETURN      
    END
 END
-
-
-
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_GetPackDetail] TO NSQL
+GO

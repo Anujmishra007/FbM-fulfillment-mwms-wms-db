@@ -176,6 +176,11 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                      GOTO Quit
                   END
+
+                  -- Store barcode in V_Barcode for ispLottableRule_CC_QRDecode to read later
+                  UPDATE RDT.RDTMOBREC WITH (ROWLOCK)
+                  SET V_Barcode = @cBarcode
+                  WHERE Mobile = @nMobile
                END
 
                IF @nDebugFlag = 1

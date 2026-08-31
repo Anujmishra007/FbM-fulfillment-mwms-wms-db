@@ -73,6 +73,7 @@ DECLARE
    @cErrMsg3            NVARCHAR( 20),    -- (james01)
    @cErrMsg4            NVARCHAR( 20),    -- (james01)
    @cErrMsg5            NVARCHAR( 20),    -- (james01)
+   @cConfirmStatus      NVARCHAR(5),
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
    @tExtValidate        VARIABLETABLE,
@@ -125,6 +126,7 @@ SELECT
    @cExtendedValidateSP = V_String3,
    @cExtendedUpdateSP   = V_String4,
    @cExtendedInfoSP     = V_String5,
+   @cConfirmStatus      = V_String6,
    @cPalletID           = V_String41,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -195,6 +197,18 @@ BEGIN
    SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
+
+
+   --rdt.rdtGetConfig will return '0', we don't know this is null or status = '0'
+   SELECT
+      @cConfirmStatus = SValue
+   FROM rdt.StorerConfig (NOLOCK)
+   WHERE Function_ID = @nFunc
+     AND StorerKey = @cStorerKey
+     AND ConfigKey = 'PalletStatus'
+
+   IF ISNULL(@cConfirmStatus,'') = ''
+      SET @cConfirmStatus = '3'
 
    -- Initiate var
 	-- EventLog - Sign In Function
@@ -627,7 +641,7 @@ BEGIN
          END
 	   END
 	   
-	   IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE PalletKey = @cPalletID AND Status = '3')
+	   IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) WHERE PalletKey = @cPalletID AND Status = @cConfirmStatus)
 	   BEGIN
 		   SET @nErrNo = 78274
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InvalidPalletID'
@@ -649,7 +663,7 @@ BEGIN
 	   END
 		
 		UPDATE dbo.Pallet
-		SET Status = '3',
+		SET Status = @cConfirmStatus,
           EditWho = @cUserName,
           EditDate = GETDATE()
 		WHERE PalletKey = @cPalletID
@@ -663,7 +677,7 @@ BEGIN
 	   END
 	   
 	   UPDATE dbo.PalletDetail
-		SET Status = '3',
+		SET Status = @cConfirmStatus,
           EditWho = @cUserName,
           EditDate = GETDATE()
 		WHERE PalletKey = @cPalletID
@@ -730,14 +744,6 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'PalletID Req'
          GOTO Step_5_Fail
 	   END
-
-		DECLARE @cConfirmStatus NVARCHAR(5)
-
-      SET @cConfirmStatus =
-         ISNULL(rdt.RDTGetConfig( @nFunc, 'PalletStatus', @cStorerKey),'')
-
-		IF @cConfirmStatus = ''
-		   SET @cConfirmStatus = '3'
 
       IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK)
 	                   WHERE PalletKey= @cPalletID
@@ -969,6 +975,7 @@ BEGIN
       V_String3 = @cExtendedValidateSP,
       V_String4 = @cExtendedUpdateSP,
       V_String5 = @cExtendedInfoSP,
+      V_String6 = @cConfirmStatus,
       V_String41 = @cPalletID,
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01, 

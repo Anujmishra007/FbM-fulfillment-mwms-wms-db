@@ -14,13 +14,15 @@ GO
 /*                                                                       */
 /* Called By: Wave                                                       */
 /*                                                                       */
-/* Version: 4.0                                                          */
+/* Version: 1.1                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 14-Apr-2026 WLChooi  1.0   Initial Version                            */
+/* 28-Jul-2026 WLChooi  1.1   FCR-14984 Modify cartonization API         */
+/*                            algorithm (WL01)                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_TOTE]
    @c_Wavekey     NVARCHAR(10)
@@ -419,7 +421,7 @@ BEGIN
 
       SET @c_PackType     = 'PICKDETAIL.Wavekey'
       SET @c_HardCTNGroup = 'PICKDETAIL.Wavekey, ISNULL(SKU.BUSR7,'''')'
-      SET @c_Algorithm    = 'HEIGHT'
+      SET @c_Algorithm    = ''   --WL01
 
       SET @c_SortCTNGroup = @c_HardCTNGroup
 

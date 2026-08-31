@@ -22,7 +22,7 @@ CREATE OR ALTER PROC rdt.rdt_839Confirm15 (
    @cStorerKey    NVARCHAR( 15),
    @cType         NVARCHAR( 10),
    @cPickSlipNo   NVARCHAR( 10),
-   @cPickZone     NVARCHAR( 1),
+   @cPickZone     NVARCHAR( 10),
    @cDropID       NVARCHAR( 20),
    @cLOC          NVARCHAR( 10),
    @cSKU          NVARCHAR( 20),
@@ -98,7 +98,8 @@ BEGIN
       @nPickedQty             INT,
       @cReasonKey             NVARCHAR( 10),
       @cLoopOrderKey          NVARCHAR( 10),
-      @cLoopOrderKeyLineNumber NVARCHAR( 5)
+      @cLoopOrderKeyLineNumber NVARCHAR( 5),
+      @cLoopDropID             NVARCHAR( 20)
 
    --RDTMOBREC
    -- C_String1 -> SuggestedUCC (UCC)
@@ -120,7 +121,6 @@ BEGIN
 
    -- Handling transaction
    SET @nTranCount = @@TRANCOUNT
-
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
@@ -215,6 +215,11 @@ BEGIN
       PickDetailKey        NVARCHAR( 18)
    )
 
+   DECLARE @tPickedKeys TABLE 
+   (
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
+
    -- Get lottable filter
    EXEC rdt.rdt_Lottable_GetCurrentSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLottableCode, 4, 'LA',
       @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
@@ -235,8 +240,7 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.Status = '4'
          AND RPL.PickMethod = 'GetTask-U'
 
@@ -246,8 +250,7 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-P'
          AND RPL.Status = '4'
    END
@@ -260,8 +263,7 @@ BEGIN
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-U'
 
       INSERT INTO @tPiecePickDetailKey ( PickDetailKey)
@@ -270,8 +272,7 @@ BEGIN
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'Pick-P'
 
       INSERT INTO @tPiecePickDetail ( PickDetailKey, Loc, Id, DropID, Qty, Lot, PickedQty, Status)
@@ -279,15 +280,15 @@ BEGIN
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
-      WHERE RPL.PickMethod = 'GetTask-P'
+      WHERE RPL.PickSlipNo = @cPickSlipNo
+         AND RPL.PickMethod = 'GetTask-P'
       UNION
       SELECT RPL.PickDetailKey, PD.Loc, PD.Id, PD.DropID, PD.Qty, PD.Lot, RPL.PickLockQty, RPL.Status
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-P'
          AND RPL.Status = '4'
    END
@@ -297,7 +298,9 @@ BEGIN
                                               UCC confirm
    ***********************************************************************************************/
 
-   BEGIN TRAN  -- Begin our own transaction
+   IF @nTranCount = 0
+      BEGIN TRAN  -- Only begin transaction if not already in one
+
    SAVE TRAN rdt_839Confirm15 -- For rollback or commit only our own transaction
 
    SET @nLoopIndex = -1
@@ -311,7 +314,7 @@ BEGIN
          @cUCC = UCCNo,
          @cOriUCC = OriUCCNo,
          @cStatus = Status,
-         @cDropID = DropID,
+         @cLoopDropID = DropID,
          @nLoopIndex = RowIndex
       FROM @tUCCPickDetail
       WHERE RowIndex > @nLoopIndex
@@ -372,7 +375,8 @@ BEGIN
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = @cPickConfirmStatus,
-                  DropID = @cDropID,
+                  Notes = DropID,
+                  DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -424,6 +428,7 @@ BEGIN
                @cScannedUCCLot = LOT
             FROM dbo.UCC WITH(NOLOCK)
             WHERE UCCNo = @cUCC
+               AND StorerKey = @cStorerKey
             
             -- re-allcoate to scanned UCC
             BEGIN TRY
@@ -465,7 +470,8 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH (ROWLOCK) SET
                   Status = @cPickConfirmStatus,
-                  DropID = @cDropID,
+                  Notes = DropID,
+                  DropID = @cLoopDropID,
                   EditDate = GETDATE(),
                   EditWho  = SUSER_SNAME()
                WHERE PickDetailKey = @cPickDetailKey
@@ -492,7 +498,7 @@ BEGIN
       @cPieceLot              NVARCHAR( 10),
       @cPieceLotLoc           NVARCHAR( 10),
       @cPieceLotId            NVARCHAR( 18),
-      @cPieceLotDropId        NVARCHAR( 18),
+      @cPieceLotDropId        NVARCHAR( 20),
       @cPieceLotUCC           NVARCHAR( 20),
       @cPieceLotQty           INT,
       @cNewPickDetailKey      NVARCHAR( 10),
@@ -600,7 +606,7 @@ BEGIN
                   CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                   UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                   ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, 'SHORT', @cPickDetailKey,
+                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, Notes, @cPickDetailKey,
                   @cNewPickDetailKey,
                   Status,
                   @nQTY_PD - @nPickedQty,
@@ -639,8 +645,7 @@ BEGIN
          FROM RDT.rdtPickLog WITH(NOLOCK)
          WHERE PickDetailKey = @cPickDetailKey
             AND PickSlipNo = @cPickSlipNo
-            AND Mobile = @nMobile
-            AND AddWho = @cUserName
+            AND (Mobile = @nMobile OR AddWho = @cUserName)
             AND PickMethod = 'GetTask-P'
          
          IF @@ROWCOUNT = 1
@@ -707,8 +712,7 @@ BEGIN
             INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.StorerKey = @cStorerKey AND SN.UCCNo = UCC.UCCNo
             WHERE RPL.PickDetailKey = @cPickDetailKey
                AND RPL.PickSlipNo = @cPickSlipNo
-               AND RPL.Mobile = @nMobile
-               AND RPL.AddWho = @cUserName
+               AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                AND RPL.PickMethod = 'Pick-P'
                AND ISNULL(RPL.Remarks, '') <> ''
                AND ISNULL(RPL.Status, '') <> '9'
@@ -728,8 +732,7 @@ BEGIN
                INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON SN.StorerKey = @cStorerKey AND RPL.Remarks = SN.SerialNo
                WHERE RPL.PickDetailKey = @cPickDetailKey
                   AND RPL.PickSlipNo = @cPickSlipNo
-                  AND RPL.Mobile = @nMobile
-                  AND RPL.AddWho = @cUserName
+                  AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                   AND RPL.PickMethod = 'Pick-P'
                   AND ISNULL(RPL.Remarks, '') <> ''
                   AND ISNULL(RPL.Status, '') <> '9'
@@ -780,7 +783,7 @@ BEGIN
                         CaseID, PickHeaderKey, OrderKey, OrderLineNumber, @cPieceLot, StorerKey, SKU, AltSku, UOM,
                         UOMQTY, QTYMoved, @cPieceLotUCC, @cPieceLotLoc, @cPieceLotId, PackKey, UpdateSource, CartonGroup,
                         CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, 'Picked', @cPickDetailKey,
+                        EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, @cPickDetailKey,
                         @cNewPickDetailKey,
                         Status,
                         1,
@@ -793,6 +796,16 @@ BEGIN
                   BEGIN CATCH
                      SET @nErrNo = 255610
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
+                     GOTO RollBackTran
+                  END CATCH
+
+                  BEGIN TRY
+                     INSERT INTO @tPickedKeys (PickDetailKey)
+                     VALUES(@cNewPickDetailKey)
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 255647
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Insert into @tPickedKeys failed
                      GOTO RollBackTran
                   END CATCH
                END
@@ -834,10 +847,11 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
+            -- for partil pick UCC, mark it as 6, the ops team discards the UCC box and keeps the material without the UCC
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET 
-                  Status = '5',
+                  Status = '6',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME()
                WHERE UCCNo = @cPieceLotUCC
@@ -897,7 +911,7 @@ BEGIN
                   CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
                   UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
                   ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, 'Unpicked', @cPickDetailKey,
+                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, @cPickDetailKey,
                   @cNewPickDetailKey,
                   Status,
                   QTY - @nIDLotMatchedQty - @nIDLotNotMatchedQty,
@@ -1002,10 +1016,14 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET 
-                  Status = CASE WHEN Notes = 'Picked' THEN @cPickConfirmStatus
-                                 ELSE Status
-                              END,
-                  DropID = @cPieceLotDropId
+                  Status = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPickConfirmStatus 
+                              ELSE Status 
+                           END,
+                  DropID = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPieceLotDropId
+                              ELSE DropID  
+                           END
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
@@ -1023,8 +1041,7 @@ BEGIN
       SELECT DISTINCT RPL.PickDetailKey
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       WHERE RPL.PickSlipNo = @cPickSlipNo
-         AND RPL.Mobile = @nMobile
-         AND RPL.AddWho = @cUserName
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
       --    AND ISNULL(RPL.Status, '') IN( '4', '9')
 
@@ -1037,8 +1054,7 @@ BEGIN
          FROM RDT.rdtPickLog RPL WITH(NOLOCK)
          INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
          WHERE RPL.PickSlipNo = @cPickSlipNo
-            AND RPL.Mobile = @nMobile
-            AND RPL.AddWho = @cUserName
+            AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
             AND RowRef > @nLoopIndex
          ORDER BY RPL.RowRef
 
@@ -1059,7 +1075,9 @@ BEGIN
 
    /*        New Logic End          */
 
-   COMMIT TRAN rdt_839Confirm15 -- Only commit change made here
+   -- Only commit if we started the transaction ourselves
+   IF @nTranCount = 0 AND @@TRANCOUNT > 0
+      COMMIT TRAN
 
    EXEC RDT.rdt_STD_EventLog
       @cActionType   = '3', -- Picking
@@ -1079,11 +1097,27 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_839Confirm15 -- Only rollback change made here
+   IF XACT_STATE() = -1
+   BEGIN
+      -- Transaction is uncommittable, must rollback entire transaction
+      ROLLBACK TRAN
+   END
+   ELSE IF XACT_STATE() = 1
+   BEGIN
+      -- Transaction is committable, rollback to savepoint only
+      ROLLBACK TRAN rdt_839Confirm15
+   END
+
+   INSERT INTO dbo.TraceInfo (TraceName, Step1, Step2, Step3, Step4, Step5, TimeIn, col1, Col2) 
+   VALUES ('rdt_839Confirm15', @cStorerKey, ISNULL(TRY_CAST(@nMobile AS NVARCHAR(20)), ''), @cUserName, @cPickSlipNo, @cDropID, GETDATE(), 'ErrorNo', ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)), ''))
+
 Fail:
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN
+   IF XACT_STATE() = 1
+   BEGIN
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
+   END
 
 END
 GO

@@ -31,3 +31,6 @@ execute rdt.rdtAddMsg 69211, 10, '69211^Invalid Option', 'us_english', 1641
 
 -- WMS-21690
 execute rdt.rdtAddMsg 69212, 10, '69212^Plt Mix Orders', 'us_english', 1641
+
+-- FCR-10366
+execute rdt.rdtAddMsg 69213, 10, '69213^Invalid Loc', 'us_english', 1641

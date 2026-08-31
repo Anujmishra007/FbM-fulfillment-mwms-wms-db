@@ -11,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-10-28   1.0  GCH225     Cloned from isp_TPS_ExtPrint09 (FCR-7330)        */
+/* 2026-06-29   2.0  GCH225     UWP-52413: Fix the GetReprintOpt for ReportType  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument09] (
@@ -31,6 +32,7 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument09] (
    , @bPrintPaperFlag      BIT               = 0
    , @cLabelPrinter        NVARCHAR(30)      = ''
    , @cPaperPrinter        NVARCHAR(30)      = ''
+   , @bIsAutoPrint         BIT               = 0
    , @cReportType          NVARCHAR(30)      = ''
    , @cPrintLabelJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
    , @cPrintPaperJobIDs    NVARCHAR(MAX)     = ''  OUTPUT
@@ -58,7 +60,6 @@ BEGIN
          , @groupByFields        NVARCHAR(MAX)
          , @cPrinterInGroup      NVARCHAR(10)
          , @cCustomLabelSP       NVARCHAR(30)
-         , @cDynPrinter          NVARCHAR(30)
          , @cEcomPlatform        NVARCHAR(30)
 
    DECLARE @cFieldName1       NVARCHAR(MAX)
@@ -76,6 +77,7 @@ BEGIN
          , @cIsPaperPrinter   NVARCHAR(1)
          , @ctempLabelJobIDs  NVARCHAR(MAX)
          , @ctempPaperJobIDs  NVARCHAR(MAX)
+         , @cCurReportType    NVARCHAR(30)
 
    SET @nContinuePrint     = 0
    SET @b_Success          = 0  
@@ -97,6 +99,7 @@ BEGIN
    SET @IsAggregate4       = 0
    SET @cModuleID          = 'TPPACK'
    SET @cCustomLabelSP     = ''
+   SET @cCurReportType     = ''
 
    SELECT @cEcomPlatform = ISNULL(ECOM_Platform,'')
    FROM ORDERS (NOLOCK)
@@ -110,13 +113,15 @@ BEGIN
                      JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                      ON WMR.ReportID =WMRD.ReportID
                      WHERE WMRD.StorerKey  = @cStorerKey 
-                     AND NOT EXISTS (SELECT 1 
+                     AND WMRD.IsPaperPrinter <> 'Y'
+                     AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
                                        AND C.LISTNAME = 'TPSPrtLast'
                                        AND C.Code = WMR.ReportType
-                                    )
+                                    )))
                      AND WMR.ModuleID = @cModuleID
+                     AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                      AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                      AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
                      AND (
@@ -136,14 +141,16 @@ BEGIN
                      FROM WMREPORT WMR (NOLOCK) 
                      JOIN WMREPORTDETAIL WMRD (NOLOCK) 
                      ON WMR.ReportID =WMRD.ReportID
-                     WHERE WMRD.StorerKey  = @cStorerKey 
-                     AND NOT EXISTS (SELECT 1 
+                     WHERE WMRD.StorerKey  = @cStorerKey
+                     AND WMRD.IsPaperPrinter <> 'Y'
+                     AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
                                        AND C.LISTNAME = 'TPSPrtLast'
                                        AND C.Code = WMR.ReportType
-                                    )
+                                    )))
                      AND WMR.ModuleID = @cModuleID
+                     AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                      AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                      AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                      AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
@@ -169,18 +176,19 @@ BEGIN
             , ISNULL(WMR.KeyFieldName2, '')
             , ISNULL(WMR.KeyFieldName3, '')
             , ISNULL(WMR.KeyFieldName4, '')
-            , IIF(IsPaperPrinter = 'Y', @cPaperPrinter, @cLabelPrinter)
       FROM WMREPORT WMR (NOLOCK) 
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID =WMRD.ReportID
       WHERE WMRD.StorerKey  = @cStorerKey 
-      AND NOT EXISTS (SELECT 1 
+      AND WMRD.IsPaperPrinter <> 'Y'
+      AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                         FROM CODELKUP C (NOLOCK)
                         WHERE C.StorerKey = WMRD.StorerKey
                         AND C.LISTNAME = 'TPSPrtLast'
                         AND C.Code = WMR.ReportType
-                     )
+                     )))
       AND WMR.ModuleID = @cModuleID
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
       AND (
@@ -192,13 +200,12 @@ BEGIN
       OPEN CUR_LBL
       FETCH NEXT FROM CUR_LBL INTO @cReportID
                                  , @cPrintSource
-                                 , @cReportType
+                                 , @cCurReportType
                                  , @cDefaultPrinterID
                                  , @cFieldName1
                                  , @cFieldName2
                                  , @cFieldName3
                                  , @cFieldName4
-                                 , @cDynPrinter
       WHILE @@FETCH_STATUS = 0
       BEGIN   
          SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -311,7 +318,7 @@ BEGIN
             -- Check if printer is a group  
             IF EXISTS(  SELECT 1 
                         FROM rdt.RDTPRINTERGROUP (NOLOCK) 
-                        WHERE PrinterGroup = @cDynPrinter
+                        WHERE PrinterGroup = @cLabelPrinter
             )  
             BEGIN  
                SET @cPrinterInGroup = ''  
@@ -321,15 +328,15 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
-               AND PrinterGroup = @cDynPrinter  
+               AND ReportType = @cCurReportType
+               AND PrinterGroup = @cLabelPrinter  
 
                IF @cPrinterInGroup = ''  
                BEGIN  
                   -- Get default printer in the group  
                   SELECT @cPrinterInGroup = PrinterID  
                   FROM rdt.RDTPRINTERGROUP (NOLOCK)  
-                  WHERE PrinterGroup = @cDynPrinter  
+                  WHERE PrinterGroup = @cLabelPrinter
                   AND DefaultPrinter = 1  
                END  
 
@@ -342,12 +349,12 @@ BEGIN
                   GOTO EXIT_SP  
                END
 
-               SET @cDynPrinter = @cPrinterInGroup
+               SET @cLabelPrinter = @cPrinterInGroup
             END
          END
          ELSE
          BEGIN
-            SET @cDynPrinter = @cDefaultPrinterID
+            SET @cLabelPrinter = @cDefaultPrinterID
          END
 
          EXEC  [WM].[lsp_WM_Print_Report]
@@ -357,7 +364,7 @@ BEGIN
                , @c_Facility     = @cFacility        
                , @c_UserName     = @c_UserID   
                , @c_ComputerName = ''
-               , @c_PrinterID    = @cDynPrinter         
+               , @c_PrinterID    = @cLabelPrinter
                , @n_NoOfCopy     = '1'     
                , @c_KeyValue1    = @cParams1        
                , @c_KeyValue2    = @cParams2        
@@ -377,42 +384,36 @@ BEGIN
             GOTO EXIT_SP  
          END
 
-         IF @cDynPrinter = @cPaperPrinter
-         BEGIN
-            SET @cPrintPaperJobIDs = IIF(@cPrintPaperJobIDs <> '', @cPrintPaperJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
-         END
-         BEGIN
-            SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
-         END
+         SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempLabelJobIDs, @ctempLabelJobIDs)
 
          FETCH NEXT FROM CUR_LBL INTO @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
-                                    , @cDynPrinter
       END
       CLOSE CUR_LBL
       DEALLOCATE CUR_LBL
    END
 
-   SET @cSQL         = ''
-   SET @cSQLParam    = ''
-   SET @cFieldName1  = ''
-   SET @cFieldName2  = ''
-   SET @cFieldName3  = ''
-   SET @cFieldName4  = ''
-   SET @cParams1     = ''
-   SET @cParams2     = ''
-   SET @cParams3     = ''
-   SET @cParams4     = ''
-   SET @IsAggregate1 = 0
-   SET @IsAggregate2 = 0
-   SET @IsAggregate3 = 0
-   SET @IsAggregate4 = 0
+   SET @cSQL            = ''
+   SET @cSQLParam       = ''
+   SET @cCurReportType  = ''
+   SET @cFieldName1     = ''
+   SET @cFieldName2     = ''
+   SET @cFieldName3     = ''
+   SET @cFieldName4     = ''
+   SET @cParams1        = ''
+   SET @cParams2        = ''
+   SET @cParams3        = ''
+   SET @cParams4        = ''
+   SET @IsAggregate1    = 0
+   SET @IsAggregate2    = 0
+   SET @IsAggregate3    = 0
+   SET @IsAggregate4    = 0
 
    IF @bPrintPaperFlag = 1
    BEGIN
@@ -431,12 +432,14 @@ BEGIN
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
-                  AND EXISTS (SELECT 1 
+                  AND WMRD.IsPaperPrinter = 'Y'
+                  AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
                               AND C.LISTNAME = 'TPSPrtLast'
                               AND C.Code = WMR.ReportType
-                             )
+                             )))
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
                   AND (
                   (@cEcomPlatform = 'JIT' AND WMRD.ReportLineDesc = 'JIT')  
@@ -457,12 +460,14 @@ BEGIN
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
-                  AND EXISTS (SELECT 1 
+                  AND WMRD.IsPaperPrinter = 'Y'
+                  AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
                               AND C.LISTNAME = 'TPSPrtLast'
                               AND C.Code = WMR.ReportType
-                             )
+                             )))
+                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
@@ -488,18 +493,19 @@ BEGIN
             , ISNULL(WMR.KeyFieldName2, '')
             , ISNULL(WMR.KeyFieldName3, '')
             , ISNULL(WMR.KeyFieldName4, '')
-            , IIF(IsPaperPrinter = 'Y', @cPaperPrinter, @cLabelPrinter)
       FROM WMREPORT WMR (NOLOCK)
       JOIN WMREPORTDETAIL WMRD (NOLOCK) 
       ON WMR.ReportID = WMRD.ReportID
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
-      AND EXISTS (SELECT 1 
+      AND WMRD.IsPaperPrinter = 'Y'
+      AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                   FROM CODELKUP C (NOLOCK)
                   WHERE C.StorerKey = WMRD.StorerKey
                   AND C.LISTNAME = 'TPSPrtLast'
                   AND C.Code = WMR.ReportType
-                  )
+                  )))
+      AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
       AND (
@@ -511,13 +517,12 @@ BEGIN
       OPEN CUR_PAPER
       FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                     , @cPrintSource
-                                    , @cReportType
+                                    , @cCurReportType
                                     , @cDefaultPrinterID
                                     , @cFieldName1
                                     , @cFieldName2
                                     , @cFieldName3
                                     , @cFieldName4
-                                    , @cDynPrinter
       WHILE @@FETCH_STATUS = 0
       BEGIN
          SET @IsAggregate1 = CASE WHEN @cFieldName1 <> '' AND (
@@ -611,7 +616,7 @@ BEGIN
             -- Check if printer is a group  
             IF EXISTS(  SELECT 1 
                         FROM rdt.RDTPRINTERGROUP (NOLOCK) 
-                        WHERE PrinterGroup = @cDynPrinter
+                        WHERE PrinterGroup = @cPaperPrinter
             )  
             BEGIN  
                SET @cPrinterInGroup = ''  
@@ -621,15 +626,15 @@ BEGIN
                FROM rdt.RDTREPORTTOPRINTER (NOLOCK)  
                WHERE Function_ID = '838'  
                AND StorerKey = @cStorerKey  
-               AND ReportType = @cReportType
-               AND PrinterGroup = @cDynPrinter  
+               AND ReportType = @cCurReportType
+               AND PrinterGroup = @cPaperPrinter  
 
                IF @cPrinterInGroup = ''  
                BEGIN  
                   -- Get default printer in the group  
                   SELECT @cPrinterInGroup = PrinterID  
                   FROM rdt.RDTPRINTERGROUP (NOLOCK)  
-                  WHERE PrinterGroup = @cDynPrinter  
+                  WHERE PrinterGroup = @cPaperPrinter  
                   AND DefaultPrinter = 1  
                END  
 
@@ -642,12 +647,12 @@ BEGIN
                   GOTO EXIT_SP  
                END
 
-               SET @cDynPrinter = @cPrinterInGroup
+               SET @cPaperPrinter = @cPrinterInGroup
             END
          END
          ELSE
          BEGIN
-            SET @cDynPrinter = @cDefaultPrinterID
+            SET @cPaperPrinter = @cDefaultPrinterID
          END
 
          EXEC  [WM].[lsp_WM_Print_Report]
@@ -657,7 +662,7 @@ BEGIN
                , @c_Facility     = @cFacility        
                , @c_UserName     = @c_UserID   
                , @c_ComputerName = ''
-               , @c_PrinterID    = @cDynPrinter         
+               , @c_PrinterID    = @cPaperPrinter
                , @n_NoOfCopy     = '1'     
                , @c_KeyValue1    = @cParams1        
                , @c_KeyValue2    = @cParams2        
@@ -677,23 +682,16 @@ BEGIN
             GOTO EXIT_SP  
          END   
 
-         IF @cDynPrinter = @cPaperPrinter
-         BEGIN
-            SET @cPrintPaperJobIDs = IIF(@cPrintPaperJobIDs <> '', @cPrintPaperJobIDs + '|' + @ctempPaperJobIDs, @ctempPaperJobIDs)
-         END
-         BEGIN
-            SET @cPrintLabelJobIDs = IIF(@cPrintLabelJobIDs <> '', @cPrintLabelJobIDs + '|' + @ctempPaperJobIDs, @ctempPaperJobIDs)
-         END
+         SET @cPrintPaperJobIDs = IIF(@cPrintPaperJobIDs <> '', @cPrintPaperJobIDs + '|' + @ctempPaperJobIDs, @ctempPaperJobIDs)
 
          FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                        , @cPrintSource
-                                       , @cReportType
+                                       , @cCurReportType
                                        , @cDefaultPrinterID
                                        , @cFieldName1
                                        , @cFieldName2
                                        , @cFieldName3
                                        , @cFieldName4
-                                       , @cDynPrinter
       END
       CLOSE CUR_PAPER
       DEALLOCATE CUR_PAPER     
@@ -726,3 +724,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_PrintDocument09] TO NSQL
+GO

@@ -22,6 +22,9 @@ GO
 /* 2026-03-03   2.3  GCH225     UWP-49786: Fix for Block Recartonization         */
 /* 2026-03-12   2.4  GCH225     UWP-XXXXX: Skip UCC Carton Check for PreCartonize*/
 /* 2026-04-01   3.0  GCH225     UWP-52975: Fine tune performance                 */
+/* 2026-05-19   3.1  GCH225     FCR-13354: Fix for auto close carton scenario    */
+/* 2026-07-21   3.2  JWF011     UWP-62055: Fix sku list for scan handler         */
+/* 2026-07-30   3.3  JWF011     UWP-62868: Fix sku list for scan handler         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -40,7 +43,8 @@ CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
    , @cScanType            NVARCHAR(20)      = ''
    , @cSKU                 NVARCHAR(20)      = ''
    , @nCartonNo            INT               = 0
-   , @nQty                 INT               = 0       
+   , @nQty                 INT               = 0  
+   , @bIsVASDone           BIT               = 0     
    , @c_UserID             NVARCHAR(256)     = ''  
    , @cLangCode            NVARCHAR(3)       = ''
    , @nPageIndex           INT               = 0
@@ -71,6 +75,8 @@ BEGIN
          , @bClickFirstOnly      BIT
          , @bShowADScreen        BIT
          , @bShowLottableScreen  BIT
+         , @bShowNumpadScreen    BIT
+         , @bShowVASScreen       BIT
          , @bAutoCloseCarton     BIT
          , @cConfigValue         NVARCHAR(30)
          , @cSQL                 NVARCHAR(MAX)
@@ -96,7 +102,9 @@ BEGIN
          , @nTtlQty              INT
          , @nTtlExpQty           INT
          , @bIsPreCartonize      BIT
-         , @bAutoPickOrderFlag BIT
+         , @bAutoPickOrderFlag   BIT
+         , @cAuthority           NVARCHAR(30)
+         , @nSKUCount            INT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -124,6 +132,8 @@ BEGIN
    SET @bClickFirstOnly       = 1
    SET @bShowADScreen         = 0
    SET @bShowLottableScreen   = 0
+   SET @bShowNumpadScreen     = 0
+   SET @bShowVASScreen        = 0
    SET @bAutoCloseCarton      = 0
    SET @cResponseJson         = ''
    SET @cPackDetailList       = ''
@@ -152,6 +162,8 @@ BEGIN
    SET @nTtlExpQty            = 0
    SET @bIsPreCartonize       = 0
    SET @bAutoPickOrderFlag    = 0
+   SET @cAuthority            = ''
+   SET @nSKUCount             = 0
 
    IF @cLoadKey <> ''
    BEGIN
@@ -443,7 +455,7 @@ SKIP_2ND_CHECK:
              FROM UPC (NOLOCK)
              WHERE StorerKey = @cStorerKey
              AND UPC = @cInputValue1
-             AND UOM IN ('EA','EACH','PCS', '6')
+             AND UOM IN ('EA','EACH','PCS', '6', 'CS', 'CASE', 'CSE')
    )
    BEGIN
       SET @cScanType = 'upc'
@@ -453,7 +465,7 @@ SKIP_2ND_CHECK:
       FROM UPC (NOLOCK)
       WHERE StorerKey = @cStorerKey
       AND UPC = @cInputValue1
-      AND UOM IN ('EA','EACH','PCS', '6')
+      AND UOM IN ('EA','EACH','PCS', '6', 'CS', 'CASE', 'CSE')
    END
    ELSE
    BEGIN
@@ -486,12 +498,24 @@ SKIP_2ND_CHECK:
       END
       ELSE 
       BEGIN
-         IF EXISTS ( SELECT 1
-                     FROM STORERCONFIG (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND ConfigKey = 'TPS-GetUCC'
-                     AND sValue = '1'
-         ) AND EXISTS ( SELECT 1
+         EXEC nspGetRight    
+            @c_Facility  = @cFacility    
+            , @c_StorerKey = @cStorerKey   
+            , @c_sku       = ''    
+            , @c_ConfigKey = 'TPS-GetUCC'    
+            , @c_authority = @cAuthority        OUTPUT    
+            , @b_Success   = @b_Success         OUTPUT
+            , @n_err       = @n_ErrNo           OUTPUT
+            , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+         IF @b_Success = 0
+         BEGIN    
+            SET @n_Continue  = 3  
+            GOTO EXIT_SP
+         END
+
+         IF @cAuthority = '1'
+         AND EXISTS ( SELECT 1
                         FROM UCC (NOLOCK)
                         WHERE Storerkey = @cStorerKey
                         AND UCCNo = @cInputValue1
@@ -595,16 +619,6 @@ SKIP_FINDSCANTYPE:
    IF @nExpectedSKUCnt > 1 
    BEGIN
       SET @bIsMultiSKU = 1
-
-      IF @cScanType = 'altsku'
-      BEGIN
-         GOTO VALIDATE_SKU
-      END
-
-      SET @n_Continue  = 3
-      SET @n_ErrNo = 11506
-      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP') + @cScanType --'Not allow more than 1 SKU found in following ScanType. '
-      GOTO EXIT_SP
    END
 
 VALIDATE_SKU:
@@ -757,12 +771,23 @@ VALIDATE_SKU:
    END
 
 SKIP_VALIDATE:
-   IF EXISTS(  SELECT 1
-               FROM STORERCONFIG (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND ConfigKey = 'TPS-PackQtyIndicator'
-               AND sValue = '1'
-   )
+   EXEC nspGetRight    
+      @c_Facility  = @cFacility    
+      , @c_StorerKey = @cStorerKey   
+      , @c_sku       = ''    
+      , @c_ConfigKey = 'TPS-PackQtyIndicator'    
+      , @c_authority = @cAuthority        OUTPUT    
+      , @b_Success   = @b_Success         OUTPUT
+      , @n_err       = @n_ErrNo           OUTPUT
+      , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+
+   IF @cAuthority = '1'
    BEGIN
       SELECT @nQty = ISNULL(PackQtyIndicator, 1) * @nQty 
       FROM SKU (NOLOCK)
@@ -831,12 +856,24 @@ SKIP_VALIDATE:
    END
 
    -- Recartonization Check Rule
-   IF EXISTS(  SELECT 1 
-               FROM STORERCONFIG (NOLOCK)
-               WHERE Storerkey = @cStorerKey
-               AND ConfigKey = 'TPS-RecartonBlocked'
-               AND SValue = '1'
-   )
+
+   EXEC nspGetRight    
+      @c_Facility  = @cFacility    
+      , @c_StorerKey = @cStorerKey   
+      , @c_sku       = ''    
+      , @c_ConfigKey = 'TPS-RecartonBlocked'    
+      , @c_authority = @cAuthority        OUTPUT    
+      , @b_Success   = @b_Success         OUTPUT
+      , @n_err       = @n_ErrNo           OUTPUT
+      , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+
+   IF @cAuthority = '1'
    AND @nCartonNo = 0
    BEGIN
       
@@ -996,6 +1033,52 @@ SKIP_VALIDATE:
    DEALLOCATE CUR_VAS
    --VAS Code QTY Validation (END)
 
+   IF @c_OperationType = 'TPACK_SCANHANDLER'
+   BEGIN
+      EXEC nspGetRight    
+           @c_Facility  = @cFacility    
+         , @c_StorerKey = @cStorerKey   
+         , @c_sku       = ''    
+         , @c_ConfigKey = 'TPS-ShowNumpadScreen'    
+         , @c_authority = @cAuthority        OUTPUT    
+         , @b_Success   = @b_Success         OUTPUT
+         , @n_err       = @n_ErrNo           OUTPUT
+         , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+      IF @b_Success = 0
+      BEGIN    
+         SET @n_Continue  = 3  
+         GOTO EXIT_SP
+      END
+
+      IF @cAuthority = '1'
+      BEGIN
+         SET @bShowNumpadScreen = 1
+         GOTO SEARCHSKU
+      END
+      
+      EXEC nspGetRight    
+           @c_Facility  = @cFacility    
+         , @c_StorerKey = @cStorerKey   
+         , @c_sku       = ''    
+         , @c_ConfigKey = 'TPS-ScanToSearch'    
+         , @c_authority = @cAuthority        OUTPUT    
+         , @b_Success   = @b_Success         OUTPUT
+         , @n_err       = @n_ErrNo           OUTPUT
+         , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+      IF @b_Success = 0
+      BEGIN    
+         SET @n_Continue  = 3  
+         GOTO EXIT_SP
+      END
+
+      IF @cAuthority = '1'
+      BEGIN
+         GOTO SEARCHSKU
+      END
+   END
+
    --Perform AntiDiversion(ADBARCODE) Step
    IF ISJSON(@cInputValue2) = 1
    AND EXISTS (SELECT 1 FROM OPENJSON(@cInputValue2)) -- if InputValue2 already got value then skip AD logic step.
@@ -1100,13 +1183,24 @@ SKIP_VALIDATE:
          END
       END
 
-      IF @cScanType = 'ucc'
-      AND EXISTS (SELECT 1 
-                  FROM STORERCONFIG (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-SkipUCCADScn'
-                  AND sValue = '1'
-      )
+      EXEC nspGetRight    
+         @c_Facility  = @cFacility    
+         , @c_StorerKey = @cStorerKey   
+         , @c_sku       = ''    
+         , @c_ConfigKey = 'TPS-SkipUCCADScn'    
+         , @c_authority = @cAuthority        OUTPUT    
+         , @b_Success   = @b_Success         OUTPUT
+         , @n_err       = @n_ErrNo           OUTPUT
+         , @c_errmsg    = @c_ErrMsg          OUTPUT
+
+      IF @b_Success = 0
+      BEGIN    
+         SET @n_Continue  = 3  
+         GOTO EXIT_SP
+      END
+
+      IF @cAuthority = '1'
+      AND @cScanType = 'ucc'
       BEGIN
          GOTO SKIP_AD
       END
@@ -1309,7 +1403,29 @@ SKIP_AD:
    END
 
 SKIP_LOTTABLE:
-   
+
+   IF @bIsVASDone = 1
+   BEGIN
+      GOTO SKIP_VAS
+   END
+   ELSE
+   BEGIN
+      --Perform VAS step, if configured.
+      IF EXISTS(  SELECT 1
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-VAS'
+                  AND sValue IN ('1', '3')
+                  AND (OPTION2 = '' OR OPTION2 IS NULL)
+      ) 
+      BEGIN
+         SET @bShowVASScreen = 1
+         GOTO SEARCHSKU
+      END
+   END
+
+SKIP_VAS:
+
    --Perform Validate Input Step, if configured.
    EXEC [API].[isp_TPACK_ValidateInput_Wrapper]
            @cType             = @cType            
@@ -1338,26 +1454,6 @@ SKIP_LOTTABLE:
    BEGIN    
       SET @n_Continue = 3
       GOTO EXIT_SP
-   END
-
-   --IF VAS prompt per SKU configured and InputValue2 and 3 is empty and Only applicable to TPACK_SCANHANDLER
-   --THEN skip TPACK_Pack_SKU step first.
-   IF EXISTS(  SELECT 1
-               FROM STORERCONFIG (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND ConfigKey = 'TPS-VAS'
-               AND sValue IN ('1', '3')
-               AND (OPTION2 = '' OR OPTION2 IS NULL)
-   )
-   AND (
-   (ISJSON(@cInputValue2) = 1 AND NOT EXISTS (SELECT 1 FROM OPENJSON(@cInputValue2)))
-   OR 
-   (ISJSON(@cInputValue2) = 0 AND @cInputValue2 = '' )
-   )
-   AND @cInputValue3 = ''
-   AND @c_OperationType = 'TPACK_SCANHANDLER'
-   BEGIN
-      GOTO SEARCHSKU
    END
 
    --PACK SKU
@@ -1417,6 +1513,51 @@ SKIP_LOTTABLE:
          SET @bAutoCloseCarton = 1
       END
 
+      IF EXISTS ( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-AutoCloseCarton'
+                  AND sValue = '1'
+      ) AND NOT EXISTS (SELECT 1 
+                        FROM PACKINFO_AUDITLOG (NOLOCK)
+                        WHERE PickSlipNo = @cPickSlipNo
+                        AND CartonNo = @nCartonNo
+                        AND CartonStatus = 'PENDAUDIT'
+      )
+      BEGIN
+         SET @nTtlQty = 0
+         SET @nTtlExpQty = 0
+
+         SELECT  @nTtlExpQty = ISNULL(SUM(ExpQty), 0)
+               , @nTtlQty = ISNULL(SUM(Qty), 0)
+               , @nSKUCount = COUNT(DISTINCT SKU)
+         FROM PACKDETAIL (NOLOCK) 
+         WHERE PickSlipNo = @cPickSlipNo
+         AND CartonNo = @nCartonNo
+         AND DropID = @cDropID
+         
+         IF  @nTtlQty = @nTtlExpQty  
+         AND @nSKUCount = 1 
+         AND EXISTS (SELECT 1 
+                     FROM ORDERS (NOLOCK)
+                     WHERE OrderKey = @cOrderKey
+                     AND DocType <> 'E'
+         )
+         AND @bIsVASDone = 1
+         BEGIN 
+            SET @bAutoCloseCarton = 1
+         END
+      END
+
+      IF EXISTS ( SELECT 1 
+                  FROM STORERCONFIG (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND ConfigKey = 'TPS-PackDetail'
+      )
+      BEGIN
+         SET @cSKUList = ISNULL((SELECT SKU FROM @oSKUList FOR JSON AUTO),'')
+      END
+
       GOTO GET_PACKDETAIL_LIST
    END
 
@@ -1426,7 +1567,7 @@ SEARCHSKU:
 
 GET_PACKDETAIL_LIST:
 
-   EXEC [API].[isp_TPACK_GetPackDetail]
+   EXEC [API].[isp_TPACK_PackDetail_Wrapper]
         @cType             = @cType            
       , @bIsDiscrete       = @bIsDiscrete      
       , @bIsCustom         = @bIsCustom        
@@ -1458,6 +1599,8 @@ GET_PACKDETAIL_LIST:
    -- Wait until capture the AD only close the carton only for ucc scan type.
    IF @bShowADScreen = 0 
    AND @bShowLottableScreen = 0 
+   AND @bShowNumpadScreen = 0
+   AND @bShowVASScreen = 0
    AND @cScanType = 'ucc'
    BEGIN
       SET @bAutoCloseCarton = 1 
@@ -1469,6 +1612,8 @@ GET_PACKDETAIL_LIST:
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , @bShowADScreen       AS bShowADScreen
                                                        , @bShowLottableScreen AS bShowLottableScreen
+                                                       , @bShowNumpadScreen   AS bShowNumpadScreen
+                                                       , @bShowVASScreen      AS bShowVASScreen
                                                        , @bAutoCloseCarton    AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , @nNumberOfADField    AS nNumberOfADField
@@ -1512,3 +1657,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_ValidateUserInput] TO NSQL
+GO

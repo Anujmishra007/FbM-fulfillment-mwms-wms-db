@@ -23,8 +23,10 @@ GO
 /* 2023-03-23  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-09-25  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
-/* 2025-05-26  SSA01    1.2   UWP-3982- Added PalletType                */
-/* 2025-07-22  PPA01    1.3   UWP-37445 updated datatype size to 40     */
+/* 2024-11-07  NJOW01   1.2   LFWM-5122 Support input extended validation*/
+/* 2025-05-26  SSA01    1.3   UWP-3982- Added PalletType                */
+/* 2025-07-22  PPA01    1.4   UWP-37445/UWP-38256  updated datatype size*/
+/*                            to 40                                     */
 /* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /* 2025-10-10  Michael  1.5   FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/
@@ -134,6 +136,12 @@ BEGIN
          ,  @c_FromPalletType NVARCHAR(10)   = ''   --(SSA01)
          ,  @c_ToPalletType   NVARCHAR(10)   = ''   --(SSA01)
          ,  @CUR_ERRLIST      CURSOR
+         ,  @c_ExtValid_ListName NVARCHAR(10) = '' --NJOW01
+         ,  @c_ExtValid_Where    NVARCHAR(500) = '' --NJOW01
+         ,  @n_FailedCnt         INT = 0 --NJOW01
+         ,  @c_ErrMsg2           NVARCHAR(255) = '' --NJOW01
+         ,  @n_Err2              INT = 0            --NJOW01
+         ,  @b_Success2          INT = 0            --NJOW01
 
    DECLARE  @t_WMSErrorList   TABLE
          (  RowID             INT            IDENTITY(1,1)
@@ -290,6 +298,19 @@ BEGIN
                        WHEN C.Storerkey = '' THEN 2
                        ELSE 3 END
       END
+
+
+      --NJOW01 S
+       SELECT TOP 1 @c_ExtValid_ListName = CLS.ListName
+       FROM CODELKUP CL (NOLOCK) 
+       JOIN CODELIST CLS (NOLOCK) ON CL.UDF01 = CLS.LISTNAME
+       JOIN CODELKUP CLSD (NOLOCK) ON CLS.ListName = CLSD.Listname
+       JOIN V_Extended_Validation V ON CLS.ListGroup = V.ValidateTable AND CL.Code = V.ValidationType
+       WHERE CL.ListName = 'VALDNCFG'
+       AND V.ValidationType <> V.ValidateTable
+       AND CLS.ListGroup = 'TRANSFERDETAIL'
+       AND CL.Storerkey = @c_FromStorerkey             
+       --NJOW01 E
 
       SET @c_TransferLineNumber = '00000'
 
@@ -544,6 +565,43 @@ BEGIN
             SET @n_Continue = 3
             GOTO EXIT_SP
          END
+
+         --NJOW01 S
+         IF ISNULL(@c_ExtValid_ListName,'') <> ''
+         BEGIN    
+            SET @c_ExtValid_Where = 'TRANSFERDETAIL.Transferkey=''' + @c_TransferKey + ''' AND TRANSFERDETAIL.TransferLineNumber=''' + @c_TransferLineNumber + ''''
+
+         	  SET @b_Success = 1    	  
+            EXEC isp_Wrapup_Validation         
+                 @c_Window          = 'w_userdefine_extended_validation'          
+                ,@c_BusObj          = 'lsp_TRF_PopulateLLI_Wrapper'          
+                ,@c_UpdateTable     = 'TRANSFERDETAIL'     
+                ,@c_XMLSchemaString = @c_ExtValid_ListName
+                ,@c_XMLDataString   = @c_ExtValid_Where 
+                ,@b_Success         = @b_Success  OUTPUT       
+                ,@n_Err             = @n_Err      OUTPUT       
+                ,@c_Errmsg          = @c_Errmsg   OUTPUT               	         	  
+                
+             IF @b_Success <> 1   
+             BEGIN             	                	  
+             	  DELETE FROM TRANSFERDETAIL
+             	  WHERE Transferkey = @c_Transferkey
+             	  AND TransferLineNumber = @c_TransferLineNumber       
+             	  
+             	  SET @c_TransferLineNumber = RIGHT( '00000' + CONVERT(NVARCHAR(5), CONVERT(INT, @c_TransferLineNumber) - 1), 5 )   
+                
+             	  SET @n_FailedCnt = @n_FailedCnt + 1
+
+                --SELECT @n_continue = 3
+                SELECT @c_Errmsg = 'Error - Sku: '+ RTRIM(@c_FromSku) + ' Lot: ' + RTRIM(@c_FromLot) + ' Loc: ' + RTRIM(@c_FromLoc) + ' ID: ' + RTRIM(@c_FromID) +  ' (' + RTRIM(@c_ErrMsg)  + ')'
+
+                INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                VALUES (@c_TableName, @c_SourceType, @c_TransferKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+                
+                --GOTO EXIT_SP             	               	  
+             END
+         END       
+         --NJOW01 E  
       END
 
       IF @c_ASNFizUpdLotToSerialNo = 1 AND @n_TotalSelected > @n_TotalInserted
@@ -598,6 +656,11 @@ EXIT_SP:
    END
    ELSE
    BEGIN
+   	IF @n_FailedCnt > 0 --NJOW01
+   	BEGIN
+   	   SET @c_ErrMsg = CAST(@n_FailedCnt AS NVARCHAR) + ' records failed to populate. (lsp_TRF_PopulateLLI_Wrapper)'
+   	END
+
       SET @b_Success = 1
       WHILE @@TRANCOUNT > 0                                                         --(Wan01)
       BEGIN
@@ -627,8 +690,8 @@ EXIT_SP:
                                      , @c_Refkey3
                                      , @c_WriteType
                                      , @n_LogWarningNo
-                                     , @n_Err
-                                     , @c_Errmsg
+                                     , @n_Err2
+                                     , @c_Errmsg2
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
@@ -642,10 +705,10 @@ EXIT_SP:
       ,  @n_LogWarningNo= @n_LogWarningNo
       ,  @c_WriteType   = @c_WriteType
       ,  @n_err2        = @n_err
-      ,  @c_errmsg2     = @c_errmsg
-      ,  @b_Success     = @b_Success
-      ,  @n_err         = @n_err
-      ,  @c_errmsg      = @c_errmsg
+      ,  @c_errmsg2     = @c_errmsg2
+      ,  @b_Success     = @b_Success2
+      ,  @n_err         = @n_err2
+      ,  @c_errmsg      = @c_errmsg2
 
       FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
                                         , @c_SourceType
@@ -654,8 +717,8 @@ EXIT_SP:
                                         , @c_Refkey3
                                         , @c_WriteType
                                         , @n_LogWarningNo
-                                        , @n_Err
-                                        , @c_Errmsg
+                                        , @n_Err2
+                                        , @c_Errmsg2
    END
    CLOSE @CUR_ERRLIST
    DEALLOCATE @CUR_ERRLIST

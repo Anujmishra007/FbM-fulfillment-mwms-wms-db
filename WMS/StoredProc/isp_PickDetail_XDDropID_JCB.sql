@@ -1,4 +1,6 @@
-
+USE [GBRWMS]
+GO
+/****** Object:  StoredProcedure [dbo].[isp_PickDetail_XDDropID_JCB]    Script Date: 5/20/2026 3:03:06 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -28,6 +30,8 @@ GO
 /* 2025-09-30  PPA374   1.1   Adding FromID filter for housekeeping     */
 /* 2025-12-11  PPA374   1.2   Adding message to Statusmsg when          */
 /*                               cancelling the task                    */
+/* 2026-05-20  SKE140   1.3   Merged Unicode control char cleanup       */
+/*                               for Lottable09 (U+202C, U+202D)        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
@@ -45,12 +49,42 @@ BEGIN
 
    DECLARE @c_OrderKey      NVARCHAR( 10)
           ,@c_PickDetailKey NVARCHAR( 10)
-		  ,@cStorerKey      NVARCHAR( 30) = 'JCB'
-		  ,@cFacility       NVARCHAR( 30) = 'EMG03'
-		  ,@cPalType        NVARCHAR( 15)
-		  ,@cUserKey        NVARCHAR( 30) = 'AutoHK'
+    ,@cStorerKey      NVARCHAR( 30) = 'JCB'
+    ,@cFacility       NVARCHAR( 30) = 'EMG03'
+    ,@cPalType        NVARCHAR( 15)
+    ,@cUserKey        NVARCHAR( 30) = 'AutoHK'
 
    SELECT @b_Success=1, @n_Err=0, @c_ErrMsg=''
+
+   -- ============================================================
+   -- Unicode control character cleanup (U+202D, U+202C)
+   -- Cleans hidden bidi chars from Lottable09 to normalize stored values
+   -- ============================================================
+   IF EXISTS (
+       SELECT 1
+         FROM lotattribute
+        WHERE StorerKey = @cStorerKey
+          AND (
+              Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
+           OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
+          )
+   )
+   BEGIN
+      UPDATE lotattribute
+      SET Lottable09 = LTRIM(RTRIM(
+          REPLACE(
+          REPLACE(
+              CONVERT(NVARCHAR(MAX), Lottable09) COLLATE Latin1_General_BIN2,
+              NCHAR(0x202D), N''),
+              NCHAR(0x202C), N'')
+          ))
+       WHERE StorerKey = @cStorerKey
+         AND (
+             Lottable09 LIKE N'%' + NCHAR(0x202C) + N'%' COLLATE Latin1_General_BIN2
+          OR Lottable09 LIKE N'%' + NCHAR(0x202D) + N'%' COLLATE Latin1_General_BIN2
+         );
+   END
+   -- ============================================================
 
    -- Housekeping
    -- Check for locations without double pal hold that require it  
@@ -74,12 +108,12 @@ BEGIN
       AND IH.Status = 'DoublePal'
    WHERE IH.Status IS NULL
       AND L.LocationCategory = 'WA'
-	  AND P.StorerKey = @cStorerKey
-	  AND P.PalletType LIKE 'D%'
-	  AND LLI.Qty > 0
+   AND P.StorerKey = @cStorerKey
+   AND P.PalletType LIKE 'D%'
+   AND LLI.Qty > 0
       AND LLI.StorerKey = @cStorerKey
       AND L.Facility = @cFacility
-	  AND L.LocationFlag IN ('','NONE')
+   AND L.LocationFlag IN ('','NONE')
    )
    BEGIN
       DECLARE @DoublePalletLocations TABLE (LocToHold NVARCHAR(10));
@@ -120,10 +154,10 @@ BEGIN
                AND IH.Status = 'DoublePal'
          WHERE IH.Status IS NULL
             AND L.LocationCategory = 'WA'
-			AND P.StorerKey = @cStorerKey
-			AND LLI.StorerKey = @cStorerKey
-			AND L.Facility = @cFacility
-			AND L.LocationFlag IN ('','NONE')
+   AND P.StorerKey = @cStorerKey
+   AND LLI.StorerKey = @cStorerKey
+   AND L.Facility = @cFacility
+   AND L.LocationFlag IN ('','NONE')
          GROUP BY LLI.Loc, L.LocationRoom
       ) T
       WHERE (
@@ -131,7 +165,7 @@ BEGIN
          (FirstLoc IS NULL AND ThirdLoc IS NULL) OR
          (SecondLoc IS NULL AND ThirdLoc IS NULL)
       ) 
-	     AND CASE 
+      AND CASE 
             WHEN RIGHT(Loc,1) IN ('3','1') AND SecondLoc IS NULL THEN LocBeam +'2'
             WHEN RIGHT(Loc,1) = '2' AND FirstLoc IS NULL THEN LocBeam +'1'
             WHEN RIGHT(Loc,1) = '2' AND ThirdLoc IS NULL THEN LocBeam +'3'
@@ -144,27 +178,27 @@ BEGIN
       SELECT TOP 1 @nLimit = COUNT(LocToHold)
       FROM (
          SELECT LocToHold, 
-		    ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
+      ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
          FROM @DoublePalletLocations DPL
-		    INNER JOIN dbo.LOC L WITH(NOLOCK)
-			ON L.Loc = DPL.LocToHold
-		 WHERE L.LocationFlag IN ('','NONE')
-	  )T
+      INNER JOIN dbo.LOC L WITH(NOLOCK)
+   ON L.Loc = DPL.LocToHold
+   WHERE L.LocationFlag IN ('','NONE')
+   )T
 
       WHILE @nCounter <= @nLimit AND @nCounter <= 20
       BEGIN
          SELECT TOP 1 @cLocToHold = LocToHold
          FROM (
             SELECT LocToHold, 
-		       ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
+         ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
             FROM @DoublePalletLocations DPL
-		       INNER JOIN dbo.LOC L WITH(NOLOCK)
-			   ON L.Loc = DPL.LocToHold
-		    WHERE L.LocationFlag IN ('','NONE')
+         INNER JOIN dbo.LOC L WITH(NOLOCK)
+      ON L.Loc = DPL.LocToHold
+      WHERE L.LocationFlag IN ('','NONE')
          ) T
          WHERE RowID = @nCounter;
 
-	     IF ISNULL(@cLocToHold, '') <> ''
+      IF ISNULL(@cLocToHold, '') <> ''
          BEGIN
             EXEC [WM].[lsp_Inventoryhold_Wrapper]
                  @c_StorerKey   = @cStorerKey,
@@ -195,7 +229,7 @@ BEGIN
                  @c_ErrMsg      = @c_ErrMsg OUTPUT,
                  @c_UserName    = @cUserKey;
          END
-	     SET @nCounter = @nCounter + 1;
+      SET @nCounter = @nCounter + 1;
       END
    END
 
@@ -203,7 +237,7 @@ BEGIN
       SELECT 1
       FROM (
          SELECT 
-		    LOC, 
+      LOC, 
             Hold, 
             Status, 
             DateOn, 
@@ -225,12 +259,12 @@ BEGIN
       FROM dbo.INVENTORYHOLD IH
          INNER JOIN (
             SELECT LOC, 
-	           Hold, 
-		       DateOn, 
-		       WhoOn
+            Hold, 
+         DateOn, 
+         WhoOn
             FROM (
                SELECT 
-			      LOC,
+         LOC,
                   Hold,
                   DateOn,
                   WhoOn,
@@ -301,10 +335,10 @@ BEGIN
 
       -- 4. Update LOCs to have status 'OK' when there are no Holds
       /*UPDATE dbo.LOC WITH(ROWLOCK)
-	  SET Status = 'OK'
-	  WHERE Facility = @cFacility
-	     AND LOC IN ( 
-	        SELECT L.Loc
+   SET Status = 'OK'
+   WHERE Facility = @cFacility
+      AND LOC IN ( 
+         SELECT L.Loc
             FROM dbo.Loc L WITH(NOLOCK)
                LEFT JOIN dbo.InventoryHold IH WITH(NOLOCK)
                   ON IH.Loc = L.Loc AND IH.Hold = '1'
@@ -332,14 +366,14 @@ BEGIN
    FROM dbo.TaskDetail TD
       LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
          ON TD.FromID = LLI.Id 
-		    AND LLI.Qty > 0
-			AND TD.StorerKey = @cStorerKey
-			AND LLI.StorerKey = @cStorerKey
+      AND LLI.Qty > 0
+   AND TD.StorerKey = @cStorerKey
+   AND LLI.StorerKey = @cStorerKey
    WHERE TD.Status = '0'
       AND TD.FromLoc <> LLI.Loc
       AND TD.StorerKey = @cStorerKey
       AND LLI.StorerKey = @cStorerKey
-	  AND TD.FromID <> ''
+   AND TD.FromID <> ''
 
    --Delete RFPutaway that got pending but no actual qty
    /*DELETE FROM RFPUTAWAY
@@ -355,7 +389,7 @@ BEGIN
             AND LLI3.Qty > 0
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
-		 AND LLI2.PendingMoveIN > 0
+   AND LLI2.PendingMoveIN > 0
    )*/
 
    DELETE RF
@@ -366,7 +400,7 @@ BEGIN
       WHERE LLI.ID = RF.FromID
          AND LLI.StorerKey = @cStorerKey
          AND LLI.PendingMoveIN > 0
-		 AND RF.Id <> ''
+   AND RF.Id <> ''
    )
    AND NOT EXISTS (
       SELECT 1
@@ -374,7 +408,7 @@ BEGIN
       WHERE LLI.ID = RF.FromID
          AND LLI.StorerKey = @cStorerKey
          AND LLI.Qty > 0
-		 AND RF.Id <> ''
+   AND RF.Id <> ''
     )
 
    --Update pending qty that can no longer be done, to free up the location
@@ -392,7 +426,7 @@ BEGIN
             AND LLI3.Qty > 0
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
-		 AND LLI2.PendingMoveIN > 0
+   AND LLI2.PendingMoveIN > 0
    )*/
 
    UPDATE LLI
@@ -421,15 +455,15 @@ BEGIN
       FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
          INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
-		       AND LLI1.StorerKey = LLI2.StorerKey
+         AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
-	           AND LLI2.StorerKey = LLI1.StorerKey
+            AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
          AND L.LocationCategory NOT IN ('STAGE','PNDIN')
-		 AND L.Facility = @cFacility
-		 AND LLI2.Qty > 0
+   AND L.Facility = @cFacility
+   AND LLI2.Qty > 0
    )*/
 
    DELETE RF
@@ -452,15 +486,15 @@ BEGIN
       FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
          INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
-		       AND LLI1.StorerKey = LLI2.StorerKey
+         AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
-	           AND LLI2.StorerKey = LLI1.StorerKey
+            AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
          AND L.LocationCategory NOT IN ('STAGE','PNDIN')
-		 AND L.Facility = @cFacility
-		 AND LLI2.Qty > 0
+   AND L.Facility = @cFacility
+   AND LLI2.Qty > 0
    )*/
 
    UPDATE LLI1
@@ -486,13 +520,13 @@ BEGIN
             LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
                ON (TD.ToLoc = LLI1.LOC OR TD.FinalLOC = LLI1.LOC)
                   AND TD.FromID = LLI1.ID
-				  AND TD.StorerKey = LLI1.StorerKey
+      AND TD.StorerKey = LLI1.StorerKey
          WHERE LLI1.StorerKey = @cStorerKey
             AND LLI1.PendingMoveIN > 0
             AND TD.TaskDetailKey IS NULL
          ) AS Sub
          ON R.ID = Sub.ID 
-		    AND R.SuggestedLoc = Sub.Loc;
+      AND R.SuggestedLoc = Sub.Loc;
 
    --Update pending that got task archived
    UPDATE LLI
@@ -505,26 +539,26 @@ BEGIN
    WHERE LLI.StorerKey = @cStorerKey
       AND LLI.PendingMoveIN > 0
       AND TD.TaskDetailKey IS NULL
-	  AND TD.FromID <> ''
+   AND TD.FromID <> ''
 
    -- PRIMARY filter for XDOCK pickdetails that do not have DROPID but have ID and are not shipped yet
    DECLARE CUR_PICK_LINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT 
-	     O.OrderKey,
-		 PD.PickDetailKey
+      O.OrderKey,
+   PD.PickDetailKey
       FROM dbo.Orders O WITH(NOLOCK)
-	     INNER JOIN dbo.ORDERDETAIL OD WITH(NOLOCK)
-		 ON O.OrderKey=OD.OrderKey 
-		 INNER JOIN dbo.PICKDETAIL PD 
-		 ON OD.OrderLineNumber=PD.OrderLineNumber 
-		    AND OD.OrderKey=PD.OrderKey 
-			AND PD.PickDetailKey IS NOT NULL
+      INNER JOIN dbo.ORDERDETAIL OD WITH(NOLOCK)
+   ON O.OrderKey=OD.OrderKey 
+   INNER JOIN dbo.PICKDETAIL PD 
+   ON OD.OrderLineNumber=PD.OrderLineNumber 
+      AND OD.OrderKey=PD.OrderKey 
+   AND PD.PickDetailKey IS NOT NULL
       WHERE O.StorerKey='JCB' 
-	     AND O.Type='0' 
-		 AND O.OrderGroup='XDOCK' 
-		 AND O.Status<>'9' 
-		 AND ISNULL(PD.DropID,'')='' 
-		 AND ISNULL(PD.ID,'')<>''
+      AND O.Type='0' 
+   AND O.OrderGroup='XDOCK' 
+   AND O.Status<>'9' 
+   AND ISNULL(PD.DropID,'')='' 
+   AND ISNULL(PD.ID,'')<>''
 
    OPEN CUR_PICK_LINES
       
@@ -535,17 +569,17 @@ BEGIN
       IF @b_debug = 1                                                           
          BEGIN
             SELECT  @c_OrderKey, @c_PickDetailKey
-			PRINT 'Order: '+@c_OrderKey+' PickDetailKey: '+@c_PickDetailKey;
+   PRINT 'Order: '+@c_OrderKey+' PickDetailKey: '+@c_PickDetailKey;
          END
       
-	     BEGIN TRY
+      BEGIN TRY
             UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
             SET DropID = ID
             WHERE Orderkey = @c_Orderkey
             AND PickDetailKey = @c_PickDetailKey
          END TRY
-		 BEGIN CATCH
-		    SET @b_Success=0
+   BEGIN CATCH
+      SET @b_Success=0
             SET @n_err = ERROR_NUMBER()
                
             IF @n_err <> 0
@@ -555,7 +589,7 @@ BEGIN
                --SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update XD PickDetail Failed. (isp_PickDetail_XDDropID_JCB)'
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
-		       EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'isp_PickDetail_XDDropID_JCB'
+         EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'isp_PickDetail_XDDropID_JCB'
             END
          END CATCH
 

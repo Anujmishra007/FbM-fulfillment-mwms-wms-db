@@ -115,3 +115,20 @@ EXECUTE rdt.rdtAddScn 5647, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 638
+
+--WMS-16735
+-- 5648 = Capture ReceiptDetail info screen
+DELETE rdt.RDTScn WHERE Scn = 5648 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5648, 'ENG'
+   ,@cLine01 = '%20d01'
+   ,@cLine02 = '%20i02'
+   ,@cLine03 = '%20d03'
+   ,@cLine04 = '%20i04'
+   ,@cLine05 = '%20d05'
+   ,@cLine06 = '%20i06'
+   ,@cLine07 = '%20d07'
+   ,@cLine08 = '%20i08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = '%20i10'
+   ,@cLine14 = '%e'
+   ,@nFunc = 638   

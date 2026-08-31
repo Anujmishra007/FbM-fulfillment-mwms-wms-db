@@ -2385,6 +2385,7 @@ BEGIN
          END
       END
 
+
       -- Validate SKU not in pick list
       IF @nQTY_PPA IS NULL
       BEGIN
@@ -4817,6 +4818,23 @@ BEGIN
          END--rdt_855ExtScn02
          --V7.0.1 end
 
+         IF @cExtendedScnSP = 'rdt_855ExtScn05'
+         BEGIN
+            IF @nStep = 0 --back to menu from new 1st screen
+               SET @nFunc = @nMenu
+
+            IF @nStep = 99 OR @nStep = 3
+            BEGIN
+               SET @cDropId = @cUDF01
+               SET @cSingleUnitOrdFlag = @cUDF04
+               SET @cExtendedInfo = @cUDF08
+               SET @cPPACartonIDByPackDetailLabelNo = @cUDF09
+               SET @cPPACartonIDByPickDetailCaseID = @cUDF10
+               SET @cDSPOrderKey = @cUDF12 --v7.2.0 --Saving to orderkey may impact calculation logic.
+               SET @cToteID = @cUDF13
+            END
+         END--rdt_855ExtScn05
+
          GOTO Quit
       END
    END
@@ -4910,6 +4928,8 @@ BEGIN
       C_String2  = @cSingleUnitOrdFlag, --v7.0.0
       C_String3  = @cToteID, --v7.0.0
       C_String4 = @cDSPOrderKey, --V7.2.0
+      --C_String5 used by extscn
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,

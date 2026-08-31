@@ -20,7 +20,7 @@ on:
           - AUSWMS
           - INDWMS
           - SDRWMS
-
+          - JPNWMS
 permissions: write-all
 
 env:

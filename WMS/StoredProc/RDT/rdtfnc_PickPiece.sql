@@ -84,7 +84,8 @@ GO
 /* 2025-09-22   6.4.0   PPA374      UWP-41253 Adding ExtUpd to step 2 inputkey 0 */
 /* 2026-01-04   6.5.0   NickT       FCR-9040 Add ExtScnSP in some steps          */
 /* 2026-02-02   6.6.0   Jackc       FCR-10041 ExtScn07 special jump logic        */
-/* 2026-02-16   6.7.0  NYE018       FCR-10366 add loc check digit                */
+/* 2026-02-16   6.7.0   NYE018      FCR-10366 add loc check digit                */
+/* 2026-05-22   6.8.0   JackC       UWP-57005 Fix issue in ExtScn02,05 (jack01)  */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -211,7 +212,6 @@ DECLARE
 
    @cLOCCheckDigitSP    NVARCHAR( 20), -- FCR-10366
    @cCheckDigitLOC      NVARCHAR( 20), -- FCR-10366
-   @cShowLocOn04        NVARCHAR( 1),  -- FCR-10366
 
 
    @cLottable01 NVARCHAR( 18),      @cLottable02 NVARCHAR( 18),      @cLottable03 NVARCHAR( 18),
@@ -343,7 +343,6 @@ SELECT
    @cExtScnSP           = V_String46,  
 
    @cLOCCheckDigitSP    = V_String47, -- FCR-10366
-   @cShowLocOn04        = V_String48, -- FCR-10366
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -485,7 +484,6 @@ BEGIN
 
    SET @cLOCCheckDigitSP = rdt.RDTGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)  -- FCR-10366
 
-   SET @cShowLocOn04 = rdt.RDTGetConfig(@nFunc, 'ShowLocOn04', @cStorerKey)  -- FCR-10366
 
 
    -- EventLog
@@ -1495,7 +1493,7 @@ BEGIN
          SET @nAction = 0
       END
 
-      IF @cExtScnSP = 'rdt_839ExtScn06'
+      IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
       BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cPickSlipNo',     @cPickSlipNo),
@@ -3610,15 +3608,6 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
-
-            -- FCR-10366 
-            IF @cShowLocOn04 = '1'
-            BEGIN
-               SET @cOutField01 = @cSuggLOC  -- Regular LOC
-            END
-            ELSE
-               SET @cOutField01 = ''  -- Don't show LOC
-            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -4553,14 +4542,6 @@ BEGIN
          ELSE
          BEGIN
             -- Go to no more task in loc screen
-             -- FCR-10366 
-            IF @cShowLocOn04 = '1'
-            BEGIN
-               SET @cOutField01 = @cSuggLOC  -- Regular LOC
-            END
-            ELSE
-               SET @cOutField01 = ''  -- Don't show LOC
-            -- FCR-10366
             SET @nScn = @nScn_NoMoreTask
             SET @nStep = @nStep_NoMoreTask
          END
@@ -6850,7 +6831,14 @@ BEGIN
             @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
          IF @nErrNo <> 0
+         BEGIN
+            IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
+            BEGIN
+               IF @cUDF01 = 'No Need Update RDTMOBREC'
+                  RETURN
+            END
             GOTO Step_99_Fail
+         END
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
          BEGIN
@@ -6862,6 +6850,8 @@ BEGIN
                -- Go to PickSlipNo screen
                SET @nScn = @nScn_PickSlipNo
                SET @nStep = @nStep_PickSlipNo
+
+               SET @nPre_Step = -1 --(jack01)
                GOTO Quit
             END
             ELSE IF @nPre_Step = @nStep_NoMoreTask
@@ -6882,6 +6872,8 @@ BEGIN
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
                SET @cOutField15 = ''
+
+               SET @nPre_Step = -1 --(jack01)
 
                SET @nScn = @nScn_PickZone
                SET @nStep = @nStep_PickZone
@@ -6913,6 +6905,8 @@ BEGIN
                -- Go to PickSlipNo screen
                SET @nScn = @nScn_PickSlipNo
                SET @nStep = @nStep_PickSlipNo
+
+               SET @nPre_Step = -1 --(jack01)
                GOTO Quit
             END
             ELSE IF @nPre_Step = @nStep_NoMoreTask
@@ -6934,6 +6928,8 @@ BEGIN
                SET @cOutField03 = ''
                SET @cOutField15 = ''
 
+               SET @nPre_Step = -1 --(jack01)
+               
                SET @nScn = @nScn_PickZone
                SET @nStep = @nStep_PickZone
 
@@ -6941,7 +6937,7 @@ BEGIN
             END
          END
 
-         IF @cExtScnSP = 'rdt_839ExtScn06'
+         IF (@cExtScnSP = 'rdt_839ExtScn06' OR @cExtScnSP = 'rdt_839ExtScn08')
          BEGIN
             IF @cUDF01 = 'GOTO STEP5'
             BEGIN
@@ -7078,7 +7074,6 @@ BEGIN
       V_String46     = @cExtScnSP,  
 
       V_String47     = @cLOCCheckDigitSP, -- FCR-10366
-      V_String48     = @cShowLocOn04, -- FCR-10366
 
       I_Field01 = '',  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = '',  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

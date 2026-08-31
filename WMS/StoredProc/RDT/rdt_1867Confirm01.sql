@@ -776,8 +776,6 @@ BEGIN
                   PD.PickSlipNo, @cPickConfirmStatus, @cUserName, GETDATE(), @cDropID, @nMobile
                FROM dbo.PickDetail PD WITH (NOLOCK)
                LEFT JOIN dbo.SKU S WITH (NOLOCK) ON S.StorerKey = PD.StorerKey AND S.SKU = PD.SKU
-               LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON LLI.StorerKey = PD.StorerKey
-                  AND LLI.SKU = PD.SKU AND LLI.Loc = PD.Loc AND LLI.Lot = PD.Lot AND LLI.ID = PD.ID
                WHERE PD.PickDetailKey = @cPickDetailKey
             END
 

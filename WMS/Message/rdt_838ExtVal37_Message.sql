@@ -13,4 +13,5 @@ EXECUTE rdt.rdtAddMsg 255758, 10, '255758Cannot Overwrite Carton Type',        '
 EXECUTE rdt.rdtAddMsg 255759, 10, '255759Invalid SerialNo',        'us_english', 838, 0,'255759Invalid SerialNo'
 EXECUTE rdt.rdtAddMsg 255760, 10, '255760BadQRCode',        'us_english', 838, 0,'255760BadQRCode'
 EXECUTE rdt.rdtAddMsg 255761, 10, '255761SNAlreadyScanned',        'us_english', 838, 0,'255761SNAlreadyScanned'
+EXECUTE rdt.rdtAddMsg 255762, 10, '255762Invalid SerialNo',        'us_english', 838, 0,'255762Invalid SerialNo'
 

@@ -63,3 +63,19 @@ EXECUTE rdt.rdtAddScn 5142, 'ENG',
    ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10","11"]}'
    ,@nFunc = 628
  
+-- 5143 = Custom data screen
+DELETE rdt.RDTScn WHERE Scn = 5143 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 5143, 'ENG'
+   ,@cLine01 = N'%20d01'
+   ,@cLine02 = N'%20d02'
+   ,@cLine03 = N'%20d03'
+   ,@cLine04 = N'%20d04'
+   ,@cLine05 = N'%20d05'
+   ,@cLine06 = N'%20d06'
+   ,@cLine07 = N'%20d07'
+   ,@cLine08 = N'%20d08'
+   ,@cLine09 = N'%20d09'
+   ,@cLine10 = N'%20d10'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10"]}'
+   ,@nFunc = 628

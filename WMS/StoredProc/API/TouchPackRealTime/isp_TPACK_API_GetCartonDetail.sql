@@ -13,6 +13,7 @@ GO
 /* 2025-08-22   1.0  GCH225     Created                                          */
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
+/* 2026-05-19   2.2  GCH225     FCR-13354: Fix for auto close carton scenario    */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -61,12 +62,14 @@ BEGIN
          , @bClickAll            BIT  
          , @bClickFirstOnly      BIT
          , @bAutoCloseCarton     BIT
-         , @nLabelLineCount      INT
+         , @nSKUCount            INT
          , @nTtlQty              INT
          , @cSKU                 NVARCHAR(20)
          , @nExpQty              INT
          , @nActualQty           INT
          , @cResponseJson        NVARCHAR(MAX)
+         , @bShowVASScreen       BIT
+         , @cAuthority           NVARCHAR(256)
    
    DECLARE @oSKUList TABLE (
       SKU NVARCHAR(20) PRIMARY KEY
@@ -96,12 +99,14 @@ BEGIN
    SET @bClickAll          = 0
    SET @bClickFirstOnly    = 1
    SET @bAutoCloseCarton   = 0
-   SET @nLabelLineCount    = 0
+   SET @nSKUCount          = 0
    SET @nTtlQty            = 0
    SET @cSKU               = ''
    SET @nExpQty            = 0
    SET @nActualQty         = 0
    SET @cResponseJson      = ''
+   SET @bShowVASScreen     = 0
+   SET @cAuthority         = ''
 
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID
@@ -119,18 +124,10 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   IF @b_sp_ExecuteAs = 1
    BEGIN
       EXECUTE AS LOGIN = @DBUserName
       SET @c_UserID = @DBUserName
-
-      IF OBJECT_ID('dbo.fnc_GetUserName', 'FN') IS NOT NULL
-      BEGIN
-         IF dbo.fnc_GetUserName() NOT IN ('WMConnect', '')
-         BEGIN
-            SET @c_UserID = dbo.fnc_GetUserName()
-         END
-      END
    END
    
    SELECT  @cType                = cType
@@ -180,12 +177,32 @@ BEGIN
       END
    END
 
+   EXEC nspGetRight    
+         @c_Facility   = @cFacility    
+      ,  @c_StorerKey  = @cStorerKey   
+      ,  @c_sku        = ''    
+      ,  @c_ConfigKey  = 'TPS-CtnRec'    
+      ,  @c_authority  = @cAuthority   OUTPUT    
+      ,  @b_Success    = @b_Success    OUTPUT    
+      ,  @n_err        = @n_ErrNo      OUTPUT    
+      ,  @c_errmsg     = @c_ErrMsg     OUTPUT
+
+   IF @b_Success = 0
+   BEGIN    
+      SET @n_Continue  = 3  
+      GOTO EXIT_SP
+   END
+   
    IF NOT EXISTS (SELECT 1
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
                   AND CartonNo = @nCartonNo
-                 )
+   )
    BEGIN
+      IF @cAuthority = '1'
+      BEGIN
+         GOTO SKIP_GET_DETAIL
+      END
       SET @n_Continue = 3
       SET @n_ErrNo = 11701      
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'No PackDetail Records Found. '
@@ -212,7 +229,7 @@ BEGIN
    BEGIN
       SELECT  @nExpQty = ISNULL(SUM(ExpQty), 0)
             , @nTtlQty = ISNULL(SUM(Qty), 0)
-            , @nLabelLineCount = COUNT(DISTINCT LabelLine)
+            , @nSKUCount = COUNT(DISTINCT SKU)
             , @cSKU = MAX(SKU)
       FROM PACKDETAIL (NOLOCK) 
       WHERE PickSlipNo = @cPickSlipNo
@@ -228,14 +245,13 @@ BEGIN
       IF @@ROWCOUNT = 1  
       AND @nExpQty > 0
       AND @nTtlQty = 0  
-      AND @nLabelLineCount = 1 
+      AND @nSKUCount = 1 
       AND EXISTS (SELECT 1 
                   FROM ORDERS (NOLOCK)
                   WHERE OrderKey = @cOrderKey
                   AND DocType <> 'E'
       )
       BEGIN 
-         SET @bAutoCloseCarton = 1
          SET @nActualQty = @nExpQty
          IF NOT EXISTS (SELECT 1
                         FROM STORERCONFIG (NOLOCK)
@@ -276,7 +292,7 @@ BEGIN
                SET @n_Continue = 3  
                GOTO EXIT_SP
             END
-            
+            SET @bAutoCloseCarton = 1
             IF (TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bAutoCloseCarton') AS BIT) = 0 
             AND TRY_CAST(JSON_VALUE(@cResponseJson, '$.meta.bShowLottableScreen') AS BIT) = 0
             )
@@ -286,6 +302,10 @@ BEGIN
             
             SET @c_ResponseString = ISNULL ((JSON_QUERY(@cResponseJson)),'')
             GOTO EXIT_SP
+         END
+         ELSE
+         BEGIN
+            SET @bShowVASScreen = 1
          END
       END
    END
@@ -320,7 +340,7 @@ BEGIN
       GOTO EXIT_SP
    END
 
-   EXEC [API].[isp_TPACK_GetPackDetail]
+   EXEC [API].[isp_TPACK_PackDetail_Wrapper]
         @cType             = @cType            
       , @bIsDiscrete       = @bIsDiscrete      
       , @bIsCustom         = @bIsCustom        
@@ -349,12 +369,15 @@ BEGIN
       GOTO EXIT_SP
    END
 
+SKIP_GET_DETAIL:
    SET @c_ResponseString = ISNULL ((SELECT 
                                      JSON_QUERY((SELECT  @cScanType           AS cScanType
                                                        , @bClickAll           AS bClickAll
                                                        , @bClickFirstOnly     AS bClickFirstOnly
                                                        , CAST(0 AS BIT)       AS bShowADScreen
                                                        , CAST(0 AS BIT)       AS bShowLottableScreen
+                                                       , CAST(0 AS BIT)       AS bShowNumpadScreen
+                                                       , @bShowVASScreen      AS bShowVASScreen
                                                        , @bAutoCloseCarton    AS bAutoCloseCarton
                                                        , @nCartonNo           AS nCartonNo
                                                        , 0                    AS nNumberOfADField
@@ -399,3 +422,10 @@ EXIT_SP:
       RETURN      
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [API].[isp_TPACK_API_GetCartonDetail] TO NSQL
+GO

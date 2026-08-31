@@ -223,7 +223,8 @@ BEGIN
                   SELECT PL.PickDetailKey
                   FROM RDT.rdtPickLog PL WITH(NOLOCK)
                   INNER JOIN PICKDETAIL PD WITH(NOLOCK) ON PL.PickDetailKey = PD.PickDetailKey
-                  WHERE PL.StorerKey = @cStorerKey
+                  WHERE PL.Mobile = @nMobile
+                     AND PL.StorerKey = @cStorerKey
                      AND PL.DropID = @cCartonId
                      AND PD.TaskDetailKey = @cTaskdetailKey
                )

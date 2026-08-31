@@ -108,6 +108,7 @@ GO
 /* 2025-12-08   8.1 Dennis      FCR-8931 AddExtScnSP on Step 8                                  */
 /* 2026-01-07   8.2 Dennis      FCR-7820 AddExtScnSp                                            */
 /* 2026-04-01   8.3 NickT       FCR-11343 Make change for rdt_838ExtScn06 in step_99            */
+/* 2026-07-08   8.4 NickT       FCR-14763 In step_99, quit main SP if UDF01 is NO UPD RDTMOBREC */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -385,8 +386,7 @@ SELECT
    @cPackByFromDropID   = V_String50,
    @cDefaultCursor      = V_String51, --(v7.5)
    @cPackByToDropID     = V_String52,
-   --C_String1 used by extscn
-   --C_String2 used by extscn
+   --C_String 1 ~ 7 used in extscn
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -751,7 +751,7 @@ BEGIN
       -- Check blank
       IF @cPackDtlDropID = '' AND @cPackByToDropID = '1'
       BEGIN
-         SET @nErrNo = 100251
+         SET @nErrNo = 267001
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ToDropID
          EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
          GOTO Quit
@@ -914,7 +914,7 @@ BEGIN
                SET @cType = 'CURRENT'
             ELSE
             BEGIN
-               SET @nErrNo = 100252
+               SET @nErrNo = 267002
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Bad ToDropID
                EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToDropID
                SET @cOutField03 = ''
@@ -1014,7 +1014,11 @@ BEGIN
 
       IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen 
       BEGIN
-         SET @cInField09 = '1' -- Option
+         IF @nCartonNo > 0
+            SET @cInField09 = '2' -- EDIT
+         ELSE
+            SET @cInField09 = '1' -- NEW
+
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
          GOTO Step_2
@@ -4395,6 +4399,63 @@ BEGIN
       END
    END
 
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         INSERT INTO @tVar (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo),
+            ('@cFromDropID',     @cFromDropID),
+            ('@nCartonNo',       CAST( @nCartonNo AS NVARCHAR( 10))),
+            ('@cLabelNo',        @cLabelNo),
+            ('@cSKU',            @cSKU),
+            ('@nQTY',            CAST( @nQTY AS NVARCHAR( 10))),
+            ('@cUCCNo',          @cUCCNo),
+            ('@cCartonType',     @cCartonType),
+            ('@cCube',           @cCube),
+            ('@cWeight',         @cWeight),
+            ('@cRefNo',          @cRefNo),
+            ('@cSerialNo',       @cSerialNo),
+            ('@nSerialQTY',      CAST( @nSerialQTY AS NVARCHAR( 10))),
+            ('@cOption',         @cOption),
+            ('@cPackDtlRefNo',   @cPackDtlRefNo),
+            ('@cPackDtlRefNo2',  @cPackDtlRefNo2),
+            ('@cPackDtlUPC',     @cPackDtlUPC),
+            ('@cPackDtlDropID',  @cPackDtlDropID),
+            ('@cPackData1',      @cPackData1),
+            ('@cPackData2',      @cPackData2),
+            ('@cPackData3',      @cPackData3)
+
+         SET @cExtendedInfo = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @tVar, ' +
+            ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            ' @nMobile        INT,           ' +
+            ' @nFunc          INT,           ' +
+            ' @cLangCode      NVARCHAR( 3),  ' +
+            ' @nStep          INT,           ' +
+            ' @nAfterStep     INT,           ' +
+            ' @nInputKey      INT,           ' +
+            ' @cFacility      NVARCHAR( 5),  ' +
+            ' @cStorerKey     NVARCHAR( 15), ' +
+            ' @tVar           VariableTable READONLY, ' +
+            ' @cExtendedInfo  NVARCHAR( 20) OUTPUT,   ' +
+            ' @nErrNo         INT           OUTPUT,   ' +
+            ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 5, @nStep, @nInputKey, @cFacility, @cStorerKey, @tVar,
+            @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+
+         SET @cOutField15 = @cExtendedInfo
+      END
+   END
+
    --(JHU151)
    SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
@@ -6514,6 +6575,9 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_99_Fail
 
+         IF @cUDF01 = 'NO UPD RDTMOBREC'
+            RETURN
+
          IF @cExtendedScreenSP = 'rdt_838ExtScn01'
          BEGIN
             IF @nScn = 4652
@@ -6828,8 +6892,7 @@ BEGIN
       V_String50     = @cPackByFromDropID,
       V_String51     = @cDefaultCursor, --(v7.5)
       V_String52     = @cPackByToDropID,
-      --C_String1 used by extscn
-      --C_String2 used by extscn
+      --C_String 1 ~ 7 used in extscn
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

@@ -258,13 +258,15 @@ BEGIN
    IF @nFreeQty = 0
       SET @cSuggestedLOC = ''
 
-   SELECT @nQTY = Qty
-   FROM dbo.LOTXLOCXID WITH(NOLOCK)
-   WHERE StorerKey = @cStorerKey
-      AND SKU = @cSKU
-      AND Loc = @cLOC
-      AND LOT = @cLOT
-      AND ID = @cID
+   IF ISNULL(@nQTY, 0 ) = 0
+   BEGIN
+      SELECT @nQTY = SUM(Qty)
+      FROM dbo.LOTXLOCXID WITH(NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND SKU = @cSKU
+         AND Loc = @cLOC
+         AND ID = @cID
+   END
    
    IF ISNULL(@nQTY, 0) = 0
    BEGIN

@@ -5,8 +5,9 @@
 /* Purpose: Extended update for Pallet Consolidate BESE                 */
 /*                                                                      */
 /* Modifications log:                                                   */
-/* Date        Rev  Author   Purposes                                   */
-/* 2026-03-16  1.0  Jackc    FCR-9676 Created                           */
+/* Date        Rev    Author   Purposes                                 */
+/* 2026-03-16  1.0.0  Jackc    FCR-9676 Created                         */
+/* 2026-05-12  1.0.1  Jackc    FCR-9676 V1.2 FBR                        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1878ExtUpd01] (
@@ -80,6 +81,49 @@ BEGIN
       BEGIN
          IF @nStep = 3
          BEGIN
+            IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) 
+                        WHERE StorerKey = @cStorerKey
+                           AND TaskType = 'ASTPA'
+                           AND FromID = @cFromID
+                           AND Status = '0')
+            BEGIN
+               BEGIN TRY
+                  UPDATE TD WITH (ROWLOCK)
+                  SET Status = 'X'
+                  FROM dbo.TaskDetail TD 
+                  WHERE StorerKey = @cStorerKey
+                     AND TaskType = 'ASTPA'
+                     AND FromID = @cFromID
+                     AND Status = '0'
+               END TRY
+               BEGIN CATCH
+                  IF @nDebugFlag = 1
+                     SELECT '261308: Cancel ASTPA task failed'
+                  ELSE
+                     -- Generate alert
+                     EXEC nspLogAlert
+                        @c_modulename        = '1878-PALMERGE'
+                        , @c_AlertMessage     = '261308: Cancel ASTPA task failed'
+                        , @n_Severity         = '5'
+                        , @b_Success          = @bSuccess      OUTPUT
+                        , @n_err              = @nErrNo        OUTPUT
+                        , @c_errmsg           = @cErrMsg       OUTPUT
+                        , @c_Activity         = 'PALMERGE'
+                        , @c_Storerkey        = @cStorerKey
+                        , @c_SKU              = ''
+                        , @c_UOM              = ''
+                        , @c_UOMQty           = ''
+                        , @c_Qty              = ''
+                        , @c_Lot              = ''
+                        , @c_Loc              = @cToLOC
+                        , @c_ID               = @cToID
+                        , @c_TaskDetailKey    = ''
+
+                  SET @nErrNo = 0
+                  GOTO Quit
+               END CATCH
+            END
+
             IF @cFromID = '' AND @nScannedCount > 0
             BEGIN
                GOTO CREATE_TASK

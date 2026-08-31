@@ -48,7 +48,10 @@ CREATE OR ALTER PROCEDURE rdt.rdt_Putaway (
    @nErrNo      INT           OUTPUT,
    @cErrMsg     NVARCHAR( 20) OUTPUT,
    @cFinalID    NVARCHAR( 18) = NULL, 
-   @nBulkSNO    INT = 0
+   @cSerialNo   NVARCHAR( 30) = '',   -- For move with SerialNoUpdateLotLocID
+   @nSerialQTY  INT = 0,              -- Same as above
+   @nBulkSNO    INT = 0,              -- Same as above. Use rdt.rdtMoveSerialNoLog table
+   @nBulkSNOQTY INT = 0               -- Same as above
 ) AS
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -119,7 +122,10 @@ CREATE OR ALTER PROCEDURE rdt.rdt_Putaway (
          @nQTY        = @nPA_QTY, 
          @cFromLOT    = @cPA_LOT, 
          @nFunc       = @nFunc, 
-         @nBulkSNO    = @nBulkSNO
+         @cSerialNo   = @cSerialNo, 
+         @nSerialQTY  = @nSerialQTY, 
+         @nBulkSNO    = @nBulkSNO, 
+         @nBulkSNOQTY = @nBulkSNOQTY
 
       IF @nErrNo <> 0
          GOTO RollBackTran
@@ -204,10 +210,12 @@ CREATE OR ALTER PROCEDURE rdt.rdt_Putaway (
          BEGIN
             -- Insert putaway QTY
             INSERT INTO dbo.UCC (
-               UCCNo, Storerkey, ExternKey, SKU, Sourcekey, Sourcetype, Userdefined01, Userdefined02, Userdefined03, Lot, Receiptkey, ReceiptLineNumber, Orderkey, OrderLineNumber, WaveKey, PickDetailKey, Userdefined04, Userdefined05, Userdefined06, Userdefined07, Userdefined08, Userdefined09, Userdefined10, 
+               UCCNo, Storerkey, ExternKey, SKU, Sourcekey, Sourcetype, Userdefined01, Userdefined02, Userdefined03, Lot, Receiptkey, ReceiptLineNumber, Orderkey, OrderLineNumber, WaveKey, PickDetailKey, 
+               Userdefined04, Userdefined05, Userdefined06, Userdefined07, Userdefined08, Userdefined09, Userdefined10, 
                ID, LOC, QTY, EditWho, EditDate, Status)
             SELECT 
-               UCCNo, Storerkey, ExternKey, SKU, Sourcekey, Sourcetype, Userdefined01, Userdefined02, Userdefined03, Lot, Receiptkey, ReceiptLineNumber, Orderkey, OrderLineNumber, WaveKey, PickDetailKey, Userdefined04, Userdefined05, Userdefined06, Userdefined07, Userdefined08, Userdefined09, Userdefined10, 
+               UCCNo, Storerkey, ExternKey, SKU, Sourcekey, Sourcetype, Userdefined01, Userdefined02, Userdefined03, Lot, Receiptkey, ReceiptLineNumber, Orderkey, OrderLineNumber, WaveKey, PickDetailKey, 
+               Userdefined04, Userdefined05, Userdefined06, Userdefined07, Userdefined08, Userdefined09, Userdefined10, 
                CASE WHEN @cLoseID = '1' THEN '' ELSE ID END, --ID
                @cFinalLOC,    --LOC
                @nPutawayQTY,  --QTY 

@@ -88,7 +88,7 @@ BEGIN
                FROM @tValue
                
                -- Invalid barcode
-               IF @@ROWCOUNT <> 9
+               IF @@ROWCOUNT <> 8
                BEGIN
                   SET @nErrNo = 253801
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidBarcode
@@ -120,6 +120,11 @@ BEGIN
                   GOTO Quit
                END
                
+               SET @cSKU = @cTempSKU
+
+               -- Only abstract SKU. 
+               -- The rest of info (SN, QTY, L01) is decode at serial no screen
+               /*
                SET @cTempSNO = @cSNOP1 + @cSNOP2 + @cSNOP3
                SET @nTempQTY = 1
                
@@ -136,9 +141,9 @@ BEGIN
                   GOTO Quit
 
                SET @cSerialNo = @cTempSNO
-               SET @cSKU = @cTempSKU
                SET @nQTY = @nTempQTY
                SET @cLottable01 = @cL01P1 + @cL01P2
+               */
             END
             ELSE
                SET @cSKU = @cBarcode

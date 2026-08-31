@@ -82,25 +82,25 @@ EXECUTE rdt.rdtAddScn 2884, 'ENG'
    ,@cLine04 = ''
    ,@cLine05 = 'Press ENTER to'
    ,@cLine06 = 'putaway next item'
-   ,@cLine13 = '%60d15' --FCR-9756 add extinfo
+   ,@cLine13 = '%60d15'
    ,@cLine14 = '%e'
    ,@cAutoDisappear = '1'
    ,@nFunc = 523
 
 -- 2885 = Confirm LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2885 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 2885, 'ENG', 
-   @cLine01 = '',
-   @cLine02 = 'LOC NOT MATCH.',
-   @cLine03 = 'PROCEED?',
-   @cLine04 = '',
-   @cLine05 = '1 = YES',
-   @cLine06 = '2 = NO',
-   @cLine07 = '',
-   @cLine08 = 'OPTION: %01i01',
-   @cLine13 = '%60d15', --FCR-9756 add extinfo
-   @cLine14 = '%e',     
-   @nFunc   = 523
+EXECUTE rdt.rdtAddScn 2885, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'LOC NOT MATCH.'
+   ,@cLine03 = 'PROCEED?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine13 = '%60d15'
+   ,@cLine14 = '%e'
+   ,@nFunc   = 523
    
 -- 2887 = Final ID screen
 DELETE rdt.RDTScn WHERE Scn = 2887 AND Lang_Code = 'ENG'
@@ -115,3 +115,29 @@ EXECUTE rdt.rdtAddScn 2887, 'ENG'
    ,@cLine14 = '%e'    
    ,@cWebGroup = '{"1":["2","3"],"2":["5","6"]}'
    ,@nFunc   = 523
+   
+-- 2888 = Suggest alternate LOC screen
+DELETE rdt.RDTScn WHERE Scn = 2888 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 2888, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'SUGGEST ALTERNATE'
+   ,@cLine03 = 'PUTAWAY LOC?'
+   ,@cLine04 = ''
+   ,@cLine05 = '1 = YES'
+   ,@cLine06 = '2 = NO'
+   ,@cLine07 = ''
+   ,@cLine08 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc   = 523
+   
+-- 2889 = Reason code screen
+DELETE rdt.RDTScn WHERE Scn = 2889 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 2889, 'ENG' 
+   ,@cLine01 = ''
+   ,@cLine02 = 'REASON CODE:'
+   ,@cLine03 = '%10i01'
+   ,@cLine04 = ''
+   ,@cLine14 = '%e'     
+   ,@nFunc   = 523
+   
+   

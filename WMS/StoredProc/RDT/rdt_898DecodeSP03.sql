@@ -12,7 +12,8 @@ GO
 /*                                                                            */
 /* Date        Author   Ver.  Purposes                                        */
 /* 2025-10-27  Dennis   1.0   FCR-8472 Created                                */
-/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */ 
+/* 2026-04-09  Sreeja   1.1   FCR-11052  Decode batch and manufacturing date  */
+/* 2026-08-07  Dennis   1.2   UWP-63386  Decode Traceability Code (UserDef01) */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898DecodeSP03] (
    @nMobile             INT,
@@ -77,9 +78,11 @@ BEGIN
       ,@cMonthChar  NVARCHAR(10)
       ,@cDateChar   NVARCHAR(10)
       ,@nMOBRECScn  INT
+      ,@cUCCNo      NVARCHAR( 20)
 
-      SELECT @nMOBRECScn = Scn
-      FROM rdt.RDTMOBREC WITH(NOLOCK)
+      SELECT @nMOBRECScn = Scn,
+             @cUCCNo     = V_UCC
+      FROM rdt.RDTMOBREC WITH (NOLOCK)
       WHERE Mobile = @nMobile
 
    SET @cBarcode = replace(TRIM(@cUCC),' ','')
@@ -250,27 +253,17 @@ BEGIN
       BEGIN
          SET @cBarcode = REPLACE(TRIM(@cUCC), ' ', '')
 
-         -- Validation - If barcode contains parentheses, must be valid GS1
-         IF CHARINDEX('(', @cBarcode) > 0
+         -- Only validate and decode if barcode starts with (10) - BAT GS1 format
+         IF LEFT(@cBarcode, 4) = '(10)'
          BEGIN
-            IF LEFT(@cBarcode, 4) <> '(10)'
-            BEGIN
-               SET @nErrNo = 263852
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
-               GOTO Quit
-            END
-            
+            -- Validation - length must be 40 or 44 for BAT barcodes
             IF LEN(@cBarcode) NOT IN (40, 44)
             BEGIN
                SET @nErrNo = 263853
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                GOTO Quit
             END
-         END
-
-         -- Only decode if barcode length is 40 or 44 AND starts with (10)
-         IF LEN(@cBarcode) IN (40, 44) AND LEFT(@cBarcode, 4) = '(10)'
-         BEGIN
+            
             -- Decode Batch: Value between (10) and (11)
             SET @cLottable02 = 
                CASE 
@@ -303,9 +296,30 @@ BEGIN
                AND @cMfgDateRaw NOT LIKE '%[^0-9]%'
                AND TRY_CONVERT(INT, @cMfgDateRaw) IS NOT NULL
             BEGIN
-               SET @cLottable03 = '20' + @cMfgDateRaw  -- 20 + YYMMDD = YYYYMMDD
+               SET @cLottable03 = '20' + @cMfgDateRaw
+            END
+
+            -- Decode Traceability Code: Value after (240), update UCC.Userdefined01
+            IF CHARINDEX('(240)', @cBarcode) > 0 AND ISNULL(@cUCCNo, '') <> ''
+            BEGIN
+               SET @cUserDefine01 = LEFT(SUBSTRING(@cBarcode, CHARINDEX('(240)', @cBarcode) + 5, LEN(@cBarcode)), 15)
+
+               BEGIN TRY
+               UPDATE dbo.UCC WITH (ROWLOCK)
+                  SET Userdefined01 = @cUserDefine01,
+                      EditDate      = GETDATE(),
+                      EditWho       = SUSER_SNAME()
+                  WHERE UCCNo     = @cUCCNo
+                  AND   StorerKey = @cStorerKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo  = 263854
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UCCUpdateFail
+                  GOTO Quit
+               END CATCH
             END
          END
+         -- If barcode doesn't start with (10), do nothing - preserves existing lottable values for other SKUs
       END
    END
 
