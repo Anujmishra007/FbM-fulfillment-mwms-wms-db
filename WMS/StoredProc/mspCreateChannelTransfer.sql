@@ -28,6 +28,7 @@ CREATE OR ALTER PROC mspCreateChannelTransfer
    @c_Sku          NVARCHAR(20),
    @c_FromLoc      NVARCHAR(10),
    @c_ToLoc        NVARCHAR(10),
+   @c_Lot          NVARCHAR(10),
    @n_Qty          INT ,
    @c_Lottable01   NVARCHAR(18) = ''  ,
    @b_Success          INT      OUTPUT,
@@ -66,6 +67,13 @@ BEGIN
    IF @n_continue IN(1,2) AND @c_FromLocHosWHtCode <> ''
    AND  @c_ToLocHostWHCode <> '' AND @c_FromLocHosWHtCode  <>  @c_ToLocHostWHCode
    BEGIN
+
+            IF(ISNULL(@c_Lottable01,'') = '')
+            BEGIN
+                SELECT @c_Lottable01 = LA.Lottable01
+                FROM LOTATTRIBUTE LA (NOLOCK)
+                WHERE LA.Lot = @c_Lot
+            END
 
                EXEC dbo.nspg_GetKey                
                   @KeyName = 'ChannelTransferKey'    
