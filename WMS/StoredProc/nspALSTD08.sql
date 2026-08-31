@@ -271,9 +271,7 @@ BEGIN
          ,  @n_QtyAvailable = @n_QtyToAllocate
          ,  @c_OtherValue = '1'
 
-      --debug
-
-        select @c_UOM, * from #ALLOCATE_CANDIDATES 
+      -- Debug output removed to avoid extra result sets during allocation
    END
 
    --debug
