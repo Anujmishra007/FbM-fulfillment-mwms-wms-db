@@ -4,12 +4,13 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_663ExtVal01                                     */
-/* Copyright: Maersk                                              */
+/* Copyright: Maersk                                                    */
 /*                                                                      */
-/* Purpose: Cold Store Kitting Validation								*/
+/* Purpose: Cold Store Kitting Validation                               */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
-/* 2026-07-13 1.0  MBI165     FCR-14667                                  */
+/* 2026-07-13 1.0  MBI165     FCR-14667                                 */
+/* 2026-08-31 1.1  NickT      FCR-16001 Add Step1 KIT HOLD validation   */
 /************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_663ExtVal01] (
@@ -70,13 +71,31 @@ DECLARE
    @nErr             INT --NJOW04 ,
           
 DECLARE 
-   @cSQL          		NVARCHAR(Max),  
-   @cSQLArg       		NVARCHAR(Max), --(jay01)  
-   @c_StorerKey   		NVARCHAR(30),
-	@c_ValidateCodelkup  NVARCHAR( 30)
+   @cSQL                NVARCHAR(Max),  
+   @cSQLArg             NVARCHAR(Max), --(jay01)  
+   @c_StorerKey         NVARCHAR(30),
+   @c_ValidateCodelkup  NVARCHAR( 30),
+   @cExternStatus       NVARCHAR( 30)
 
    IF @nFunc = 663 -- Normal receiving
    BEGIN
+      IF @nStep = 1 -- Kit Key scan
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            SELECT @cExternStatus = ExternStatus
+            FROM dbo.KIT WITH (NOLOCK)
+            WHERE KITKey = @cKitKey
+
+            IF ISNULL(@cExternStatus, '') = '7'
+            BEGIN
+               SET @nErrNo = 279401
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- KIT ON HOLD
+               GOTO QUIT
+            END
+         END
+      END --st1
+
       IF @nStep = 4 -- SKU
       BEGIN
          IF @nInputKey = 1 -- ENTER
@@ -120,24 +139,24 @@ DECLARE
          
                EXEC sp_executesql @cSQL, @cSQLArg , @cRecFound OUTPUT, @cKitKey,@nMobile 
 
-               IF @cRecFound = 0 AND @cType <> 'CONDITION'  
-               BEGIN   
-                  --SET @bInValid = 1 
-                  SET @nErrNo = 218280
-                  SET @cErrMsg = ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)),'') + ' ' + @cErrMsg + RTRIM(@cDescription) + master.dbo.fnc_GetCharASCII(13) 
-                  GOTO QUIT   
-               END   
-               ELSE IF @cRecFound > 0 AND @cType = 'CONDITION' AND @cColumnName = 'NOT EXISTS'   
-               BEGIN   
-                  --SET @bInValid = 1 
+               IF @cRecFound = 0 AND @cType <> 'CONDITION'
+               BEGIN
+                  --SET @bInValid = 1
                   SET @nErrNo = 218280
                   SET @cErrMsg = ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)),'') + ' ' + @cErrMsg + RTRIM(@cDescription) + master.dbo.fnc_GetCharASCII(13)
-                  GOTO QUIT    
-               END   
-               ELSE IF @cRecFound = 0 AND @cType = 'CONDITION' AND   
-                        (ISNULL(RTRIM(@cColumnName),'') = '' OR @cColumnName = 'EXISTS')    
-               BEGIN   
-                  --SET @bInValid = 1   
+                  GOTO QUIT
+               END
+               ELSE IF @cRecFound > 0 AND @cType = 'CONDITION' AND @cColumnName = 'NOT EXISTS'
+               BEGIN
+                  --SET @bInValid = 1
+                  SET @nErrNo = 218280
+                  SET @cErrMsg = ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)),'') + ' ' + @cErrMsg + RTRIM(@cDescription) + master.dbo.fnc_GetCharASCII(13)
+                  GOTO QUIT
+               END
+               ELSE IF @cRecFound = 0 AND @cType = 'CONDITION' AND
+                        (ISNULL(RTRIM(@cColumnName),'') = '' OR @cColumnName = 'EXISTS')
+               BEGIN
+                  --SET @bInValid = 1
                   SET @nErrNo = 218280
                   SET @cErrMsg = ISNULL(TRY_CAST(@nErrNo AS NVARCHAR(20)),'') + ' ' + @cErrMsg + RTRIM(@cDescription)  + master.dbo.fnc_GetCharASCII(13)
                   GOTO QUIT
