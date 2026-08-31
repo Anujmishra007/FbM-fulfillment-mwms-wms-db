@@ -35,11 +35,6 @@ AS
 BEGIN
    SET NOCOUNT ON
 
-   --debug
-   PRINT '@c_uom=' + @c_uom +  ', @n_uombase=' + CONVERT(NVARCHAR, @n_uombase)+ 
-   ',@n_qtylefttofulfill=' + CONVERT(NVARCHAR, @n_qtylefttofulfill)+ ', @c_Facility=' + @c_Facility+
-   ', @c_HostWHCode=' + @c_HostWHCode + ', @c_OtherParms=' + @c_OtherParms + ', @c_lot=' + @c_lot
-
    DECLARE  CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY
    FOR SELECT LOTxLOCxID.LOC, LOTxLOCxID.ID,
    QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED), '1'
