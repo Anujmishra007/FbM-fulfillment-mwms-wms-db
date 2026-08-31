@@ -12,6 +12,7 @@ GO
 /* Date         Rev   Author   Purposes                                                            */
 /* 18-03-2025   1.0   PPA374   Adding step = 3 to allow lottable 03 to be updated                  */
 /* 19-03-2025   2.0   PPA374   Adding lottable11 auto-gen and renaming the SP as per standards     */
+/* 31-08-2026   2.1   PPA374   Setting up the range for lottable11                                 */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_684GetRecInfoJCB]
@@ -141,12 +142,14 @@ BEGIN
          (SELECT Lottable11 FROM LOTATTRIBUTE WITH(NOLOCK)
          WHERE StorerKey = 'JCB'
          AND Lottable11 LIKE 'C[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+		 AND SUBSTRING(Lottable11,2,9) < 521202144
 
          UNION ALL
 
          SELECT Lottable11 FROM RECEIPTDETAIL WITH(NOLOCK)
          WHERE StorerKey = 'JCB'
-         AND ToId LIKE 'C[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]')T1
+         AND ToId LIKE 'C[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+		 AND SUBSTRING(Lottable11,2,9) < 521202144)T1
 
          SELECT TOP 1 @cLottable11 = CASE WHEN @cPalletType <> 'M' THEN ''
          WHEN MAX(CaseLPN) IS NULL OR MAX(CaseLPN) = 'C999999999' THEN 'C000000001' 
