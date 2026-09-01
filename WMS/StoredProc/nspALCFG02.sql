@@ -1277,7 +1277,7 @@ BEGIN
                                                   AND PICKDETAIL.Storerkey = UCC.Storerkey 
                                                   AND PICKDETAIL.Sku = UCC.Sku 
                                                   AND UCC.[Status] BETWEEN ''3'' AND ''5''
-                                                  AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04                                                     
+                                                  AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04
                                     ELSE ' ' END +                                                     
                               ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +
                               ' AND LOTxLOCxID.Sku = @c_Sku ' +
@@ -1672,7 +1672,7 @@ BEGIN
                                    WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'Y' THEN   --(Wan02) 
                               ' JOIN UCC (NOLOCK) ON (UCC.StorerKey = LOTxLOCxID.StorerKey AND UCC.SKU = LOTxLOCxID.SKU AND  
                                                      UCC.LOT = LOTxLOCxID.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID AND UCC.Status <= ''5'')
-                                LEFT OUTER JOIN ( SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID
+                                LEFT OUTER JOIN ( SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.DropID   /*WL04*/
                                                   ,Qty = SUM(PD.QTY)
                                                   FROM PICKDETAIL PD(NOLOCK) 
                                                   JOIN UCC (NOLOCK) ON UCC.Storerkey = PD.Storerkey
@@ -1684,13 +1684,14 @@ BEGIN
                                                   AND   PD.Orderkey > ''''
                                                   AND   PD.Qty > 0
                                                   AND   UCC.Status >= ''3''
-                                                  GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID
+                                                  GROUP BY PD.Storerkey, PD.Sku, PD.Lot, PD.Loc, PD.ID, PD.DropID   /*WL04*/
                                                   ) PICKDETAIL
                                                   ON  PICKDETAIL.Lot = LOTxLOCxID.Lot
                                                   AND PICKDETAIL.Loc = LOTxLOCxID.Loc
                                                   AND PICKDETAIL.Storerkey = UCC.Storerkey 
                                                   AND PICKDETAIL.Sku = UCC.Sku 
-                                                  AND UCC.[Status] BETWEEN ''3'' AND ''5'''                                                     
+                                                  AND UCC.[Status] BETWEEN ''3'' AND ''5''
+                                                  AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04
                                     ELSE ' ' END +                                                                                                                           
                               --' WHERE LOTxLOCxID.Storerkey = @c_Storerkey) ' + --(CLVN01)
                                      ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +       --(CLVN01)
