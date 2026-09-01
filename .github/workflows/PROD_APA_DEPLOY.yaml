@@ -1,371 +1,451 @@
-name: PROD ASIA DEPLOY
+name: PROD APA DEPLOY
 
 on:
   workflow_dispatch:
     inputs:
-      WMSDB:
-        description: "Kindly choose a *-prod Tag from the options above and a WMSDB Name from the list below for deployment. To deploy all WMSDBs in PROD ASIA, select ALL."
+      TARGET_DBS:
+        description: "Select target database(s) for deployment"
         required: true
         type: choice
         options:
           - ALL
-          - INDWMS
           - AUSWMS
           - MYSWMS
           - CHNWMS
-          - VNMWMS
           - HKGWMS
           - TWNWMS
-          - PAKWMS
+          - CHN2WMS
+          - VNMWMS
           - IDNWMS
-concurrency:
-  group: apa-prod-${{ github.event.inputs.WMSDB }}
-  cancel-in-progress: false
+          - THAWMS
+          - INDWMS
+          - PAKWMS
+      PR_NUMBERS:
+        description: "PR number(s) to extract SQL files from - comma separated (e.g., 126 or 126,127)"
+        required: false
+        type: string
+        default: ""
+      SQL_FILES:
+        description: "Direct SQL file paths - comma separated (e.g., WMS/StoredProc/x.sql). Use for ad-hoc sync without PR."
+        required: false
+        type: string
+        default: ""
+      SNOW_CR:
+        description: "Please share the ServiceNow CR number for tracking"
+        required: false
+        type: string
+        default: ""
+
 permissions: write-all
 
 env:
-  DEPLOYMENT_STATUS_PAGE: https://mwmsdb-status.fulfillment.maersk.com/
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  OWNER: ${{ github.repository_owner }}
-  WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
-  REPO: ${{ github.event.repository.name }}
-  ENV_CODE: asia
-  WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
-  WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
+  REGION: APA
+  ENVIRONMENT: PROD
 
 jobs:
-  INIT_DEPLOY:
+  INIT:
     runs-on: ubuntu-latest
-    name: Preparing the deployment
+    name: "Validate & Prepare Deployment"
     outputs:
-      MATRIX_OUTPUT: ${{ env.MATRIX_OUTPUT }}
+      SQL_FILES_LIST: ${{ steps.prepare.outputs.SQL_FILES_LIST }}
+      TARGET_SERVERS: ${{ steps.prepare.outputs.TARGET_SERVERS }}
+      RUNNER: ${{ steps.prepare.outputs.RUNNER }}
+      VALID: ${{ steps.prepare.outputs.VALID }}
     steps:
-      - name: print Inputs
-        run: echo "${{ toJSON(inputs) }}"
-      - name: Dump GitHub context
-        env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
-      - name: checking stage deployment conditions
-        shell: pwsh
+      - name: Validate branch
+        if: github.ref != 'refs/heads/release'
         run: |
-          if('${{ github.ref }}' -like "refs/tags/*-prod*")
-           {
-            write-host "This is a tag deployment"
-           }else{
-            write-output '# ERROR : Deployment was initiated using a branch(${{ github.ref_name }}) instead of a tag.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-            write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-            write-output '❌ **Error:** PROD deployment must be initiated using a designated prod tag (*-prod or *-prod-hotfix). It cannot be triggered directly from a branch or any other tag. Please select the correct tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-            throw "tage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment."
-           }
-      - name: Checkout
+          echo "::error::This workflow can only be run from the 'release' branch."
+          echo "Current branch: ${{ github.ref }}"
+          exit 1
+
+      - name: Checkout release branch
         uses: actions/checkout@v4
         with:
+          ref: release
           fetch-depth: 0
-          ref: ${{ github.ref_name }}
-      - name: Dump GitHub context
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          if [[ -z "${{ inputs.PR_NUMBERS }}" && -z "${{ inputs.SQL_FILES }}" ]]; then
+            echo "::error::Either PR_NUMBERS or SQL_FILES must be provided"
+            exit 1
+          fi
+
+      - name: Extract SQL files from PRs
+        id: extract_pr_files
+        if: inputs.PR_NUMBERS != ''
+        shell: bash
         env:
-          GITHUB_CONTEXT: ${{ toJson(github) }}
-        run: echo "$GITHUB_CONTEXT"
-      - name: Parse json data
-        shell: pwsh
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
-          $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
-          write-host "$($json_metadata | ConvertTo-Json -Depth 10)"
-          if ($env:WMSDB_NAME -eq 'ALL')
-            {
-             write-output "## All WMSDBs are selected for deployment" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-             write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-             write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-             write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-             $matrixtable = @()
-             foreach ($wmsdb in $json_metadata.databases.PSObject.Properties)
-               {
-                $DB_CURRENT_VERSION = $wmsdb.Value.Database_Version
-                $DB_DEPLOY_VERSION = '${{ github.ref_name }}'
-                $DB_SERVER_NAME = $wmsdb.Value.Server_name
-                $DATBASE_NAME = $wmsdb.name
-                write-host "Parsing DB name : $($wmsdb.name), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
-                ####################### Checking Currrent Version and Deploy Version Format ########################
-                if($DB_CURRENT_VERSION -match $pattern)
-                 {
-                  $DB_CURRENT_VERSION_ZERO = $Matches.0
-                  $DB_CURRENT_VERSION_YEAR = $Matches.year
-                  $DB_CURRENT_VERSION_MONTH = $Matches.month
-                  $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
-                  write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
-                 }else{
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }
-                 ####################### Checking Deployment Version and Deploy Version Format ########################
-                 if($DB_DEPLOY_VERSION -match $pattern)
-                 {
-                  $DB_DEPLOY_VERSION_ZERO = $Matches.0
-                  $DB_DEPLOY_VERSION_YEAR = $Matches.year
-                  $DB_DEPLOY_VERSION_MONTH = $Matches.month
-                  $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
-                  write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
-                 }else{
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }
-                ####################### Deployment version is higher than Current version ########################
-                if($DB_DEPLOY_VERSION_ZERO -eq $DB_CURRENT_VERSION_ZERO)
-                 {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
-                 {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
-                 {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
-                 {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  continue
-                 }
+          PR_NUMBERS="${{ inputs.PR_NUMBERS }}"
+          ALL_SQL_FILES=""
+          UNMERGED_PRS=""
+          INVALID_BASE_PRS=""
 
+          echo "## PR Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| PR # | Title | Status | SQL Files |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|--------|-----------|" >> $GITHUB_STEP_SUMMARY
 
-                $changed_files = git diff --name-only $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
-                $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
-                $changed_files_string = $changed_files_list -join ","
-                if($changed_files_string -ne '')
-                 {
-                  $obj = New-Object -TypeName PSObject
-                  $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
-                  $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
-                  $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
-                  $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
-                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
-                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
-                  $matrixtable += $obj
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  }elseif($changed_files_string -eq '')
-                  {
-                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  }
+          IFS=',' read -ra PR_ARRAY <<< "$PR_NUMBERS"
+          for PR in "${PR_ARRAY[@]}"; do
+            PR=$(echo "$PR" | xargs)
 
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
-            }
-          }else{
-              if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stg.json"}else{throw "WMSDB does not exist in stg.json"}
-              
-              write-output "## $($DATBASE_NAME) database deployment status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-              write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-              write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-              write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-              $matrixtable = @()
-              $DB_CURRENT_VERSION = $json_metadata.databases.$($env:WMSDB_NAME).Database_Version
-              $DB_DEPLOY_VERSION = '${{ github.ref_name }}'
-              $DB_SERVER_NAME = $json_metadata.databases.$($env:WMSDB_NAME).Server_name
-              $DATBASE_NAME = $env:WMSDB_NAME
-              write-host "Parsing DB name : $($env:WMSDB_NAME), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
+            PR_DATA=$(gh pr view "$PR" --json title,state,mergedAt,baseRefName 2>/dev/null || echo "")
 
-              ####################### Checking Currrent Version and Deploy Version Format ########################
-              if($DB_CURRENT_VERSION -match $pattern)
-                {
-                $DB_CURRENT_VERSION_ZERO = $Matches.0
-                $DB_CURRENT_VERSION_YEAR = $Matches.year
-                $DB_CURRENT_VERSION_MONTH = $Matches.month
-                $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
-                write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
-                }else{
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version  is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ ERROR : Current version $($DB_CURRENT_VERSION) is not in the correct format, skipping deployment for this database."
-                }
-                ####################### Checking Deployment Version and Deploy Version Format ########################
-                if($DB_DEPLOY_VERSION -match $pattern)
-                {
-                $DB_DEPLOY_VERSION_ZERO = $Matches.0
-                $DB_DEPLOY_VERSION_YEAR = $Matches.year
-                $DB_DEPLOY_VERSION_MONTH = $Matches.month
-                $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
-                write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
-                }else{
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ ERROR : Deploy version $($DB_DEPLOY_VERSION) is not in the correct format, skipping deployment for this database."
-                }
-              ####################### Deployment version is higher than Current version condition ########################
-              if($DB_DEPLOY_VERSION_ZERO -eq $DB_CURRENT_VERSION_ZERO)
-                {
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) version, skipping deployment for this database."
-                }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
-                {
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-                }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
-                {
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-                }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
-                {
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-                }
-              ################### Checking for changed files between current version and deploy version ########################
-              $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
-              $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
-              $changed_files_string = $changed_files_list -join ","
-              if($changed_files_string -ne '')
-                {
-                $obj = New-Object -TypeName PSObject
-                $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
-                $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
-                $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
-                $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
-                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
-                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
-                $matrixtable += $obj
+            if [[ -z "$PR_DATA" ]]; then
+              echo "| $PR | - | ❌ Not found | - |" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
 
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
-                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
-                }elseif($changed_files_string -eq '')
-                {
-                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION)|"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                throw " ⚠️ there are no *.sql files for deployment"
-                }
-              }
+            TITLE=$(echo "$PR_DATA" | jq -r '.title' | head -c 50)
+            MERGED_AT=$(echo "$PR_DATA" | jq -r '.mergedAt')
+            BASE_REF=$(echo "$PR_DATA" | jq -r '.baseRefName')
 
-      - name: print METRIX_OUTPUT
-        shell: pwsh
+            if [[ "$MERGED_AT" == "null" || "$MERGED_AT" == "" ]]; then
+              echo "| $PR | $TITLE | ⚠️ Not merged | - |" >> $GITHUB_STEP_SUMMARY
+              UNMERGED_PRS="$UNMERGED_PRS $PR"
+              continue
+            fi
+
+            if [[ "$BASE_REF" != "release" ]]; then
+              echo "| $PR | $TITLE | ⚠️ Merged to $BASE_REF | - |" >> $GITHUB_STEP_SUMMARY
+              INVALID_BASE_PRS="$INVALID_BASE_PRS $PR"
+              continue
+            fi
+
+            PR_FILES=$(gh pr view "$PR" --json files --jq '.files[].path' | grep '\.sql$' || echo "")
+            FILE_COUNT=$(echo "$PR_FILES" | grep -c '\.sql$' 2>/dev/null || echo "0")
+
+            if [[ -n "$PR_FILES" ]]; then
+              ALL_SQL_FILES="$ALL_SQL_FILES $PR_FILES"
+            fi
+
+            echo "| $PR | $TITLE | ✅ Merged to release | $FILE_COUNT files |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          if [[ -n "$UNMERGED_PRS" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ Deployment Blocked" >> $GITHUB_STEP_SUMMARY
+            echo "The following PRs are not merged:$UNMERGED_PRS" >> $GITHUB_STEP_SUMMARY
+            echo "::error::PRs not merged to release:$UNMERGED_PRS"
+            exit 1
+          fi
+
+          if [[ -n "$INVALID_BASE_PRS" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ Warning" >> $GITHUB_STEP_SUMMARY
+            echo "The following PRs were not merged to \`release\` branch:$INVALID_BASE_PRS" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          UNIQUE_FILES=$(echo "$ALL_SQL_FILES" | tr ' ' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+          echo "PR_SQL_FILES=$UNIQUE_FILES" >> $GITHUB_OUTPUT
+
+      - name: Prepare deployment
+        id: prepare
+        shell: bash
         run: |
-          ######### Printing final Summary Output #########
-          write-output "---------------------------- METRIX_OUTPUT ----------------------------"
-          write-output "$($env:MATRIX_OUTPUT)"
-          write-output "---------------------------- ADDING link Summery----------------------------"
-          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-          write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-          write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          PR_FILES="${{ steps.extract_pr_files.outputs.PR_SQL_FILES }}"
+          DIRECT_FILES="${{ inputs.SQL_FILES }}"
+
+          if [[ -n "$PR_FILES" && -n "$DIRECT_FILES" ]]; then
+            ALL_FILES="$PR_FILES,$DIRECT_FILES"
+          elif [[ -n "$PR_FILES" ]]; then
+            ALL_FILES="$PR_FILES"
+          else
+            ALL_FILES="$DIRECT_FILES"
+          fi
+
+          UNIQUE_FILES=$(echo "$ALL_FILES" | tr ',' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
+
+          CONFIG=$(cat .github/config/db-servers.json)
+          RUNNER=$(echo "$CONFIG" | jq -r ".PROD.APA.runner")
+          SERVERS=$(echo "$CONFIG" | jq -c ".PROD.APA.servers")
+
+          TARGET_DBS="${{ inputs.TARGET_DBS }}"
+
+          if [[ "$TARGET_DBS" == "ALL" ]]; then
+            TARGET_SERVERS="$SERVERS"
+          else
+            TARGET_SERVERS="{}"
+            DB="$TARGET_DBS"
+            SERVER=$(echo "$SERVERS" | jq -r "to_entries[] | select(.value | contains([\"$DB\"])) | .key")
+            if [[ -n "$SERVER" ]]; then
+              TARGET_SERVERS=$(echo "{}" | jq --arg server "$SERVER" --arg db "$DB" '.[$server] = [$db]')
+            else
+              echo "::error::Database $DB not found in APA config"
+              exit 1
+            fi
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## SQL Files to Deploy (from release branch)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| # | File Path | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          VALID="true"
+          COUNT=1
+          IFS=',' read -ra FILE_ARRAY <<< "$UNIQUE_FILES"
+          for FILE in "${FILE_ARRAY[@]}"; do
+            FILE=$(echo "$FILE" | xargs)
+            if [[ -f "$FILE" ]]; then
+              echo "| $COUNT | \`$FILE\` | ✅ Found |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| $COUNT | \`$FILE\` | ❌ Not found in release |" >> $GITHUB_STEP_SUMMARY
+              VALID="false"
+            fi
+            ((COUNT++))
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Deployment Target" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: PROD" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region**: APA (Asia Pacific)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: $TARGET_DBS" >> $GITHUB_STEP_SUMMARY
+          echo "- **Runner**: \`$RUNNER\`" >> $GITHUB_STEP_SUMMARY
+          if [[ -n "${{ inputs.SNOW_CR }}" ]]; then
+            echo "- **ServiceNow CR**: ${{ inputs.SNOW_CR }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Server → Database Mapping" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          echo "$TARGET_SERVERS" | jq '.' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          if [[ "$VALID" == "false" ]]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ❌ Deployment Blocked" >> $GITHUB_STEP_SUMMARY
+            echo "Some SQL files were not found in the \`release\` branch." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "### ⏳ Awaiting Approval" >> $GITHUB_STEP_SUMMARY
+          echo "Review the files and targets above, then approve to proceed with deployment." >> $GITHUB_STEP_SUMMARY
+
+          echo "SQL_FILES_LIST=$UNIQUE_FILES" >> $GITHUB_OUTPUT
+          echo "TARGET_SERVERS=$TARGET_SERVERS" >> $GITHUB_OUTPUT
+          echo "RUNNER=$RUNNER" >> $GITHUB_OUTPUT
+          echo "VALID=$VALID" >> $GITHUB_OUTPUT
 
   APPROVAL:
     runs-on: ubuntu-latest
-    needs: [INIT_DEPLOY]
+    needs: [INIT]
+    if: needs.INIT.outputs.VALID == 'true'
     environment:
       name: PROD-ASIA
-      url: ${{ env.DEPLOYMENT_STATUS_PAGE }}
-    if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
-    name: "Approval for PROD ASIA Deployment"
+    name: "Approve Deployment"
     steps:
-      - name: print matrix values for testing test
-        run: echo "APPROVED"
-  DEPLOY:
-    runs-on: prod-sea-vm-management-agent
-    needs: [INIT_DEPLOY, APPROVAL]
-    if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
-    environment:
-      name: prod-apa
-      url: ${{ env.DEPLOYMENT_STATUS_PAGE }}
-    strategy:
-      max-parallel: 1
-      fail-fast: false
-      matrix:
-        data: ${{ fromJson(needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT) }}
-    name: "${{ matrix.data.DATBASE_NAME }}-${{ matrix.data.DB_DEPLOY_VERSION }}"
-    env:
-      DATBASE_NAME: ${{ matrix.data.DATBASE_NAME }}
-      DB_CURRENT_VERSION: ${{ matrix.data.DB_CURRENT_VERSION }}
-      DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
-      DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
-      SQL_SCRIPT_FILES_STRING: ${{ matrix.data.CHANGED_FILES_STRING }}
-      DB_ADMIN_USER_PASSWORD: ${{ secrets.PROD_APA_DB_ADMIN_USER_PASSWORD }}
+      - name: Approved
+        run: echo "✅ Deployment approved by ${{ github.actor }}"
 
+  DEPLOY:
+    runs-on: ${{ needs.INIT.outputs.RUNNER }}
+    needs: [INIT, APPROVAL]
+    if: needs.INIT.outputs.VALID == 'true'
+    name: "Execute Deployment"
+    env:
+      SQL_FILES_LIST: ${{ needs.INIT.outputs.SQL_FILES_LIST }}
+      TARGET_SERVERS: ${{ needs.INIT.outputs.TARGET_SERVERS }}
     steps:
-      - name: print matrix values for testing test
-        run: |
-          echo "database name : ${{ matrix.data.DATBASE_NAME }}"
-          echo "current version : ${{ matrix.data.DB_CURRENT_VERSION }}"
-          echo "deploy version : ${{ matrix.data.DB_DEPLOY_VERSION }}"
-          echo "server name : ${{ matrix.data.DB_SERVER_NAME }}"
-          echo "changed files : ${{ matrix.data.CHANGED_FILES_STRING }}"
-      - name: Checkout
+      - name: Checkout release branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          ref: ${{ github.ref_name }}
+          ref: release
+          fetch-depth: 1
 
       - name: Install PowerShell
         uses: PSModule/install-powershell@v1
-      - name: Install required PowerShell modules
-        shell: pwsh
-        run: |
-          $modules = @('SqlServer', 'PSScriptAnalyzer')
 
-            foreach ($module in $modules) {
-                if (-not (Get-Module -ListAvailable -Name $module)) {
-                    Write-Host "Installing $module..."
-                    Set-PSRepository PSGallery -InstallationPolicy Trusted
-                    Install-Module $module -ErrorAction Stop -Force
-                } else {
-                    Write-Host "$module is already installed. Skipping..."
+      - name: Install SqlServer module
+        shell: pwsh
+        run: |
+          if (-not (Get-Module -ListAvailable -Name SqlServer)) {
+            Set-PSRepository PSGallery -InstallationPolicy Trusted
+            Install-Module SqlServer -Force
+          }
+
+      - name: Execute SQL Deployment
+        id: deploy
+        shell: pwsh
+        env:
+          DB_USERNAME: ${{ secrets.PROD_DB_ADMIN_USER }}
+          DB_PASSWORD: ${{ secrets.PROD_DB_ADMIN_USER_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Continue"
+
+          $sqlFilesList = "$env:SQL_FILES_LIST" -split ","
+          $targetServers = $env:TARGET_SERVERS | ConvertFrom-Json
+          $username = $env:DB_USERNAME
+          $password = $env:DB_PASSWORD
+
+          $results = @()
+          $hasErrors = $false
+          $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+
+          New-Item -ItemType Directory -Path "./logs" -Force | Out-Null
+          $logFile = "./logs/deployment_$timestamp.txt"
+
+          Write-Host "=========================================="
+          Write-Host "   PROD APA DEPLOYMENT STARTED"
+          Write-Host "=========================================="
+          Write-Host "Timestamp: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+          Write-Host "Files to deploy: $($sqlFilesList.Count)"
+          Write-Host "Target: ${{ inputs.TARGET_DBS }}"
+          Write-Host "=========================================="
+
+          foreach ($server in $targetServers.PSObject.Properties) {
+            $serverName = $server.Name
+            $databases = $server.Value
+
+            foreach ($database in $databases) {
+              Write-Host ""
+              Write-Host ">>> Processing: $database on $serverName"
+              Write-Host "-------------------------------------------"
+
+              foreach ($sqlFile in $sqlFilesList) {
+                $sqlFile = $sqlFile.Trim()
+                if ([string]::IsNullOrEmpty($sqlFile)) { continue }
+
+                $result = [PSCustomObject]@{
+                  Server = $serverName
+                  Database = $database
+                  File = $sqlFile
+                  Status = "Pending"
+                  Duration = 0
+                  Error = ""
                 }
+
+                if (-Not (Test-Path $sqlFile)) {
+                  $result.Status = "NotFound"
+                  $result.Error = "File not found"
+                  $results += $result
+                  Write-Host "  ❌ $sqlFile - NOT FOUND" -ForegroundColor Red
+                  Add-Content -Path $logFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | NOT FOUND | $sqlFile"
+                  $hasErrors = $true
+                  continue
+                }
+
+                $startTime = Get-Date
+                $fileName = Split-Path $sqlFile -Leaf
+
+                try {
+                  $connectionString = "Server=$serverName;Database=$database;User Id=$username;Password=$password;TrustServerCertificate=True;"
+                  Invoke-Sqlcmd -InputFile $sqlFile -ConnectionString $connectionString -ErrorAction Stop
+
+                  $duration = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
+                  $result.Status = "Success"
+                  $result.Duration = $duration
+
+                  Write-Host "  ✅ $fileName - SUCCESS (${duration}s)" -ForegroundColor Green
+                  Add-Content -Path $logFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | SUCCESS | $serverName | $database | $sqlFile | ${duration}s"
+                }
+                catch {
+                  $duration = [math]::Round(((Get-Date) - $startTime).TotalSeconds, 2)
+                  $result.Status = "Failed"
+                  $result.Duration = $duration
+                  $result.Error = $_.Exception.Message
+                  $hasErrors = $true
+
+                  Write-Host "  ❌ $fileName - FAILED" -ForegroundColor Red
+                  Write-Host "     Error: $($_.Exception.Message)" -ForegroundColor Red
+                  Add-Content -Path $logFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | FAILED | $serverName | $database | $sqlFile | $($_.Exception.Message)"
+                }
+
+                $results += $result
+              }
             }
-      - name: Copy db-deply script to pwd
-        run: |
-          cp ./.github/scripts/db-deployment.ps1 ./db-deployment.ps1
-      - name: replace token if any
-        uses: cschleiden/replace-tokens@v1.3
-        with:
-          files: '["./db-deployment.ps1"]'
-      - name: Deployment Started Notification
-        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
-        with:
-          github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
-          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
-          notification-color: 09ACF3
-      - name: Run the DB script
-        id: run-db-script
-        timeout-minutes: 10
-        shell: pwsh
-        run: |
-          ./db-deployment.ps1
-      - name: Validate the deployment
-        id: validate
-        timeout-minutes: 10
-        shell: pwsh
-        run: |
-          curl -L -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/dispatches  -d '{"event_type":"auto-merge-pr","client_payload":{"environment_code": "${{ env.ENV_CODE }}","database": "${{ matrix.data.DATBASE_NAME }}","db_version": "${{ matrix.data.DB_DEPLOY_VERSION }}","requestor": "${{ github.triggering_actor}}","workflow_run_failed": "false"}}'
-          $retry_count = 0
-          do{
-           sleep 5
-           $retry_count = $retry_count + 1
-           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
-           write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version)"
-          }until($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION))
-      - name: Upload logs to GitHub
+          }
+
+          $successCount = ($results | Where-Object { $_.Status -eq "Success" }).Count
+          $failedCount = ($results | Where-Object { $_.Status -eq "Failed" }).Count
+          $notFoundCount = ($results | Where-Object { $_.Status -eq "NotFound" }).Count
+
+          Write-Host ""
+          Write-Host "=========================================="
+          Write-Host "   DEPLOYMENT SUMMARY"
+          Write-Host "=========================================="
+          Write-Host "Total Operations: $($results.Count)"
+          Write-Host "✅ Successful: $successCount" -ForegroundColor Green
+          Write-Host "❌ Failed: $failedCount" -ForegroundColor $(if ($failedCount -gt 0) { "Red" } else { "Green" })
+          Write-Host "⚠️  Not Found: $notFoundCount" -ForegroundColor $(if ($notFoundCount -gt 0) { "Yellow" } else { "Green" })
+          Write-Host "=========================================="
+
+          $summaryFile = $env:GITHUB_STEP_SUMMARY
+
+          Add-Content $summaryFile "## Deployment Results - PROD APA"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "**Target**: ${{ inputs.TARGET_DBS }}"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "| Server | Database | File | Status | Duration |"
+          Add-Content $summaryFile "|--------|----------|------|--------|----------|"
+
+          foreach ($r in $results) {
+            $statusIcon = switch ($r.Status) {
+              "Success" { "✅" }
+              "Failed" { "❌" }
+              "NotFound" { "⚠️" }
+              default { "❓" }
+            }
+            $fileName = Split-Path $r.File -Leaf
+            Add-Content $summaryFile "| $($r.Server) | $($r.Database) | \`\`$fileName\`\` | $statusIcon $($r.Status) | $($r.Duration)s |"
+          }
+
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "### Summary"
+          Add-Content $summaryFile "- ✅ Successful: $successCount"
+          Add-Content $summaryFile "- ❌ Failed: $failedCount"
+          Add-Content $summaryFile "- ⚠️ Not Found: $notFoundCount"
+
+          if ($failedCount -gt 0) {
+            Add-Content $summaryFile ""
+            Add-Content $summaryFile "### Errors"
+            Add-Content $summaryFile '```'
+            foreach ($r in ($results | Where-Object { $_.Status -eq "Failed" })) {
+              $fileName = Split-Path $r.File -Leaf
+              Add-Content $summaryFile "[$($r.Database)] $fileName"
+              Add-Content $summaryFile "  Error: $($r.Error)"
+              Add-Content $summaryFile ""
+            }
+            Add-Content $summaryFile '```'
+          }
+
+          $results | ConvertTo-Json -Depth 3 | Out-File "./logs/results.json"
+
+          if ($hasErrors) {
+            Write-Host ""
+            Write-Host "⚠️  Deployment completed with errors. Check logs for details." -ForegroundColor Yellow
+            exit 1
+          }
+
+      - name: Upload deployment logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
-          path: ./logs/${{ matrix.data.DATBASE_NAME }}.txt
-      - name: Deployment Started Notification
-        if: steps.validate.outcome == 'success'
-        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
-        with:
-          github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
-          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
-          notification-color: 09ACF3
+          name: deployment-logs-APA-${{ github.run_id }}
+          path: ./logs/
 
-      - name: Deployment Started Notification
-        if: steps.validate.outcome == 'failure'
+      - name: Notify Teams - Success
+        if: success()
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
           ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
-          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
-          notification-color: 09ACF3
+          notification-summary: "✅ PROD APA Deploy - ${{ inputs.TARGET_DBS }} - Success | CR: ${{ inputs.SNOW_CR }}"
+          notification-color: 28A745
+
+      - name: Notify Teams - Failure
+        if: failure()
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
+          notification-summary: "❌ PROD APA Deploy - ${{ inputs.TARGET_DBS }} - Failed | CR: ${{ inputs.SNOW_CR }}"
+          notification-color: DC3545
