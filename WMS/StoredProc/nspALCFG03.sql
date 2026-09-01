@@ -1277,7 +1277,7 @@ BEGIN
                                                   AND PICKDETAIL.Storerkey = UCC.Storerkey 
                                                   AND PICKDETAIL.Sku = UCC.Sku 
                                                   AND UCC.[Status] BETWEEN ''3'' AND ''5''
-                                                  AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04                                                     
+                                                  AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04
                                     ELSE ' ' END +                                                     
                               ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +
                               ' AND LOTxLOCxID.Sku = @c_Sku ' +
@@ -1690,8 +1690,8 @@ BEGIN
                                                   AND PICKDETAIL.Loc = LOTxLOCxID.Loc
                                                   AND PICKDETAIL.Storerkey = UCC.Storerkey 
                                                   AND PICKDETAIL.Sku = UCC.Sku 
+                                                  AND UCC.[Status] BETWEEN ''3'' AND ''5''
                                                   AND PICKDETAIL.DropID = UCC.UCCNo '   --WL04
-                                                  AND UCC.[Status] BETWEEN ''3'' AND ''5'''                                                     
                                     ELSE ' ' END +                                                                                
                               --' WHERE LOTxLOCxID.Storerkey = @c_Storerkey) ' + --(CLVN01)
                                      ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +       --(CLVN01)
