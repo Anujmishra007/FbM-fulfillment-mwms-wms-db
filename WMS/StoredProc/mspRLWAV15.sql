@@ -21,6 +21,8 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 2026-08-05  AlexK    1.0   FCR-14839 - JCBUSA - Wave Release SP       */
+/* 2026-09-01  AlexK01  1.1   FCR-14839 - enhance pickface loc search for*/
+/*                                        RPF tasks                      */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV15]
   @c_Wavekey      NVARCHAR(10)
@@ -280,42 +282,52 @@ BEGIN
 
          --Find RPF ToLoc
          --1. Check pickface
+         --(AlexK01) S
          SELECT TOP 1 @c_RPF_ToLoc = SL.Loc
          FROM SKUxLOC SL (NOLOCK)
          JOIN LOC L (NOLOCK) 
             ON (L.Facility = @c_Facility AND L.Loc = SL.Loc)
          CROSS APPLY (
             SELECT 
-                COUNT(DISTINCT LLI.ID) AS TotalID
+                --COUNT(DISTINCT LLI.ID) AS TotalID,
+                COUNT(DISTINCT CASE WHEN (ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIn, 0)) > 0 THEN LLI.ID END) AS TotalActiveID,
+                SUM(ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIn, 0)) As TotalQty
             FROM LOTxLOCxID LLI (NOLOCK)
             WHERE LLI.StorerKey = SL.StorerKey
-              AND LLI.Sku       = SL.Sku
+              --AND LLI.Sku       = SL.Sku
               AND LLI.Loc       = SL.Loc
          ) LLI
          WHERE SL.StorerKey    = @c_StorerKey
-           AND SL.Sku          = @c_Sku
-           AND SL.LocationType = 'PICK'
-           AND (L.MaxPallet - LLI.TotalID) > 0
+         AND SL.Sku          = @c_Top1Sku
+         AND SL.LocationType = 'PICK'
+         --AND (L.MaxPallet - LLI.TotalID) > 0
+         AND 
+         (
+            (L.MaxPallet >= 2 AND (L.MaxPallet - TotalActiveID) >= 1)
+            OR
+            (L.MaxPallet = 1 AND TotalQty = 0)
+         )
          ORDER BY L.Loc
+         
+         ----2. Check friend location: Location having same SKU where LOC.LocationType = 'PICK'
+         --IF @c_RPF_ToLoc = ''
+         --BEGIN
+         --   SELECT TOP 1 @c_RPF_ToLoc = LLI.Loc
+         --   FROM LOTxLOCxID LLI (NOLOCK)
+         --   JOIN LOC L (NOLOCK) ON (L.Facility = @c_Facility AND L.Loc = LLI.Loc)
+         --   CROSS APPLY (
+         --       SELECT COUNT(DISTINCT LLI.ID) AS DistinctIDCount
+         --       FROM LOTxLOCxID LLI (NOLOCK)
+         --       WHERE LLI.Loc = LLI.Loc
+         --   ) CLLI
+         --   WHERE LLI.StorerKey  = @c_StorerKey
+         --     AND LLI.Sku        = @c_Top1Sku
+         --     AND L.LocationType = 'PICK'
+         --     AND (L.MaxPallet - CLLI.DistinctIDCount) > 0
+         --   ORDER BY L.Loc
+         --END
 
-         --2. Check friend location: Location having same SKU where LOC.LocationType = 'PICK'
-         IF @c_RPF_ToLoc = ''
-         BEGIN
-            SELECT TOP 1 @c_RPF_ToLoc = LLI.Loc
-            FROM LOTxLOCxID LLI (NOLOCK)
-            JOIN LOC L (NOLOCK) ON (L.Facility = @c_Facility AND L.Loc = LLI.Loc)
-            CROSS APPLY (
-                SELECT COUNT(DISTINCT LLI.ID) AS DistinctIDCount
-                FROM LOTxLOCxID LLI (NOLOCK)
-                WHERE LLI.Loc = LLI.Loc
-            ) CLLI
-            WHERE LLI.StorerKey  = @c_StorerKey
-              AND LLI.Sku        = @c_Top1Sku
-              AND L.LocationType = 'PICK'
-              AND (L.MaxPallet - CLLI.DistinctIDCount) > 0
-            ORDER BY L.Loc
-         END
-
+         --(AlexK01) E
 
          --3. Assign empty location in same AISLE
          IF @c_RPF_ToLoc = ''
