@@ -135,6 +135,31 @@ BEGIN
 
             SET @nTotalLocPickedQty += @nQty
          END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
       END -- LOC
 
       --PickSlipNo
@@ -199,6 +224,27 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
             SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
@@ -274,6 +320,31 @@ BEGIN
 
             SET @nTotalLocPickedQty += @nQty
          END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
       END -- LOC
 
       --PickSlipNo
@@ -338,6 +409,27 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
             SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
@@ -417,6 +509,31 @@ BEGIN
 
             SET @nTotalLocPickedQty += @nQty
          END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
       END -- LOC
 
       --PickSlipNo
@@ -485,6 +602,27 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
             SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
@@ -556,6 +694,31 @@ BEGIN
 
             SET @nTotalLocPickedQty += @nQty
          END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON RPL.PickDetailKey = PD.PickDetailKey
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalLocPickedQty += @nQty
+         END
       END -- LOC
 
       --PickSlipNo
@@ -616,6 +779,27 @@ BEGIN
                AND PD.QTY > 0
             SET @nQty = ISNULL(@nQty, 0)
 
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --3. rdtPickLog UCC Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.PickLockQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'GetTask-U'
+               AND RPL.Status = '9'
+            SET @nQty = ISNULL(@nQty, 0)
+            SET @nTotalPSNPickedQty += @nQty
+         END
+         --4. rdtPickLog Piece Qty (in-progress picked)
+         BEGIN
+            SET @nQty = 0
+            SELECT @nQty = ISNULL(SUM(RPL.ActQty), 0)
+            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+            WHERE RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'Pick-P'
+            SET @nQty = ISNULL(@nQty, 0)
             SET @nTotalPSNPickedQty += @nQty
          END
       END -- PickSlipNo
