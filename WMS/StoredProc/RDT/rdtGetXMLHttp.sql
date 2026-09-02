@@ -14,6 +14,7 @@ GO
 /* 03-Apr-2025  1.1.0 NLT013    UWP-32244 Extend Menu number                */
 /* 2026-05-29   1.2.0 JackC     UWP-57695 Add storer,facility data          */
 /* 2026-06-15   1.2.1 JackC     UWP-57695 Add TraceID to XML session        */
+/* 2026-09-01   1.2.2 JackC     UWP-57695 Add exception field on SQL error  */
 /****************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetXMLHttp(
@@ -26,6 +27,8 @@ AS
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @nDebugFlag  INT = 0
 
    DECLARE
       @cXMLHeader       NVARCHAR( MAX),
@@ -156,10 +159,34 @@ AS
          '"/>'
    SET @cXMLFooter += '</tordt>'
 
+   -- Exception field: present when SQL exception was caught by rdtHandle_SetUser (v1.2.2)
+   DECLARE @cXMLException   NVARCHAR(MAX)  = ''
+   DECLARE @nExcErrNo       INT            = 0
+   DECLARE @cExcErrMsg      NVARCHAR(1024) = ''
+
+   BEGIN TRY
+      EXEC rdt.rdtGetXMLException
+         @nMobile       = @nMobile,
+         @cTraceID      = @cTraceID,
+         @cMobRecErrMsg = @cErrMsg,
+         @cFacility     = @cFacility,
+         @cStorerKey    = @cStorerKey,
+         @cXMLException = @cXMLException OUTPUT,
+         @nErrNo        = @nExcErrNo     OUTPUT,
+         @cErrMsg       = @cExcErrMsg    OUTPUT 
+   END TRY
+   BEGIN CATCH
+      IF @nDebugFlag = 1
+         SELECT 'Get XML Exception failed. Error: ' + ERROR_MESSAGE()
+
+      SET @cXMLException = ''
+   END CATCH
+
    -- Construct entire XML
    SET @cXML =
       @cXMLHeader +
       @cXMLSession +
+      @cXMLException +
       @cXMLScreen +
       @cXML +
       @cXMLFooter

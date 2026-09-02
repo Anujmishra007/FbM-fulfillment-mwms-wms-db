@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdtInsRDTLog                                              */
-/* Copyright      : IDS / Maersk                                              */
+/* Copyright      : Maersk                                                    */
 /* Purpose: Insert a log entry into rdt.rdtLog table.                         */
 /*                                                                            */ 
 /* Modifications log:                                                         */
