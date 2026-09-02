@@ -12,6 +12,7 @@ EXECUTE rdt.rdtAddScn 4020, 'ENG',
    ,@cLine04 = ''
    ,@cLine05 = 'DROPID:'
    ,@cLine06 = '%20i01'
+   ,@cLine08 = '%20d10' --UWP-65495
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["5","6"]}'
    ,@nFunc = 1812
