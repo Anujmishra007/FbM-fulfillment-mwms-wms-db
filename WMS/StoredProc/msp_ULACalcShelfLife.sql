@@ -27,6 +27,7 @@ GO
 /* 2025-05-06  VIBIN01  1.3   FCR - 4255 - Exclude the SLCODE ML14 and ML46      */
 /* 2025-05-27  PPA371   1.4   FCR - 4006 - Added check if storer config is enable*/
 /* 2025-09-18  MICHAEL  1.5   FCR-7927 - Exclude ML18 and ML13 from Hold (ML01)  */
+/* 2026-08-24  VNI056   1.6   Added toLottable07 Parameter- FCR-14631            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ULACalcShelfLife] (
@@ -214,7 +215,7 @@ BEGIN
                -- Calculate new Shelf Life
                IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUL'
                BEGIN
-                 SELECT @c_ShelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @d_Lottable04);
+                 SELECT @c_ShelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @d_Lottable04, @c_Lottable07);  --VNI01
                END
                ELSE IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUD'
                BEGIN
@@ -378,7 +379,13 @@ BEGIN
 						select @c_CustomField=ISNULL(SValue ,0) from StorerConfig with (nolock)   --(PPA371)
 						where StorerKey =@c_StorerKey and ConfigKey='NewShelfLifeCalcBUD'         --(PPA371)
 
-						IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' --or @c_ShelfLife = 'ML13' or @c_ShelfLife = 'ML18'   --(Wan01)
+                        IF EXISTS (                                     --VNI01(START)
+                            SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                            WHERE ListName = 'SLCode'
+                          AND Storerkey = @c_StorerKey
+                          AND Code = @c_ShelfLife
+                          AND UDF05 = 'EXP'                          --VNI01(END)
+                        )  --or @c_ShelfLife = 'ML13' or @c_ShelfLife = 'ML18'   --(Wan01)
                           SET @c_ToLottable06 = '1'
                         ELSE
                           SET @c_ToLottable06 = @c_Lottable06

@@ -695,12 +695,14 @@ END
         IF @c_customsExportDeclForMbolFlag = '1'
         BEGIN
             IF EXISTS ( SELECT 1 FROM INSERTED, DELETED
-                        WHERE INSERTED.OrderKey = DELETED.OrderKey
-                          AND INSERTED.[status] = DELETED.[status]
-                          AND INSERTED.[status] = '5'
+                      WHERE INSERTED.OrderKey = DELETED.OrderKey
                           AND LEN(TRIM(INSERTED.MBOLKey)) > 0
-                          AND ISNULL(INSERTED.MBOLKey,'') <> ISNULL(DELETED.MBOLKey,'')
                           AND ISNULL(INSERTED.C_Country,'') IN ('GBR','NOR','GB','NO')
+						  AND NOT EXISTS
+						  (
+						    SELECT 1 FROM ORDERDETAIL OD, INSERTED I WHERE OD.OrderKey = I.OrderKey AND OD.Status <> '5'
+						  )
+               )
             BEGIN
                 EXEC ispGenTransmitLog2 'XDCBWEXPDL', @c_MBolKey,
                 				'', @c_Storer, ''
