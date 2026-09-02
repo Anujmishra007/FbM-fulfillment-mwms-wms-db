@@ -1,0 +1,9 @@
+-- rdt_663ExtVal01
+-- 279401 - 279450
+-- FCR-16001
+
+EXECUTE rdt.rdtDropMsg 279401, 279450
+
+EXECUTE rdt.rdtAddMsg 279401, 10, '279401KitOnHold     ', 'us_english', 663, 0, '279401 KIT ON HOLD'
+
+SELECT * FROM rdt.rdtmsg WITH(NOLOCK) WHERE message_id BETWEEN 279401 AND 279450

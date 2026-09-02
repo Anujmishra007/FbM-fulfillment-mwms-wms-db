@@ -11,7 +11,6 @@ GO
 /*                                                                             */
 /* Date       Rev    Author     Purposes                                       */
 /* 2026-01-04 1.0.0  NickT      FCR-9040. Created                              */
-/* 2026-07-28 1.1.0  NYE018     FCR-12865 skip sn logic for the PAGEIND        */
 /*******************************************************************************/
   
 CREATE OR ALTER PROC  [RDT].[rdt_839ExtScn06] (
@@ -148,7 +147,6 @@ BEGIN
       @cOrderKey              NVARCHAR( 10),
       @cCurrentOrderKey       NVARCHAR( 10),
       @cPreviousOrderKey      NVARCHAR( 10),
-      @cSNnotRequired         NVARCHAR( 1),
       @cCloseDropIDFlag       NVARCHAR( 1) = '',
       @cPickDetailKey         NVARCHAR( 18),
       @cRowRefTemp            INT,
@@ -333,8 +331,6 @@ BEGIN
    WHERE Mobile = @nMobile
 
    SET @cEntryDropID = rdt.rdtGetConfig( @nFunc, 'EntryDropID', @cStorerKey)
-
-   SET @cSNnotRequired = rdt.rdtGetConfig( @nFunc, 'SNnotRequired', @cStorerKey)
 
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
    IF @cPickConfirmStatus = '0'
@@ -2061,93 +2057,90 @@ BEGIN
                   END
                   ELSE IF @cUOM = '6'
                   BEGIN
-                     IF @cSNnotRequired <> '1'
+                     SELECT @cScannedSN = C_String7,
+                        @cScannedLot = C_String8
+                     FROM RDT.RDTMOBREC WITH(NOLOCK)
+                     WHERE Mobile = @nMobile
+
+                     DECLARE @cScannedLottable01 NVARCHAR(18)
+
+                     SELECT @cScannedLottable01 = Lottable01
+                     FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
+                     WHERE Lot = @cScannedLot
+
+                     SELECT 
+                        @cScannedLOC = Loc,
+                        @cScannedID = ID,
+                        @cScannedSKU = SKU
+                     FROM dbo.SerialNo WITH(NOLOCK)
+                     WHERE SerialNo = @cScannedSN
+                        AND StorerKey = @cStorerKey
+
+                     SELECT TOP 1 
+                        @nrdtPickLogID = RowRef,
+                        @cCurrentOrderKey = RPL.OrderKey
+                     FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+                     INNER JOIN dbo.LOT WITH(NOLOCK) ON RPL.Descr IS NOT NULL AND RPL.Descr = LOT.Lot
+                     INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LOT.Lot = LA.Lot
+                     WHERE PickSlipNo = @cPickSlipNo 
+                        AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
+                        AND RPL.PickMethod = 'GetTask-P'
+                        AND RPL.Status = '0'
+                        AND ISNULL(RPL.Loc,'') = ISNULL(@cScannedLOC,'')
+                        AND ISNULL(RPL.ID,'') = ISNULL(@cScannedID,'')
+                        AND ISNULL(RPL.SKU,'') = ISNULL(@cScannedSKU,'')
+                        AND RPL.PickLockQty < RPL.ActQty
+                        AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
+                     ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey
+
+                     SELECT @nRowCount = @@ROWCOUNT
+
+                     IF @nRowCount = 0
                      BEGIN
-                        SELECT @cScannedSN = C_String7,
-                           @cScannedLot = C_String8
-                        FROM RDT.RDTMOBREC WITH(NOLOCK)
-                        WHERE Mobile = @nMobile
+                        SET @nErrNo = 255515
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- uggested SN is missing in rdtPickLog
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                        GOTO STEP_SKUQTY_FAIL
+                     END
 
-                        DECLARE @cScannedLottable01 NVARCHAR(18)
-
-                        SELECT @cScannedLottable01 = Lottable01
-                        FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
-                        WHERE Lot = @cScannedLot
-
-                        SELECT
-                           @cScannedLOC = Loc,
-                           @cScannedID = ID,
-                           @cScannedSKU = SKU
-                        FROM dbo.SerialNo WITH(NOLOCK)
-                        WHERE SerialNo = @cScannedSN
-                           AND StorerKey = @cStorerKey
-
-                        SELECT TOP 1
-                           @nrdtPickLogID = RowRef,
-                           @cCurrentOrderKey = RPL.OrderKey
+                     BEGIN TRY
+                        INSERT INTO RDT.rdtPickLog (OrderKey, PickZone, PickDetailKey, StorerKey, Remarks, ActQty, Mobile, PickSlipNo, PickMethod, Status, DropID)
+                        SELECT OrderKey, PickZone, PickDetailKey, StorerKey, @cScannedSN, 1, Mobile, PickSlipNo, 'Pick-P', '0', IIF(@cDropIDScn = 'PickZoneScn', @cDropID, '')
                         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-                        INNER JOIN dbo.LOT WITH(NOLOCK) ON RPL.Descr IS NOT NULL AND RPL.Descr = LOT.Lot
-                        INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LOT.Lot = LA.Lot
-                        WHERE PickSlipNo = @cPickSlipNo
-                           AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
-                           AND RPL.PickMethod = 'GetTask-P'
-                           AND RPL.Status = '0'
-                           AND ISNULL(RPL.Loc,'') = ISNULL(@cScannedLOC,'')
-                           AND ISNULL(RPL.ID,'') = ISNULL(@cScannedID,'')
-                           AND ISNULL(RPL.SKU,'') = ISNULL(@cScannedSKU,'')
-                           AND RPL.PickLockQty < RPL.ActQty
-                           AND (LOT.Lot = @cScannedLot OR (LOT.Lot <> @cScannedLot AND @cScannedLottable01 = LA.Lottable01))
-                        ORDER BY RPL.OrderKey, IIF(LOT.Lot = @cScannedLot, 1, 2), RPL.PickLockQty DESC, RPL.PickDetailKey
+                        WHERE RowRef = @nrdtPickLogID
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255518
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert rdtPickLog failed
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                        GOTO STEP_SKUQTY_FAIL
+                     END CATCH
 
-                        SELECT @nRowCount = @@ROWCOUNT
+                     BEGIN TRY
+                        UPDATE dbo.SerialNo WITH(ROWLOCK)
+                        SET UserDefine01 = '3'
+                        WHERE SerialNo = ISNULL(@cScannedSN, 'EMPTYSN')
+                           AND StorerKey = @cStorerKey
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255536
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                        GOTO STEP_SKUQTY_FAIL
+                     END CATCH
 
-                        IF @nRowCount = 0
-                        BEGIN
-                           SET @nErrNo = 255515
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- uggested SN is missing in rdtPickLog
-                           EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO STEP_SKUQTY_FAIL
-                        END
-
-                        BEGIN TRY
-                           INSERT INTO RDT.rdtPickLog (OrderKey, PickZone, PickDetailKey, StorerKey, Remarks, ActQty, Mobile, PickSlipNo, PickMethod, Status, DropID)
-                           SELECT OrderKey, PickZone, PickDetailKey, StorerKey, @cScannedSN, 1, Mobile, PickSlipNo, 'Pick-P', '0', IIF(@cDropIDScn = 'PickZoneScn', @cDropID, '')
-                           FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-                           WHERE RowRef = @nrdtPickLogID
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 255518
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Insert rdtPickLog failed
-                           EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO STEP_SKUQTY_FAIL
-                        END CATCH
-
-                        BEGIN TRY
-                           UPDATE dbo.SerialNo WITH(ROWLOCK)
-                           SET UserDefine01 = '3'
-                           WHERE SerialNo = ISNULL(@cScannedSN, 'EMPTYSN')
-                              AND StorerKey = @cStorerKey
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 255536
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
-                           EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO STEP_SKUQTY_FAIL
-                        END CATCH
-
-                        BEGIN TRY
-                           UPDATE RDT.rdtPickLog WITH(ROWLOCK)
-                           SET PickLockQty = PickLockQty + 1,
-                              Status = IIF(PickLockQty = ActQty - 1, '9', Status)
-                           WHERE RowRef = @nrdtPickLogID
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 255519
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
-                           EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO STEP_SKUQTY_FAIL
-                        END CATCH
-                     END -- SNnotRequired
+                     BEGIN TRY
+                        UPDATE RDT.rdtPickLog WITH(ROWLOCK)
+                        SET PickLockQty = PickLockQty + 1,
+                           Status = IIF(PickLockQty = ActQty - 1, '9', Status)
+                        WHERE RowRef = @nrdtPickLogID
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 255519
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
+                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                        GOTO STEP_SKUQTY_FAIL
+                     END CATCH
                   END
                END
                ELSE
@@ -3087,9 +3080,28 @@ BEGIN
                SET @cOutField12 =''
                SET @cOutField15 =''
 
-               -- Go to Abort screen
-               SET @nAfterScn = 6840
-               SET @nAfterStep = 99
+               -- Go to Short screen
+               IF @nTotalLocPickedQty > 0 
+                  AND EXISTS( SELECT 1
+                       FROM RDT.rdtPickLog WITH(NOLOCK)
+                       WHERE PickSlipNo = @cPickSlipNo
+                          AND Loc = @cSuggLOC
+                          AND (Mobile = @nMobile OR AddWho = @cUserName)
+                          AND (
+                               PickMethod = 'Pick-P'
+                               OR (PickMethod = 'GetTask-U' AND Status = '9')
+                             )
+                    )
+               BEGIN
+                  SET @nAfterScn = 6777
+                  SET @nAfterStep = 99
+               END
+               ELSE-- Go to Abort screen
+               BEGIN
+                  SET @nAfterScn = 6840
+                  SET @nAfterStep = 99
+               END
+               
                GOTO UPD_RDTMOBREC
             END
 

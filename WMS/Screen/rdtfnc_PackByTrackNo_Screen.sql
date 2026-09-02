@@ -43,7 +43,7 @@ EXECUTE rdt.rdtAddScn 3122, 'ENG',
    ,@cLine07 = 'TTL PACK: %05d05'
    ,@cLine08 = ''
    ,@cLine09 = 'SKU:'
-   ,@cLine10 = '%30i06'    -- SOS300492 Extend to 30 chars
+   ,@cLine10 = '%1000iV_Max'
    ,@cLine11 = 'ABORT? (1=YES) %01i07'
    ,@cLine12 = ''
    ,@cLine13 = '%20d15'

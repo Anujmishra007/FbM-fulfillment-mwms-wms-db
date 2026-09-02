@@ -12,6 +12,10 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-06-12   1.0  JWF011     FCR-13553: Created                               */
+/* 2026-08-12   1.1  JWF011     UWP-61321: Add PickDetail SKU logic              */
+/* 2026-08-19   1.2  JWF011     UWP-61321: Update PickDetail SKU logic           */
+/* 2026-08-24   1.3  JWF011     UWP-61321: Fix SKU List                          */
+/* 2026-08-28   1.4  JWF011     UWP-61321: Update SKU List                       */
 /*********************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPACK_PackDetail_Std] (
@@ -207,156 +211,386 @@ BEGIN
                             + ', '''' AS DynamicValue2 ' + CHAR(13)
    END            
 
-   IF ISNULL(@cSKUList,'') <> ''
+   IF EXISTS ( SELECT 1
+               FROM StorerConfig (NOLOCK)
+               WHERE ConfigKey = 'TPS-ShowPickDetailSKU'
+               AND StorerKey = @cStorerKey
+               AND SValue = '1'
+   )
    BEGIN
-      SELECT @nSKUCount=COUNT(1)
-      FROM OPENJSON(@cSKUList)
-      WITH (SKU NVARCHAR(20))
-
-      
-      IF @cLottableList <> ''
+      --Logitech Logic
+      IF ISNULL(@cSKUList,'') <> ''
       BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                                 + ', JSON_QUERY((SELECT lottable ' + CHAR(13)
-                                 + '  FROM OPENJSON(@cLottableList) WITH (sku NVARCHAR(20), lottable NVARCHAR(30)) t ' + CHAR(13)
-                                 + '  WHERE t.sku = S.sku FOR JSON PATH)) AS lottables ' + CHAR(13)
-      END
-      ELSE
-      BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                               + ', JSON_QUERY(''[]'') AS lottables '  + CHAR(13)
-      END
-
-
-      SET @cSQLFromClause = @cSQLFromClause 
-                          + ' FROM SKU S (NOLOCK) ' + CHAR(13)
-
-      SET @cSQLWhereClause = @cSQLWhereClause
-                           + ' WHERE S.StorerKey = @cStorerKey ' + CHAR(13)
-                           
-   
-      IF @nCartonNo <> 0
-      BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                               + ', COALESCE(SUM(PD.Qty),0) AS packedQty ' + CHAR(13)
-         
-         SET @cSQLFromClause = @cSQLFromClause
-                             + ' LEFT JOIN PACKDETAIL PD (NOLOCK) ' + CHAR(13)
-                             + ' ON S.StorerKey = PD.StorerKey ' + CHAR(13)
-                             + ' AND S.SKU = PD.SKU ' + CHAR(13)
-                             + ' AND PD.PickSlipNo = @cPickSlipNo ' + CHAR(13)
-                             + ' AND PD.CartonNo = @nCartonNo ' + CHAR(13)
-
-      END
-      ELSE
-      BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause
-                               + ', 0 AS packedQty ' + CHAR(13)
-      END
-
-      IF @nSKUCount = 1
-      BEGIN
-         SELECT @cSKU = SKU
+         SELECT @nSKUCount=COUNT(1)
          FROM OPENJSON(@cSKUList)
          WITH (SKU NVARCHAR(20))
 
+         IF @cLottableList <> ''
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                  + ', JSON_QUERY((SELECT lottable ' + CHAR(13)
+                                  + '  FROM OPENJSON(@cLottableList) WITH (sku NVARCHAR(20), lottable NVARCHAR(30)) t ' + CHAR(13)
+                                  + '  WHERE t.sku = S.sku FOR JSON PATH)) AS lottables ' + CHAR(13)
+         END
+         ELSE
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                  + ', JSON_QUERY(''[]'') AS lottables '  + CHAR(13)
+         END
+
+         SET @cSQLFromClause = @cSQLFromClause 
+                             + ' FROM SKU S (NOLOCK) ' + CHAR(13)
+
          SET @cSQLWhereClause = @cSQLWhereClause
-                              + ' AND S.SKU = @cSKU '  + CHAR(13)
+                              + ' WHERE S.StorerKey = @cStorerKey ' + CHAR(13)
+
+         SET @cSQLOrderByClause = ' ORDER BY '+ CHAR(13)
+
+         IF @nCartonNo <> 0
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                  + ', COALESCE(SUM(PAD2.Qty),0) AS packedQty ' + CHAR(13)
+                                  + ', COALESCE(SUM(PAD2.ExpQty),0) AS ExpQty ' + CHAR(13)
+                                  + ', COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD2.QTY),0) AS QtyToPack ' + CHAR(13)
+            
+            SET @cSQLFromClause = @cSQLFromClause
+                                + ' LEFT JOIN ( ' + CHAR(13)
+                                + ' SELECT StorerKey, SKU, MAX(EditDate) AS EditDate ' + CHAR(13)
+                                + ' FROM PACKDETAIL (NOLOCK) ' + CHAR(13)
+                                + ' WHERE PickSlipNo = @cPickSlipNo ' + CHAR(13)
+                                + ' AND CartonNo = @nCartonNo ' + CHAR(13)
+                                + ' GROUP BY StorerKey, SKU ' + CHAR(13)
+                                + ' ) PAD1 ' + CHAR(13)
+                                + ' ON S.StorerKey = PAD1.StorerKey ' + CHAR(13)
+                                + ' AND S.SKU = PAD1.SKU ' + CHAR(13)
+
+            SET @cSQLFromClause = @cSQLFromClause
+                                + ' LEFT JOIN ( ' + CHAR(13)
+                                + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY, SUM(ExpQty) AS ExpQty, MAX(EditDate) AS EditDate ' + CHAR(13)
+                                + ' FROM PACKDETAIL (NOLOCK) ' + CHAR(13)
+                                + ' WHERE PickSlipNo = @cPickSlipNo ' + CHAR(13)
+                                + ' GROUP BY StorerKey, SKU ' + CHAR(13)
+                                + ' ) PAD2 ' + CHAR(13)
+                                + ' ON S.StorerKey = PAD2.StorerKey ' + CHAR(13)
+                                + ' AND S.SKU = PAD2.SKU ' + CHAR(13)
+
+            SET @cSQLFromClause = @cSQLFromClause
+                                + ' INNER JOIN ( ' + CHAR(13)
+                                + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY ' + CHAR(13)
+                                + ' FROM PICKDETAIL (NOLOCK) ' + CHAR(13)
+                                + ' WHERE OrderKey = @cOrderKey ' + CHAR(13)
+                                + ' GROUP BY StorerKey, SKU ' + CHAR(13)
+                                + ' ) PID ' + CHAR(13)
+                                + ' ON S.StorerKey = PID.StorerKey ' + CHAR(13)
+                                + ' AND S.SKU = PID.SKU ' + CHAR(13)
+
+         END
+         ELSE
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', 0 AS packedQty ' + CHAR(13)
+                                 + ', 0 AS ExpQty ' + CHAR(13)
+                                 + ', 0 AS QtyToPack ' + CHAR(13)
+         END
+
+         IF @nSKUCount = 1
+         BEGIN
+            SELECT @cSKU = SKU
+            FROM OPENJSON(@cSKUList)
+            WITH (SKU NVARCHAR(20))
+
+            IF @nCartonNo <> 0
+            BEGIN
+               SET @cSQLWhereClause = @cSQLWhereClause
+                                    + ' AND S.SKU IN ( ' + CHAR(13)
+                                    + ' SELECT SKU ' + CHAR(13)
+                                    + ' FROM PICKDETAIL (NOLOCK) ' + CHAR(13)
+                                    + ' WHERE OrderKey = @cOrderKey ) ' + CHAR(13)
+
+               SET @cSQLOrderByClause = @cSQLOrderByClause 
+                                      + ' CASE WHEN S.SKU = @cSKU THEN 0 ELSE 1 END ' + CHAR(13)
+                                      + ' ,CASE WHEN COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD2.QTY),0) <= 0 THEN 1 ELSE 0 END '+ CHAR(13)
+                                      + ' ,MAX(PAD2.EditDate) DESC ' + CHAR(13)
+            END
+            ELSE
+            BEGIN
+               SET @cSQLWhereClause = @cSQLWhereClause
+                                    + ' AND S.SKU = @cSKU '  + CHAR(13)
+
+               SET @cSQLOrderByClause = @cSQLOrderByClause 
+                                      + ' CASE WHEN S.SKU = @cSKU THEN 0 ELSE 1 END ' + CHAR(13)
+            END
+         END
+         ELSE
+         BEGIN
+            SET @cSQLWhereClause = @cSQLWhereClause
+                                 + ' AND EXISTS (SELECT 1 FROM OPENJSON(@cSKUList) WITH (SKU NVARCHAR(20)) t WHERE t.SKU = S.SKU) '  + CHAR(13)
+
+            SET @cSQLOrderByClause = @cSQLOrderByClause 
+                                   + ' LEN(S.SKU) ASC, ' + CHAR(13)
+                                   + ' MAX(S.EditDate) DESC ' + CHAR(13)
+         END
+
+         SET @cSQLParams = @cSQLParams
+                        + ' , @cLottableList NVARCHAR(1000) '
+                        + ' , @cStorerKey NVARCHAR(15) '
+                        + ' , @cPickSlipNo NVARCHAR(10) '
+                        + ' , @nCartonNo INT '
+                        + ' , @cSKU NVARCHAR(20) '
+                        + ' , @cSKUList NVARCHAR(1000) '
+                        + ' , @cOrderKey NVARCHAR(10) '
+
+         IF @cDynamicColumn3 = 'CUSTOM'
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+            SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+            SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+            SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+         END
+
+         SET @cSQLQuery = @cSQLSelectClause 
+                        + @cSQLFromClause 
+                        + @cSQLWhereClause 
+                        + @cSQLGroupByClause
+                        + @cSQLOrderByClause
+                        + @cSQLPageClause
+                        + @cSQLQueryEnd
+
+         --Store JSON result into variable
+         EXEC sp_executesql  @cSQLQuery
+                           , @cSQLParams
+                           , @oDynamicJson OUTPUT
+                           , @cLottableList
+                           , @cStorerKey
+                           , @cPickSlipNo
+                           , @nCartonNo
+                           , @cSKU
+                           , @cSKUList
+                           , @cOrderKey
       END
       ELSE
       BEGIN
+         SET @cSQLSelectClause = @cSQLSelectClause 
+                               + ', JSON_QUERY(''[]'') AS lottables ' + CHAR(13)
+                               + ', COALESCE(SUM(PAD.Qty),0) AS packedQty ' + CHAR(13)
+                               + ', COALESCE(SUM(PAD.ExpQty),0) AS ExpQty ' + CHAR(13)
+                               + ', COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD.QTY),0) AS QtyToPack ' + CHAR(13)
+
+         SET @cSQLFromClause = @cSQLFromClause 
+                             + ' FROM SKU S (NOLOCK) ' + CHAR(13)
+
+         SET @cSQLFromClause = @cSQLFromClause
+                             + ' LEFT JOIN ( ' + CHAR(13)
+                             + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY, SUM(ExpQty) AS ExpQty, MAX(EditDate) AS EditDate ' + CHAR(13)
+                             + ' FROM PACKDETAIL (NOLOCK) ' + CHAR(13)
+                             + ' WHERE PickSlipNo = @cPickSlipNo ' + CHAR(13)
+                             + ' GROUP BY StorerKey, SKU ' + CHAR(13)
+                             + ' ) PAD ' + CHAR(13)
+                             + ' ON S.StorerKey = PAD.StorerKey ' + CHAR(13)
+                             + ' AND S.SKU = PAD.SKU ' + CHAR(13)
+
+         SET @cSQLFromClause = @cSQLFromClause
+                             + ' INNER JOIN ( ' + CHAR(13)
+                             + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY ' + CHAR(13)
+                             + ' FROM PICKDETAIL (NOLOCK) ' + CHAR(13)
+                             + ' WHERE OrderKey = @cOrderKey ' + CHAR(13)
+                             + ' GROUP BY StorerKey, SKU ' + CHAR(13)
+                             + ' ) PID ' + CHAR(13)
+                             + ' ON S.StorerKey = PID.StorerKey ' + CHAR(13)
+                             + ' AND S.SKU = PID.SKU ' + CHAR(13)
+
          SET @cSQLWhereClause = @cSQLWhereClause
-                              + ' AND EXISTS (SELECT 1 FROM OPENJSON(@cSKUList) WITH (SKU NVARCHAR(20)) t WHERE t.SKU = S.SKU) '  + CHAR(13)
+                              + ' WHERE S.StorerKey = @cStorerKey ' + CHAR(13)
+
+         SET @cSQLOrderByClause = @cSQLOrderByClause 
+                                + ' ORDER BY ' + CHAR(13)
+                                + ' CASE WHEN COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD.QTY),0) <= 0 THEN 1 ELSE 0 END, '+ CHAR(13)
+                                + ' MAX(PAD.EditDate) DESC ' + CHAR(13)
+
+         SET @cSQLParams = @cSQLParams
+                         + ' , @cStorerKey NVARCHAR(15) '
+                         + ' , @cPickSlipNo NVARCHAR(10) '
+                         + ' , @nCartonNo INT '
+                         + ' , @cOrderKey NVARCHAR(10) '
+
+         IF @cDynamicColumn3 = 'CUSTOM'
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+            SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+            SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+            SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+         END
+
+         SET @cSQLQuery = @cSQLSelectClause 
+                        + @cSQLFromClause 
+                        + @cSQLWhereClause 
+                        + @cSQLGroupByClause
+                        + @cSQLOrderByClause
+                        + @cSQLPageClause
+                        + @cSQLQueryEnd
+
+         --Store JSON result into variable
+         EXEC sp_executesql  @cSQLQuery
+                           , @cSQLParams
+                           , @oDynamicJson OUTPUT
+                           , @cStorerKey
+                           , @cPickSlipNo
+                           , @nCartonNo
+                           , @cOrderKey
       END
-
-      SET @cSQLOrderByClause = @cSQLOrderByClause 
-                             + ' ORDER BY LEN(S.SKU) ASC, MAX(S.EditDate) DESC ' + CHAR(13)
-
-      SET @cSQLParams = @cSQLParams
-                      + ' , @cLottableList NVARCHAR(1000) '
-                      + ' , @cStorerKey NVARCHAR(15) '
-                      + ' , @cPickSlipNo NVARCHAR(10) '
-                      + ' , @nCartonNo INT '
-                      + ' , @cSKU NVARCHAR(20) '
-                      + ' , @cSKUList NVARCHAR(1000) '
-
-      IF @cDynamicColumn3 = 'CUSTOM'
-      BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
-         SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
-         SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
-         SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
-      END
-
-      SET @cSQLQuery = @cSQLSelectClause 
-                     + @cSQLFromClause 
-                     + @cSQLWhereClause 
-                     + @cSQLGroupByClause
-                     + @cSQLOrderByClause
-                     + @cSQLPageClause
-                     + @cSQLQueryEnd
-
-      -- PRINT @cSQLQuery 
-
-      --Store JSON result into variable
-      EXEC sp_executesql  @cSQLQuery
-                        , @cSQLParams
-                        , @oDynamicJson OUTPUT
-                        , @cLottableList
-                        , @cStorerKey
-                        , @cPickSlipNo
-                        , @nCartonNo
-                        , @cSKU
-                        , @cSKUList
    END
    ELSE
    BEGIN
-      SET @cSQLSelectClause = @cSQLSelectClause 
-                            --+ ', SUM(PD.Qty) AS packedQty ' + CHAR(13)
-                            + ', JSON_QUERY(''[]'') AS lottables ' + CHAR(13)
-                            + ', COALESCE(SUM(PD.Qty),0) AS packedQty ' + CHAR(13)
-
-      SET @cSQLFromClause = @cSQLFromClause
-                          + ' FROM PACKDETAIL PD (NOLOCK) ' + CHAR(13)
-                          + ' INNER JOIN SKU S (NOLOCK) ' + CHAR(13)
-                          + ' ON PD.StorerKey = S.StorerKey ' + CHAR(13)
-                          + ' AND PD.SKU = S.SKU ' + CHAR(13)
-
-      SET @cSQLWhereClause = @cSQLWhereClause
-                           + ' WHERE PD.PickSlipNo = @cPickSlipNo ' + CHAR(13)
-                           + ' AND PD.CartonNo = @nCartonNo ' + CHAR(13)
-
-      SET @cSQLOrderByClause = @cSQLOrderByClause 
-                             + ' ORDER BY MAX(PD.EditDate) DESC ' + CHAR(13)
-
-      SET @cSQLParams = @cSQLParams
-                      + ' , @cPickSlipNo NVARCHAR(10) '
-                      + ' , @nCartonNo INT ' 
-
-      IF @cDynamicColumn3 = 'CUSTOM'
+      --General Logic
+      IF ISNULL(@cSKUList,'') <> ''
       BEGIN
-         SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
-         SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
-         SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
-         SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
-      END
+         SELECT @nSKUCount=COUNT(1)
+         FROM OPENJSON(@cSKUList)
+         WITH (SKU NVARCHAR(20))
 
-      SET @cSQLQuery = @cSQLSelectClause 
-                     + @cSQLFromClause 
-                     + @cSQLWhereClause 
-                     + @cSQLGroupByClause
-                     + @cSQLOrderByClause
-                     + @cSQLPageClause
-                     + @cSQLQueryEnd
+         IF @cLottableList <> ''
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                    + ', JSON_QUERY((SELECT lottable ' + CHAR(13)
+                                    + '  FROM OPENJSON(@cLottableList) WITH (sku NVARCHAR(20), lottable NVARCHAR(30)) t ' + CHAR(13)
+                                    + '  WHERE t.sku = S.sku FOR JSON PATH)) AS lottables ' + CHAR(13)
+         END
+         ELSE
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', JSON_QUERY(''[]'') AS lottables '  + CHAR(13)
+         END
 
-      -- PRINT @cSQLQuery
+         SET @cSQLFromClause = @cSQLFromClause 
+                           + ' FROM SKU S (NOLOCK) ' + CHAR(13)
+
+         SET @cSQLWhereClause = @cSQLWhereClause
+                              + ' WHERE S.StorerKey = @cStorerKey ' + CHAR(13)
       
-      --Store JSON result into variable
-      EXEC sp_executesql  @cSQLQuery
-                        , @cSQLParams
-                        , @oDynamicJson OUTPUT
-                        , @cPickSlipNo
-                        , @nCartonNo
+         IF @nCartonNo <> 0
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', COALESCE(SUM(PD.Qty),0) AS packedQty ' + CHAR(13)
+                                 + ', 0 AS ExpQty ' + CHAR(13)
+                                 + ', 0 AS QtyToPack ' + CHAR(13)
+            
+            SET @cSQLFromClause = @cSQLFromClause
+                              + ' LEFT JOIN PACKDETAIL PD (NOLOCK) ' + CHAR(13)
+                              + ' ON S.StorerKey = PD.StorerKey ' + CHAR(13)
+                              + ' AND S.SKU = PD.SKU ' + CHAR(13)
+                              + ' AND PD.PickSlipNo = @cPickSlipNo ' + CHAR(13)
+                              + ' AND PD.CartonNo = @nCartonNo ' + CHAR(13)
+
+         END
+         ELSE
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause
+                                 + ', 0 AS packedQty ' + CHAR(13)
+                                 + ', 0 AS ExpQty ' + CHAR(13)
+                                 + ', 0 AS QtyToPack ' + CHAR(13)
+         END
+
+         IF @nSKUCount = 1
+         BEGIN
+            SELECT @cSKU = SKU
+            FROM OPENJSON(@cSKUList)
+            WITH (SKU NVARCHAR(20))
+
+            SET @cSQLWhereClause = @cSQLWhereClause
+                                 + ' AND S.SKU = @cSKU '  + CHAR(13)
+         END
+         ELSE
+         BEGIN
+            SET @cSQLWhereClause = @cSQLWhereClause
+                                 + ' AND EXISTS (SELECT 1 FROM OPENJSON(@cSKUList) WITH (SKU NVARCHAR(20)) t WHERE t.SKU = S.SKU) '  + CHAR(13)
+         END
+
+         SET @cSQLOrderByClause = @cSQLOrderByClause 
+                              + ' ORDER BY LEN(S.SKU) ASC, MAX(S.EditDate) DESC ' + CHAR(13)
+
+         SET @cSQLParams = @cSQLParams
+                        + ' , @cLottableList NVARCHAR(1000) '
+                        + ' , @cStorerKey NVARCHAR(15) '
+                        + ' , @cPickSlipNo NVARCHAR(10) '
+                        + ' , @nCartonNo INT '
+                        + ' , @cSKU NVARCHAR(20) '
+                        + ' , @cSKUList NVARCHAR(1000) '
+
+         IF @cDynamicColumn3 = 'CUSTOM'
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+            SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+            SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+            SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+         END
+
+         SET @cSQLQuery = @cSQLSelectClause 
+                        + @cSQLFromClause 
+                        + @cSQLWhereClause 
+                        + @cSQLGroupByClause
+                        + @cSQLOrderByClause
+                        + @cSQLPageClause
+                        + @cSQLQueryEnd
+
+         --Store JSON result into variable
+         EXEC sp_executesql  @cSQLQuery
+                           , @cSQLParams
+                           , @oDynamicJson OUTPUT
+                           , @cLottableList
+                           , @cStorerKey
+                           , @cPickSlipNo
+                           , @nCartonNo
+                           , @cSKU
+                           , @cSKUList
+      END
+      ELSE
+      BEGIN
+         SET @cSQLSelectClause = @cSQLSelectClause 
+                              + ', JSON_QUERY(''[]'') AS lottables ' + CHAR(13)
+                              + ', COALESCE(SUM(PD.Qty),0) AS packedQty ' + CHAR(13)
+                              + ', 0 AS ExpQty ' + CHAR(13)
+                              + ', 0 AS QtyToPack ' + CHAR(13)
+
+         SET @cSQLFromClause = @cSQLFromClause
+                           + ' FROM PACKDETAIL PD (NOLOCK) ' + CHAR(13)
+                           + ' INNER JOIN SKU S (NOLOCK) ' + CHAR(13)
+                           + ' ON PD.StorerKey = S.StorerKey ' + CHAR(13)
+                           + ' AND PD.SKU = S.SKU ' + CHAR(13)
+
+         SET @cSQLWhereClause = @cSQLWhereClause
+                              + ' WHERE PD.PickSlipNo = @cPickSlipNo ' + CHAR(13)
+                              + ' AND PD.CartonNo = @nCartonNo ' + CHAR(13)
+
+         SET @cSQLOrderByClause = @cSQLOrderByClause 
+                              + ' ORDER BY MAX(PD.EditDate) DESC ' + CHAR(13)
+
+         SET @cSQLParams = @cSQLParams
+                        + ' , @cPickSlipNo NVARCHAR(10) '
+                        + ' , @nCartonNo INT ' 
+
+         IF @cDynamicColumn3 = 'CUSTOM'
+         BEGIN
+            SET @cSQLSelectClause = @cSQLSelectClause + JSON_VALUE(@cDynamicColumn5, '$.select')
+            SET @cSQLFromClause = @cSQLFromClause + JSON_VALUE(@cDynamicColumn5, '$.from')
+            SET @cSQLWhereClause = @cSQLWhereClause + JSON_VALUE(@cDynamicColumn5, '$.where')
+            SET @cSQLGroupByClause = @cSQLGroupByClause + JSON_VALUE(@cDynamicColumn5, '$.groupBy')
+         END
+
+         SET @cSQLQuery = @cSQLSelectClause 
+                        + @cSQLFromClause 
+                        + @cSQLWhereClause 
+                        + @cSQLGroupByClause
+                        + @cSQLOrderByClause
+                        + @cSQLPageClause
+                        + @cSQLQueryEnd
+
+         --Store JSON result into variable
+         EXEC sp_executesql  @cSQLQuery
+                           , @cSQLParams
+                           , @oDynamicJson OUTPUT
+                           , @cPickSlipNo
+                           , @nCartonNo
+      END
    END
 
    SET @cPackDetailList = @oDynamicJson

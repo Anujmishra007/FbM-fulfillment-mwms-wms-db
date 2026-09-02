@@ -174,7 +174,8 @@ DECLARE
    @nPickedQty          INT,    
    @nPickCheck          INT,    
    @nQty                INT,    
-   @cInSKU              NVARCHAR(40),    
+   @cInSKU              NVARCHAR(40),
+   @cInMax              NVARCHAR(1000),
    @cDecodeLabelNo      NVARCHAR(20),    
    @cShipperKey         NVARCHAR(15),    
    @cPickDetailKey      NVARCHAR(10),    
@@ -385,7 +386,8 @@ SELECT
    @cUserName        = UserName,    
    @cLottable02      = V_Lottable02,    
    @cOrderKey        = V_OrderKey,    
-   @cSKU             = V_SKU,    
+   @cSKU             = V_SKU,
+   @cInMax           = ISNULL(V_Max, ''),
    @cDropID          = V_CaseID,    
        
    @nIsMoveOrders    = V_Integer1,      
@@ -1747,9 +1749,9 @@ BEGIN
    BEGIN    
       -- Screen mapping    
       SET @cCartonNo = CASE WHEN @nDisAllowChangeCtnNo = 1 THEN ISNULL(RTRIM(@cOutField03),'') else ISNULL(RTRIM(@cInField03),'') END    
-      SET @cInSKU = ISNULL(RTRIM(@cInField06),'')    
-      SET @cOption = ISNULL(RTRIM(@cInField07),'')    
-      SET @cBarcode = ISNULL(RTRIM(@cInField06),'')    
+      SET @cInSKU = ISNULL(RTRIM(LEFT(@cInMax, 40)),'')
+      SET @cOption = ISNULL(RTRIM(@cInField07),'')
+      SET @cBarcode = ISNULL(RTRIM(LEFT(@cInMax, 60)),'')
 
       -- (james01)    
       IF ISNULL(@cOption, '') <> ''    
@@ -6176,8 +6178,9 @@ BEGIN
        -- UserName      = @cUserName,    
        V_Lottable02  = @cLottable02,    
        V_OrderKey    = @cOrderKey,    
-       V_SKU         = @cSKU,    
-       V_CaseID      = @cDropID,    
+       V_SKU         = @cSKU,
+       V_CaseID      = @cDropID,
+       V_Max         = '',
     
        V_Cartonno    = @nCartonNo,    
        V_FromScn     = @nFromScn,    

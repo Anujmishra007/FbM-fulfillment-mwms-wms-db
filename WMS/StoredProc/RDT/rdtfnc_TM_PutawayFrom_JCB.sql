@@ -1185,21 +1185,15 @@ BEGIN
                    FROM dbo.LOTXLOCXID LLI2 WITH(NOLOCK)
                    WHERE LLI2.Loc = LOC.Loc
                      AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
-                  COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn,
-                  SUM(LLI.Qty - LLI.QtyPicked) AS TotalQty
+                  COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
                FROM dbo.LOC WITH(NOLOCK)
-               INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                  ON LLI.Loc = LOC.Loc
                LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
-                  ON LLI.StorerKey = RP.StorerKey
+                  ON RP.StorerKey = @cStorerKey
                      AND LOC.Loc = RP.SuggestedLoc
                      AND RP.ID <> ''
-               WHERE Facility = @cFacility
-                  AND LLI.StorerKey = @cStorerKey
-                  AND LLI.Sku = @cSKU
+               WHERE LOC.Facility = @cFacility
                   AND LOC.Loc <> @cToLoc
                   AND LOC.Status = 'OK'
-                  AND LOC.PutawayZone = @cPutawayZone
                   AND LOC.LocationGroup = @cLocationGroup
                   AND LOC.LocationCategory = @cLocCategory
                   AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
@@ -1215,7 +1209,7 @@ BEGIN
                                  AND IH.Hold = '1'))
                GROUP BY LOC.Loc, LOC.MaxPallet) AS T
             WHERE T.PendingMoveIn + TotalID < T.MaxPallet
-            ORDER BY T.TotalQty DESC, T.Loc
+            ORDER BY T.Loc
          END
          ELSE
          BEGIN
@@ -1539,19 +1533,13 @@ BEGIN
                            AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
                         COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
                      FROM dbo.LOC WITH(NOLOCK)
-                     LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                        ON LLI.Loc = LOC.Loc
-                        AND LLI.Sku = @cSKU
-                        AND LLI.StorerKey = @cStorerKey
                      LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
                         ON RP.StorerKey = @cStorerKey
                         AND LOC.Loc = RP.SuggestedLoc
                         AND RP.ID <> ''
                      WHERE Facility = @cFacility
-                        AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.Qty IS NULL)
                         AND LOC.Loc = @cToLoc
                         AND LOC.Status = 'OK'
-                        AND LOC.PutawayZone = @cPutawayZone
                         AND LOC.LocationGroup = @cLocationGroup
                         AND LOC.LocationCategory = @cLocCategory
                         AND (@cChkLevelHeight <> '1' OR LOC.LocLevel <= @fMaximumLevel)
@@ -2374,16 +2362,11 @@ BEGIN
                                     AND LLI2.Qty - LLI2.QtyPicked > 0) AS TotalID,
                                  COUNT(DISTINCT NULLIF(RP.ID, '')) AS PendingMoveIn
                               FROM dbo.LOC WITH(NOLOCK)
-                              INNER JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK)
-                                 ON LLI.Loc = LOC.Loc
                               LEFT JOIN dbo.RFPutaway RP WITH(NOLOCK)
-                                 ON LLI.StorerKey = RP.StorerKey
+                                 ON RP.StorerKey = @cStorerKey
                                     AND LOC.Loc = RP.SuggestedLoc
                                     AND RP.ID <> ''
-                              WHERE Facility = @cFacility
-                                 AND LLI.StorerKey = @cStorerKey
-                                 AND LLI.Sku = @cSKU
-                                 AND LLI.Qty - LLI.QtyPicked > 0
+                              WHERE LOC.Facility = @cFacility
                                  AND LOC.Status = 'OK'
                                  AND LOC.PutawayZone = @cPutawayZone
                                  AND LOC.LocationGroup = @cLocationGroup

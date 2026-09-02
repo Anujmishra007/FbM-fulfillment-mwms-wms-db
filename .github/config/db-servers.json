@@ -1,0 +1,40 @@
+{
+  "PROD": {
+    "AME": {
+      "runner": "prod-ame-vm-management-agent",
+      "secret": "PROD_DB_ADMIN_USER_PASSWORD",
+      "levis_db": "USALEV4DWMS",
+      "servers": {
+        "wmsdb-a-utc-3": ["BRAWMS"],
+        "wmsdb-a-utc-4": ["CHLWMS", "CHLV1WMS"],
+        "wmsdb-a-utc-4d": ["USA4DWMS", "USA4DNJWMS", "CAN4DWMS"],
+        "wmsdb-a-utc-5": ["PANWMS", "COLWMS", "PERWMS", "PERV1WMS"],
+        "wmsdb-a-utc-6": ["MEXWMS"],
+        "wmsdb-a-utc-7d": ["MEX7DTIJWMS"],
+        "wmsdb-a-uslev4d": ["USALEV4DWMS"]
+      }
+    },
+    "EUR": {
+      "runner": "prod-weu-vm-management-agent",
+      "secret": "PROD_DB_ADMIN_USER_PASSWORD",
+      "servers": {
+        "wmsdb-a-utc": ["GBRWMS", "IRLWMS", "IRLV1WMS", "SENWMS", "TGOWMS"],
+        "wmsdb-a-utc1": ["NLDWMS", "HRVWMS", "DEUWMS", "DEUV1WMS", "ESPWMS", "DNKWMS", "SWEV1WMS", "CMRWMS", "NGAWMS", "BELWMS", "CZEWMS"],
+        "wmsdb-a-utc2": ["ZAFWMS", "ZAFV1WMS"],
+        "wmsdb-a-utc3": ["SAUWMS", "KENWMS", "TURV1WMS", "TURWMS"],
+        "wmsdb-a-utc4": ["AREWMS"]
+      }
+    },
+    "APA": {
+      "runner": "prod-apa-vm-management-agent",
+      "secret": "PROD_DB_ADMIN_USER_PASSWORD",
+      "servers": {
+        "wmsdb-a-utc11": ["AUSWMS"],
+        "wmsdb-a-utc530": ["INDWMS"],
+        "wmsdb-a-utc8": ["MYSWMS", "CHNWMS", "HKGWMS", "TWNWMS", "CHN2WMS"],
+        "wmsdb-a-utc7": ["VNMWMS", "IDNWMS", "THAWMS"],
+        "wmsdb-a-utc5": ["PAKWMS"]
+      }
+    }
+  }
+}

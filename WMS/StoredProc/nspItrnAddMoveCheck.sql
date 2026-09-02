@@ -2670,6 +2670,7 @@ BEGIN
                      ,@c_Sku        = @c_Sku
                      ,@c_Fromloc    = @c_fromloc
                      ,@c_ToLoc        = @c_ToLoc
+                     ,@c_Lot        = @c_Lot
                      ,@n_Qty =  @n_Qty
                      ,@c_Lottable01 = @c_lottable01
                      ,@b_Success    = @b_Success      OUTPUT

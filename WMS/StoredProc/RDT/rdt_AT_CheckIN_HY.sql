@@ -124,7 +124,7 @@ AS
          -- Check-In validation: latest RDTVASLOG Status must be 4 (Checked Out)
          IF @cOption = '1'
          BEGIN
-            IF @cLatestStatus <> '4'
+            IF @cLatestStatus NOT IN('', '4')
             BEGIN
                SET @nErrNo  = 278051
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CtrNotChkOut
@@ -136,7 +136,7 @@ AS
          -- Check-Out validation: latest record must be End Unloading (Status=3)
          IF @cOption = '9'
          BEGIN
-            IF @cLatestStatus <> '3'
+            IF @cLatestStatus NOT IN('', '3')
             BEGIN
                SET @nErrNo  = 278052
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- CtrNotUnload

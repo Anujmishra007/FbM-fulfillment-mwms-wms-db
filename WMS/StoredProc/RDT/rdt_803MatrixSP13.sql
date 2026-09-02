@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2025-11-27 1.0.0  Cuize    FCR-9003 Created                          */
+/* 2026-08-21 1.1.0  NickT    FCR-14204 Add Hospital logic              */
 /************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_803MatrixSP13] (
@@ -51,7 +52,6 @@ BEGIN
    DECLARE @cLF                     NVARCHAR( 1)
    DECLARE @bSuccess                INT
    DECLARE @cDropID                 NVARCHAR( 20)
---    DECLARE @cToDropID               NVARCHAR( 20)
    DECLARE @cOrderKey               NVARCHAR( 10)
    DECLARE @cCartID                 NVARCHAR( 10)
    DECLARE @cOrderLoadKey           NVARCHAR(10)
@@ -61,7 +61,9 @@ BEGIN
    DECLARE @cLightMode              NVARCHAR(4)
    DECLARE @cWaveKey                NVARCHAR(10)
    DECLARE @cDisplayPosition        NVARCHAR(10)
-
+   DECLARE @cBulkHospLocPrefix      NVARCHAR( 10)
+   DECLARE @cHospLocIdentifier      NVARCHAR( 10)
+   DECLARE @cToDropID               NVARCHAR( 20)
 
    SET @cCR = CHAR( 13)
    SET @cLF = CHAR( 10)
@@ -76,16 +78,25 @@ BEGIN
    SET @cResult09 = ''
    SET @cResult10 = ''
 
+   SET @cBulkHospLocPrefix = rdt.rdtGetConfig(@nFunc, 'BulkHospLoc', @cStorerKey)
+   IF ISNULL(@cBulkHospLocPrefix, '') = '' OR @cBulkHospLocPrefix = '0'
+      SET @cBulkHospLocPrefix = 'ONBR_HSP'
+
+   SET @cHospLocIdentifier = rdt.rdtGetConfig(@nFunc, 'HOSPLOCIDENTIFIER', @cStorerKey)
+   IF ISNULL(@cHospLocIdentifier, '') = '' OR @cHospLocIdentifier = '0'
+      SET @cHospLocIdentifier = 'HS'
+
    -- Get PTLTran info
    SELECT TOP 1
-      @cOrderKey = OrderKey,
-      @cDropID = DropID,
-      @cSKU = SKU,
-      @cOrderLoc = LOC,
-      @cStation = DeviceID,
+      @cOrderKey  = OrderKey,
+      @cDropID    = DropID,
+      @cSKU       = SKU,
+      @cOrderLoc  = LOC,
+      @cStation   = DeviceID,
       @cStorerkey = Storerkey,
       @cCartID    = SourceKey,
-      @cWaveKey   = Remarks
+      @cWaveKey   = Remarks,
+      @cToDropID  = CaseID
    FROM PTL.PTLTran WITH (NOLOCK)
    WHERE IPAddress = @cIPAddress
      AND DevicePosition = @cPosition
@@ -106,92 +117,126 @@ BEGIN
       @cLogicalPOS = S.LogicalPOS,
       @cToSlotLoc  = C.LOC
    FROM dbo.DeviceProfile AS S WITH (NOLOCK)      -- STATION
-   JOIN dbo.DeviceProfile AS C WITH (NOLOCK)      -- CART
-       ON C.LogicalPOS = S.LogicalPOS
-          AND C.DeviceType = 'CART'
-          AND C.DeviceID   = @cCartID
-          AND C.StorerKey  = @cStorerKey
+   INNER JOIN dbo.DeviceProfile AS C WITH (NOLOCK)      -- CART
+      ON C.LogicalPOS = S.LogicalPOS
+      AND C.DeviceType = 'CART'
+      AND C.DeviceID   = @cCartID
+      AND C.StorerKey  = @cStorerKey
    WHERE S.DeviceType = 'STATION'
      AND S.DeviceID   = @cStation
      AND S.LOC        = @cOrderLoc
      AND S.StorerKey  = @cStorerKey;
 
 
+   SET @cResult08= 'GOTO SLOT:' + @cOrderLoc
 
-   SET @cResult08= 'GOTO SLOT:'+@cOrderLoc
-
-   --1. All this SLOT finished
-   IF NOT EXISTS(
-      SELECT 1 FROM PICKDETAIL AS PD WITH (NOLOCK )
-         JOIN Orders O WITH (NOLOCK ) ON O.orderkey = PD.orderkey
-      WHERE PD.wavekey = @cwavekey
-        AND O.UserDefine05 = @cOrderLoc
-        AND PD.DropID NOT LIKE 'CART%'
-        --AND PD.pickdetailkey <> @cPickDetailkey
-   )
+   IF @cStation = 'HOSPITAL' -- Hospital
    BEGIN
-      SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)    -- flashing yellow and turns blue
-      SET @cResult09 = '** SLOT COMPLETE **'
-   END
+      SET @cResult08 += ' - ' + @cToDropID
 
-   --2. This SLOT not finish, this order not finished
+      IF NOT EXISTS( SELECT 1 
+            FROM dbo.PICKDETAIL PD WITH (NOLOCK )
+            INNER JOIN dbo.LOC WITH(NOLOCK) ON PD.Loc = LOC.Loc
+            WHERE PD.wavekey = @cwavekey
+               AND PD.OrderKey = @cOrderKey
+               AND LOC.Facility = @cFacility
+               AND PD.Qty > 0
+               AND (LEFT(LOC.Loc, LEN(@cHospLocIdentifier)) <> @cHospLocIdentifier OR LOC.LocationType <> 'HOSPITAL') 
+               AND LEFT(LOC.Loc, LEN(@cBulkHospLocPrefix)) <> @cBulkHospLocPrefix
+      )
+      BEGIN
+         SET @cResult09 = '** ORDER COMPLETE **'
+      END
+
+      IF NOT EXISTS( SELECT 1 
+            FROM dbo.PICKDETAIL PD WITH (NOLOCK )
+            INNER JOIN dbo.LOC WITH(NOLOCK) ON PD.Loc = LOC.Loc
+            WHERE PD.wavekey = @cwavekey
+               AND LOC.Facility = @cFacility
+               AND PD.Qty > 0
+               AND (LEFT(LOC.Loc, LEN(@cHospLocIdentifier)) <> @cHospLocIdentifier OR LOC.LocationType <> 'HOSPITAL') 
+               AND LEFT(LOC.Loc, LEN(@cBulkHospLocPrefix)) <> @cBulkHospLocPrefix
+      )
+      BEGIN
+         SET @cResult09 = '** WAVE COMPLETE **'
+      END
+   END
    ELSE
    BEGIN
-      SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey)    -- flashing yellow and turns off
-   END
-
-   --All pickdetail moved to cart slot
-   IF NOT EXISTS(SELECT 1
-      FROM PICKDETAIL AS PD WITH (NOLOCK)
-      JOIN Orders O WITH (NOLOCK) ON O.orderkey = PD.orderkey
-      WHERE PD.wavekey = @cwavekey
+      --1. All this SLOT finished
+      IF NOT EXISTS(
+         SELECT 1 FROM PICKDETAIL AS PD WITH (NOLOCK )
+            JOIN Orders O WITH (NOLOCK ) ON O.orderkey = PD.orderkey
+         WHERE PD.wavekey = @cwavekey
+         AND O.UserDefine05 = @cOrderLoc
          AND PD.DropID NOT LIKE 'CART%'
-        AND O.UserDefine04 = @cStation
-   )
-   BEGIN
-      SET @cResult09 = '** WAVE COMPLETED **'
+         --AND PD.pickdetailkey <> @cPickDetailkey
+      )
+      BEGIN
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)    -- flashing yellow and turns blue
+         SET @cResult09 = '** SLOT COMPLETE **'
+      END
+      --2. This SLOT not finish, this order not finished
+      ELSE
+      BEGIN
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey)    -- flashing yellow and turns off
+      END
 
-      SELECT TOP 1
-         @cDisplayPosition = DevicePosition
-      FROM DeviceProfile WITH(NOLOCK )
-      WHERE DeviceType = 'STATION'
-         AND DeviceID   = @cStation
-         AND StorerKey  = @cStorerKey
-         AND DeviceModel = 'DISPLAY'
+      --All pickdetail moved to cart slot
+      IF NOT EXISTS(SELECT 1
+         FROM PICKDETAIL AS PD WITH (NOLOCK)
+         JOIN Orders O WITH (NOLOCK) ON O.orderkey = PD.orderkey
+         WHERE PD.wavekey = @cwavekey
+            AND PD.DropID NOT LIKE 'CART%'
+         AND O.UserDefine04 = @cStation
+      )
+      BEGIN
+         SET @cResult09 = '** WAVE COMPLETED **'
 
-      EXEC PTL.isp_PTL_LightUpLoc -- SEND 'COMPLETE' TO THE DISPLAY
-           @n_Func           = 805
-         ,@n_PTLKey         = 0
-         ,@c_DisplayValue   = 'COMPLETE' --'Complete message'
-         ,@b_Success        = @bSuccess    OUTPUT
-         ,@n_Err            = @nErrNo      OUTPUT
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT
-         ,@c_DeviceID       = @cStation
-         ,@c_DevicePos      = @cDisplayPosition
-         ,@c_DeviceIP       = @cIPAddress
-         ,@c_LModMode       = @cLightMode
-         ,@c_DeviceModel    = 'BATCH12'
+         SELECT TOP 1
+            @cDisplayPosition = DevicePosition
+         FROM DeviceProfile WITH(NOLOCK )
+         WHERE DeviceType = 'STATION'
+            AND DeviceID   = @cStation
+            AND StorerKey  = @cStorerKey
+            AND DeviceModel = 'DISPLAY'
 
+         EXEC PTL.isp_PTL_LightUpLoc -- SEND 'COMPLETE' TO THE DISPLAY
+            @n_Func           = 805
+            ,@n_PTLKey         = 0
+            ,@c_DisplayValue   = 'COMPLETE' --'Complete message'
+            ,@b_Success        = @bSuccess    OUTPUT
+            ,@n_Err            = @nErrNo      OUTPUT
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT
+            ,@c_DeviceID       = @cStation
+            ,@c_DevicePos      = @cDisplayPosition
+            ,@c_DeviceIP       = @cIPAddress
+            ,@c_LModMode       = @cLightMode
+            ,@c_DeviceModel    = 'BATCH12'
+
+      END
+
+
+      IF @cLight = '1'  -- light up
+      BEGIN
+
+
+         EXEC PTL.isp_PTL_LightUpLoc
+            @n_Func           = 805
+            ,@n_PTLKey         = 0
+            ,@c_DisplayValue   = ''
+            ,@b_Success        = @bSuccess    OUTPUT
+            ,@n_Err            = @nErrNo      OUTPUT
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT
+            ,@c_DeviceID       = @cStation
+            ,@c_DevicePos      = @cPosition
+            ,@c_DeviceIP       = @cIPAddress
+            ,@c_LModMode       = @cLightMode
+
+      END
    END
 
-
-   IF @cLight = '1'  -- light up
-   BEGIN
-
-
-      EXEC PTL.isp_PTL_LightUpLoc
-           @n_Func           = 805
-         ,@n_PTLKey         = 0
-         ,@c_DisplayValue   = ''
-         ,@b_Success        = @bSuccess    OUTPUT
-         ,@n_Err            = @nErrNo      OUTPUT
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT
-         ,@c_DeviceID       = @cStation
-         ,@c_DevicePos      = @cPosition
-         ,@c_DeviceIP       = @cIPAddress
-         ,@c_LModMode       = @cLightMode
-
-   END
+   
 
 Quit:
 

@@ -12,6 +12,8 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-10-28   1.0  GCH225     Cloned from isp_TPS_ExtPrint09 (FCR-7330)        */
 /* 2026-06-29   2.0  GCH225     UWP-52413: Fix the GetReprintOpt for ReportType  */
+/* 2026-08-03   2.1  GCH225     UWP-63206: Follow the old SP logic AutoPrint     */
+/* 2026-08-06   2.2  GCH225     UWP-63009: EcomPlatform check only for label     */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument09] (
@@ -114,6 +116,7 @@ BEGIN
                      ON WMR.ReportID =WMRD.ReportID
                      WHERE WMRD.StorerKey  = @cStorerKey 
                      AND WMRD.IsPaperPrinter <> 'Y'
+                     AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                      AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
@@ -143,6 +146,7 @@ BEGIN
                      ON WMR.ReportID =WMRD.ReportID
                      WHERE WMRD.StorerKey  = @cStorerKey
                      AND WMRD.IsPaperPrinter <> 'Y'
+                     AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                      AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                        FROM CODELKUP C (NOLOCK)
                                        WHERE C.StorerKey = WMRD.StorerKey
@@ -181,6 +185,7 @@ BEGIN
       ON WMR.ReportID =WMRD.ReportID
       WHERE WMRD.StorerKey  = @cStorerKey 
       AND WMRD.IsPaperPrinter <> 'Y'
+      AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
       AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                         FROM CODELKUP C (NOLOCK)
                         WHERE C.StorerKey = WMRD.StorerKey
@@ -421,31 +426,27 @@ BEGIN
                   FROM PICKDETAIL (NOLOCK)
                   WHERE OrderKey = @cOrderKey
                   AND [Status] = '4'
-      )
+      ) OR @cEcomPlatform = 'JIT' -- If order is ecom type, then skip print paper packing list.
       BEGIN
          GOTO EXIT_SP
       END
 
-      IF NOT EXISTS ( SELECT 1 
-                  FROM WMREPORT WMR (NOLOCK) 
-                  JOIN WMREPORTDETAIL WMRD (NOLOCK)  
-                  ON WMR.ReportID = WMRD.ReportID
-                  WHERE WMRD.StorerKey  = @cStorerKey 
-                  AND WMR.ModuleID = @cModuleID
-                  AND WMRD.IsPaperPrinter = 'Y'
-                  AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
-                              FROM CODELKUP C (NOLOCK)
-                              WHERE C.StorerKey = WMRD.StorerKey
-                              AND C.LISTNAME = 'TPSPrtLast'
-                              AND C.Code = WMR.ReportType
-                             )))
-                  AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
-                  AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
-                  AND (
-                  (@cEcomPlatform = 'JIT' AND WMRD.ReportLineDesc = 'JIT')  
-                  OR 
-                  (@cEcomPlatform <> 'JIT')
-                  )
+      IF NOT EXISTS (SELECT 1 
+                     FROM WMREPORT WMR (NOLOCK) 
+                     JOIN WMREPORTDETAIL WMRD (NOLOCK)  
+                     ON WMR.ReportID = WMRD.ReportID
+                     WHERE WMRD.StorerKey  = @cStorerKey 
+                     AND WMR.ModuleID = @cModuleID
+                     AND WMRD.IsPaperPrinter = 'Y'
+                     AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
+                     AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
+                                 FROM CODELKUP C (NOLOCK)
+                                 WHERE C.StorerKey = WMRD.StorerKey
+                                 AND C.LISTNAME = 'TPSPrtLast'
+                                 AND C.Code = WMR.ReportType
+                              )))
+                     AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
+                     AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
       )  
       BEGIN
          SET @n_Continue = 3
@@ -461,6 +462,7 @@ BEGIN
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter = 'Y'
+                  AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                   AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
@@ -471,11 +473,6 @@ BEGIN
                   AND (WMR.KeyFieldName1 = '' OR WMR.KeyFieldName1 IS NULL)
                   AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
                   AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-                  AND (
-                  (@cEcomPlatform = 'JIT' AND WMRD.ReportLineDesc = 'JIT')  
-                  OR 
-                  (@cEcomPlatform <> 'JIT')
-                  )
       )
       BEGIN
          SET @n_Continue = 3
@@ -499,6 +496,7 @@ BEGIN
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
       AND WMRD.IsPaperPrinter = 'Y'
+      AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
       AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                   FROM CODELKUP C (NOLOCK)
                   WHERE C.StorerKey = WMRD.StorerKey
@@ -508,12 +506,8 @@ BEGIN
       AND WMR.ReportType =  CASE WHEN ISNULL(@cReportType,'') <> '' THEN  @cReportType ELSE   WMR.ReportType END
       AND (WMRD.UserName = '' OR WMRD.UserName = @c_UserID)
       AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)
-      AND (
-      (@cEcomPlatform = 'JIT' AND WMRD.ReportLineDesc = 'JIT')  
-      OR 
-      (@cEcomPlatform <> 'JIT')
-      )
       ORDER BY WMR.ReportID        
+
       OPEN CUR_PAPER
       FETCH NEXT FROM CUR_PAPER INTO  @cReportID
                                     , @cPrintSource

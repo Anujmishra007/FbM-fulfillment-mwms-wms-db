@@ -164,7 +164,8 @@ GO
 /*                                  validation check                           */
 /* 06-Oct-2025  AK01         2.8    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /* 28-May-2026  USH022       2.9    UWP-49056 - Avoid to reset status, asnstatus =0 */
-/*                                  when openQty>0 and UPDATE(ASNStatus) = 51 */
+/*                                  when openQty>0 and UPDATE(ASNStatus) = 51   */
+/* 31-Aug-2026  USH022       3.0    FCR-15217 - Auto ASN Finalize               */
 /*******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptHeaderUpdate]
 ON  [dbo].[RECEIPT]
@@ -241,6 +242,7 @@ BEGIN
           , @c_DisallowCloseASNB4Finalize NVARCHAR(30) --NJOW03
           , @c_ASNStatus_From                NVARCHAR(10) = ''                      --(Wan03)
           , @c_ASNStatus_To                  NVARCHAR(10) = ''                      --(Wan03)
+          , @c_ASNXBPSReceived               NVARCHAR(1) = ''                       --USH022-(3.0)
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    SET @c_StatusUpdated = 'N'                      -- (MC02)
@@ -683,6 +685,65 @@ BEGIN
    --(Wan02) - END
    IF @n_continue = 1 or @n_continue=2
    BEGIN
+       --start USH022 (ver-3.0)
+        SELECT @b_Success = 0
+            Execute nspGetRight
+                       @c_Facility,           -- facility
+                       @c_StorerKey,          -- Storerkey
+                       NULL,                  -- Sku
+                       'ASNXBPSReceived',     -- Configkey
+                       @b_Success              OUTPUT,
+                       @c_ASNXBPSReceived      OUTPUT,
+                       @n_err2                 OUTPUT,
+                       @c_ErrMsg               OUTPUT
+        IF @b_Success <> 1
+        BEGIN
+            SELECT @n_err = 163082 -- @n_err2
+            SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'
+        END
+      BEGIN TRY
+         IF @c_ASNXBPSReceived = '1'
+         BEGIN
+            DECLARE @c_XBPS_Received NVARCHAR(2) = '';
+            DECLARE @c_XBPS_Update NVARCHAR(2) = '';
+
+            SELECT @c_XBPS_Received = ISNULL(LTRIM(RTRIM(C.Code)),'')
+            FROM CODELKUP C (NOLOCK)
+            WHERE C.LISTNAME = 'ASNStatus'
+              AND C.Short = 'XBPSR'
+
+            SELECT @c_XBPS_Update = ISNULL(LTRIM(RTRIM(C.Code)),'')
+            FROM CODELKUP C (NOLOCK)
+            WHERE C.LISTNAME = 'ASNStatus'
+              AND C.Short = 'XBPSU'
+            IF @c_XBPS_Received = '' OR @c_XBPS_Update = ''
+            BEGIN
+                SET @n_continue = 3
+                SET @n_err = 163082
+                SET @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err)
+                              + ': ASNStatus codes not configured (XBPSR/XBPSU). (ntrReceiptHeaderUpdate)'
+            END
+            ELSE
+            BEGIN
+                UPDATE RECEIPT WITH (ROWLOCK)
+                 SET  ASNStatus = @c_XBPS_Received
+                 ,    Status = '9'
+                 FROM RECEIPT, INSERTED, DELETED
+                 WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
+                 AND   INSERTED.ReceiptKey = DELETED.ReceiptKey
+                 AND   DELETED.ASNStatus = @c_XBPS_Update
+                 AND   INSERTED.OpenQty = 0
+            END
+         END
+      END TRY
+      BEGIN CATCH
+         SET @n_continue = 3
+         SET @n_err = ERROR_NUMBER()
+         SET @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err)
+                       + ': ' + ERROR_MESSAGE() + ' (Update ASNStatus to 95. ntrReceiptHeaderUpdate)'
+      END CATCH
+       --end (ver-3.0)
+
        --start (ver-2.9)
       DECLARE @b_CustomImportSubmit BIT = 0;
 
@@ -2917,6 +2978,3 @@ ELSE
    END
 END
 GO
-
-
-

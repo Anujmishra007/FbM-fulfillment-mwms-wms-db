@@ -24,6 +24,7 @@ GO
 /* Date        Author   Ver   Purposes                                     */
 /* 10-Feb-2026 SSA01    1.0   Create UWP-47046                             */
 /* 25-May-2026 ADW035   1.1   Fix check for dynamicpick locations tasks    */
+/* 24-Aug-2026 Michael  1.2   FCR-15122 - Chg Priority for AM Order (ML01) */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspSKURPL01]
    @c_Storerkey  NVARCHAR(15)   = '',
@@ -61,6 +62,7 @@ BEGIN
 	 , @c_Priority NVARCHAR(1) = ''
 	 , @c_Type NVARCHAR(10) = ''
 	 , @c_DynamicPickLoc NVARCHAR(10) = ''
+    , @n_PendingTaskQty INT   --ML01
 
 
    WHILE @@TRANCOUNT > 0
@@ -89,6 +91,7 @@ BEGIN
            , QtyToReplen int NOT NULL DEFAULT(0)
            , Priority int NOT NULL DEFAULT(0)
            , Type  NVARCHAR(10)   NOT NULL DEFAULT('')
+           , HasTodayAMOrder INT NULL DEFAULT(0)  --ML01
           )
 
           INSERT INTO #skuQtyVivo
@@ -96,6 +99,7 @@ BEGIN
             MIN(ISNULL(sl.QtyLocationMinimum,0)) AS min,
             MAX(ISNULL(sl.QtyLocationLimit,0)) AS max
             ,0,0,0,ISNULL(sl.LocationType,'')
+            , ISNULL(MAX(CASE WHEN o.AddDate < CONVERT(NVARCHAR(11),GETDATE(),120)+'12:00' THEN 1 ELSE 0 END),0)   --ML01
           FROM ORDERS o WITH (NOLOCK)
           JOIN ORDERDETAIL od WITH (NOLOCK) on od.OrderKey = o.Orderkey
           LEFT JOIN SKUxLOC sl WITH (NOLOCK) ON sl.StorerKey = o.StorerKey
@@ -195,8 +199,9 @@ BEGIN
 
 
 	  DECLARE CUR_OPEN_ORDERS CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-       SELECT  Sku, Qty, Loc, Min, Max, QtyAvailable, QtyToReplen , Priority
-           , Type  FROM #skuQtyVivo sqt where sqt.Priority <> '5'
+       SELECT  Sku, Qty, Loc, Min, Max, QtyAvailable, QtyToReplen --ML01--, Priority
+           , CASE WHEN HasTodayAMOrder = 1 THEN '6' ELSE Priority END   --ML01
+           , Type FROM #skuQtyVivo sqt where sqt.Priority <> '5'
 
        OPEN CUR_OPEN_ORDERS
 
@@ -206,22 +211,27 @@ BEGIN
        BEGIN
 
               IF ISNULL(@c_Loc,'') = ''
-              BEGIN      --ADW035 start
-                     SELECT TOP 1 @c_DynamicPickLoc = LOC.LOC
-                        FROM LOC WITH (NOLOCK)
-                        WHERE LOC.LocationFlag = 'NONE'
-                          AND LOC.Status = 'OK'
-                          AND LOC.Facility = @c_Facility
-                          AND LOC.LocationType = @c_DynamicPickLocType
-                          AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
-                          AND NOT EXISTS (
-                            SELECT 1
-                            FROM LOTxLOCxID LLI WITH (NOLOCK)
-                            WHERE LLI.Loc = LOC.LOC
-                          AND LLI.StorerKey = @c_StorerKey
-                          AND (LLI.QTY - LLI.QTYPICKED - LLI.QtyReplen) > 0
-                            )
-                        ORDER BY LOC.LOC; --ADW035 end
+              BEGIN   --ADW035 start
+                 SELECT TOP 1 @c_DynamicPickLoc = LOC.LOC
+                 FROM LOC WITH (NOLOCK)
+                 LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON LOC.Loc = TD.ToLoc AND TD.Storerkey = @c_StorerKey   --ML01
+                       AND TD.Sku = @c_Sku AND TD.Status IN ('0','3','5')   --ML01
+                 WHERE LOC.LocationFlag = 'NONE'
+                   AND LOC.Status = 'OK'
+                   AND LOC.Facility = @c_Facility
+                   AND LOC.LocationType = @c_DynamicPickLocType
+                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE loc = LOC.LOC )
+--ML01                   AND NOT EXISTS (
+                   AND (TD.Taskdetailkey IS NOT NULL OR NOT EXISTS (   --ML01
+                     SELECT 1
+                     FROM LOTxLOCxID LLI WITH (NOLOCK)
+                     WHERE LLI.Loc = LOC.LOC
+                   AND LLI.StorerKey = @c_StorerKey
+                   AND (LLI.QTY - LLI.QTYPICKED - LLI.QtyReplen) > 0
+                    )
+                  )   --ML01
+                ORDER BY CASE WHEN TD.Pickdetailkey iS NULL THEN 2 ELSE 1 END,   --ML01
+                         LOC.LOC; --ADW035 end
 
                   IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI (NOLOCK)
                        WHERE LLI.STORERKEY =  @c_StorerKey
@@ -265,23 +275,94 @@ BEGIN
                       END
             END
 
+          --ML01-S
+          SELECT @n_PendingTaskQty = ISNULL(SUM(Qty),0)
+            FROM TASKDETAIL WITH(NOLOCK)
+           WHERE Storerkey  = @c_StorerKey
+             AND Sku        = @c_Sku
+             AND ToLoc      = @c_Loc
+             AND TaskType   = 'RPF'
+             AND Status IN ('0','3','5')
+
+          IF @n_QtyToReplen > 0 AND @n_QtyToReplen = @n_PendingTaskQty
+             SET @n_QtyToReplen = 0
+
+          IF NOT EXISTS(SELECT TOP 1 1
+                 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                 JOIN dbo.LOC        LOC WITH (NOLOCK) ON LLI.LOC = LOC.Loc
+                 JOIN dbo.ID         ID  WITH (NOLOCK) ON LLI.ID = ID.Id
+                 LEFT JOIN (
+                    SELECT Lot, FromLoc, FromID, QtyReplen = SUM(Qty)
+                      FROM dbo.TASKDETAIL WITH (NOLOCK)
+                     WHERE Storerkey = @c_StorerKey
+                       AND SKu = @c_sku
+                       AND TaskType = 'RPF'
+                       AND Status IN ('0','3','5')
+                     GROUP BY Lot, FromLoc, FromID
+                 ) TD ON LLI.Lot = TD.Lot AND LLI.Loc = TD.FromLoc AND LLI.ID = TD.FromID
+                 WHERE LLI.STORERKEY = @c_StorerKey
+                   AND LLI.Sku = @c_Sku
+                   AND LOC.Facility = @c_Facility
+                   AND LOC.Status = 'OK'
+                   AND ID.Status = 'OK'
+                   AND LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD')
+                   AND LOC.LocationCategory <> 'SHELVING'
+                   AND (LOC.Locationtype = 'BULK' OR LOC.LocationType = 'PICK')
+                   AND (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED - ISNULL(TD.QtyReplen,0)) > 0
+                   AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE Sku = @c_Sku AND fromLoc = LLI.LOC AND fromLot = LLI.LOT AND fromId = LLI.ID))
+          BEGIN
+             SET @n_QtyToReplen = 0
+          END
+
+          IF @n_QtyToReplen > 0
+          BEGIN
+             IF EXISTS(SELECT TOP 1 1 FROM TASKDETAIL WITH (NOLOCK)
+                       WHERE Storerkey  = @c_StorerKey
+                         AND Sku        = @c_Sku
+                         AND ToLoc      = @c_Loc
+                         AND TaskType   = 'RPF'
+                         AND Status     = '0')
+             BEGIN
+                DELETE TASKDETAIL WITH(ROWLOCK)
+                 WHERE Storerkey  = @c_StorerKey
+                   AND Sku        = @c_Sku
+                   AND ToLoc      = @c_Loc
+                   AND TaskType   = 'RPF'
+                   AND Status     = '0'
+             END
+          END
+          --ML01-E
+
           WHILE @n_QtyToReplen > 0
           BEGIN
                   SELECT Top 1 @c_FromLOC = LLI.LOC,
                                   @c_FromID = LLI.ID,
                                   @c_FromLot = LLI.Lot
+                             , @n_QtyAvailable = LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED - ISNULL(TD.QtyReplen,0)   --ML01
                          FROM     dbo.LOTxLOCxID LLI (NOLOCK)
                          JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.Loc
                          JOIN dbo.ID ID WITH (NOLOCK) ON LLI.ID = ID.Id
-                         JOIN dbo.SKUxLOC SL WITH (nolock) ON SL.StorerKey = LLI.StorerKey AND
-                            SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+--ML01                         JOIN dbo.SKUxLOC SL WITH (nolock) ON SL.StorerKey = LLI.StorerKey AND
+--ML01                            SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+                         --ML01-S
+                         LEFT JOIN (
+                            SELECT Lot, FromLoc, FromID, QtyReplen = SUM(Qty)
+                              FROM dbo.TASKDETAIL WITH (NOLOCK)
+                             WHERE Storerkey = @c_StorerKey
+                               AND SKu = @c_sku
+                               AND TaskType = 'RPF'
+                               AND Status IN ('0','3','5')
+                             GROUP BY Lot, FromLoc, FromID
+                         ) TD ON LLI.Lot = TD.Lot AND LLI.Loc = TD.FromLoc AND LLI.ID = TD.FromID
+                         --ML01-E
                          WHERE LOC.LocationFlag NOT IN ('DAMAGE', 'HOLD') AND
                                   LOC.Facility = @c_Facility AND
                                   LOC.Status = 'OK' AND
                                   ID.Status = 'OK' AND
                                   LOC.LocationCategory <> 'shelving' AND
                                   (LOC.Locationtype = 'BULK' OR LOC.LocationType = 'PICK') AND
-                                  (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0
+--ML01                                  (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED) > 0
+                                  (LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED - ISNULL(TD.QtyReplen,0)) > 0   --ML01
                                   AND LLI.STORERKEY =  @c_StorerKey
                                   AND LLI.Sku = @c_Sku
                                   AND NOT EXISTS (SELECT 1 FROM #replenVivo
@@ -292,7 +373,9 @@ BEGIN
                           CASE WHEN LOC.LocationType = 'PICK' THEN 0 ELSE 1 END,
                           CASE WHEN LOC.LocationType = 'BULK' THEN 0 ELSE 1 END,
                          LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED
+                         - ISNULL(TD.QtyReplen,0)   --ML01
 
+/* ML01-S
                   SELECT @n_QtyAvailable = SUM(LLI.QTY - LLI.QTYPICKED - LLI.QTYALLOCATED)
                          FROM  dbo.LOTxLOCxID LLI (NOLOCK)
                          JOIN dbo.LOC LOC WITH (NOLOCK) ON LLI.LOC = LOC.Loc
@@ -311,7 +394,7 @@ BEGIN
                                   AND LOC.loc = ISNULL(@c_FromLoc,'')
                                   AND LLI.LOT = ISNULL(@c_FromLot,'')
                                   AND LLI.ID = ISNULL(@c_FromID,'')
-
+ML01-E */
 
                   IF @n_QtyAvailable > 0 AND NOT EXISTS (SELECT 1 FROM #replenVivo WHERE Sku = @c_Sku AND fromLoc = @c_FromLoc
                   AND fromLot = @c_FromLot AND fromId = @c_FromID)
@@ -514,4 +597,6 @@ QUIT_SP:
       BEGIN TRAN
    END
 END
+GO
+GRANT EXECUTE ON [dbo].[mspSKURPL01] TO [NSQL]
 GO

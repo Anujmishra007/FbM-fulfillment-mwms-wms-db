@@ -16,6 +16,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2026-07-06 1.0  Cuize    FCR-13139 Created                                 */
+/* 2026-08-20 1.1  Cuize    UWP-64610 Fix Full UCC detection in Screen 6920   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Confirm_Order23] (
@@ -64,6 +65,8 @@ BEGIN
    DECLARE @cUserColor        NVARCHAR(20)
    DECLARE @nVirtualCartonCount INT
    DECLARE @bIsFullUCC        BIT
+   DECLARE @nUCCQty           INT
+   DECLARE @nPDQty            INT
    DECLARE @cPickDetailKey    NVARCHAR(10)
    DECLARE @cOrderKey         NVARCHAR(10)
    DECLARE @nQty              INT
@@ -105,8 +108,31 @@ BEGIN
    -- ========================================================================
    IF @nCurrentScn = 6920
    BEGIN
-      -- Check if Full UCC or Unit-Level (DropID is UCC = Full UCC)
+      -- UWP-64610: Full UCC detection - must check ALL conditions:
+      --   1. DropID exists in UCC.UCCNo
+      --   2. Only 1 distinct VirtualCartonID (CaseID) under this DropID
+      --   3. PickDetail total Qty = UCC total Qty (no partial processing)
+      SET @bIsFullUCC = 0
       IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cDropID)
+      BEGIN
+         SELECT @nUCCQty = ISNULL(SUM(Qty), 0)
+         FROM dbo.UCC WITH (NOLOCK)
+         WHERE UCCNo = @cDropID
+         AND StorerKey = @cStorerKey
+
+         SELECT @nVirtualCartonCount = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cDropID)),
+                @nPDQty = ISNULL(SUM(Qty), 0)
+         FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+           AND DropID = @cDropID
+           AND Qty > 0
+
+         -- Full UCC: only 1 CaseID AND no partial processing
+         IF @nVirtualCartonCount <= 1 AND @nPDQty = @nUCCQty
+            SET @bIsFullUCC = 1
+      END
+
+      IF @bIsFullUCC = 1
       BEGIN
          -- ========================================================================
          -- FULL UCC: Get virtual carton and jump to Full UCC section
@@ -132,7 +158,6 @@ BEGIN
            AND L.UserDefine02 = 'INPROGRESS'
            AND L.AddWho = @cUserName
 
-         SET @bIsFullUCC = 1
          GOTO FullUCCSort
       END
       ELSE
@@ -262,25 +287,33 @@ BEGIN
    /***********************************************************************************************
                                       DETERMINE SORT TYPE
    ***********************************************************************************************/
-   -- FCR-13139: Check Full UCC vs Unit Level sorting
+   -- UWP-64610: Check Full UCC vs Unit Level sorting
    -- Full UCC conditions:
    --   1. @PickDropID exists in UCC.UCCNo
-   --   2. AND only 1 distinct VirtualCartonID (CaseID) under this DropID
-   --      Note: NULL/empty CaseID counts as 1 VirtualCartonID
-   -- Unit Level: Multiple VirtualCartonIDs under the DropID
+   --   2. Only 1 distinct VirtualCartonID (CaseID) under this DropID
+   --   3. PickDetail total Qty = UCC total Qty (no partial processing)
+   -- Unit Level: Multiple VirtualCartonIDs OR partial UCC already processed
    SET @bIsFullUCC = 0
    IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cDropID)
    BEGIN
-      -- Count distinct VirtualCartonIDs (CaseID) for this DropID
-      -- ISNULL treats NULL/empty as single group
-      SELECT @nVirtualCartonCount = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cDropID))
+      -- Get UCC total qty
+      IF @nUCCQty IS NULL
+      BEGIN
+         SELECT @nUCCQty = ISNULL(SUM(Qty), 0)
+         FROM dbo.UCC WITH (NOLOCK)
+         WHERE UCCNo = @cDropID
+      END
+
+      -- Count distinct VirtualCartonIDs and total PickDetail qty
+      SELECT @nVirtualCartonCount = COUNT(DISTINCT ISNULL(NULLIF(CaseID, ''), @cDropID)),
+             @nPDQty = ISNULL(SUM(Qty), 0)
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
         AND DropID = @cDropID
         AND Qty > 0
 
-      -- Full UCC: Only 1 VirtualCartonID (or all NULL/empty)
-      IF @nVirtualCartonCount <= 1
+      -- Full UCC: Only 1 VirtualCartonID AND no partial processing
+      IF @nVirtualCartonCount <= 1 AND @nPDQty = @nUCCQty
          SET @bIsFullUCC = 1
    END
 
@@ -310,7 +343,6 @@ FullUCCSort:
         AND U.UCCNo = @cDropID
 
       -- Get UCC total qty (for allocated move)
-      DECLARE @nUCCQty INT
       SELECT @nUCCQty = ISNULL(SUM(Qty), 0)
       FROM dbo.UCC WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey

@@ -28,6 +28,8 @@ GO
 /* 2026-07-03   Michael    1.4   FCR-12991 Add AppLock and ConfigKey       */
 /*                               NoQtyReplen, Sourcekey, Message03 (ML04)  */
 /* 2026-07-28   Michael    1.5   FCR-14924 TH-UQNMD Replenishment (ML05)   */
+/* 2026-08-14   Michael    1.6   FCR-12496 Add new config (ML06) (UOM,     */
+/*                               ZeroSystemQty,TaskGroupKey,SourcePriority)*/
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_GenReplenishmentTask_01]
@@ -70,11 +72,14 @@ BEGIN
    TransitLOC         Transit LOC expression                                                Y/N           SQL
    TD_TransitLOC      TaskDetail Transit LOC expression                                     Y/N           SQL
    TaskGrouping       Task Grouping expression                                              Y/N           SQL
+   TaskGroupkey       Task Groupkey                                                         Y/N           SQL
    ReplenQty          Replenish Qty expression                                              Y/N           SQL
    SL_LocType         SKUxLOC LocationType expression                                       Y/N           SQL
    TaskType           Task Type expression (Value will be ignored if SQL setup)             Y/N    Value  SQL
    TaskPriority       Task Priority expression (Value will be ignored if SQL setup)         Y/N    Value  SQL
+   SourcePriority     Task Source Priority expression (Value will be ignored if SQL setup)  Y/N    Value  SQL
    PickMethod         Pick Method Value (Value will be ignored if SQL setup)                Y/N    Value  SQL
+   UOM                Task Detail UOM                                                       Y/N    Value  SQL
    SourceKey          Source Key (Value will be ignored if SQL setup)                       Y/N    Value  SQL
    Message03          Message03 (Value will be ignored if SQL setup)                        Y/N    Value  SQL
    NoQtyReplen        Do not use QtyReplen (Value will be ignored if SQL setup)             Y/N    0/1    SQL
@@ -91,6 +96,7 @@ BEGIN
    NoErrIfAppLockFail No Error If App Lock Fail                                             Y/N    0/1
    NoChkCommingleSku  Not Check CommingleSku                                                Y/N    0/1
    QtyAvlExclQtyAlc   QtyAvailable Exclude QtyAllocated                                     Y/N    0/1
+   ZeroSystemQty      Force Zero SystemQty                                                  Y/N    0/1
    Clear_SourceType   Delete TaskDetail SourceType(s)                                       Y/N    Value
    Clear_TaskType     Delete TaskDetail TaskType(s)                                         Y/N    Value
 */
@@ -105,6 +111,7 @@ BEGIN
          , @c_SP_Name                NVARCHAR(128) = 'isp_GenReplenishmentTask_01'
          , @c_Packkey                NVARCHAR(10)
          , @c_UOM                    NVARCHAR(10)
+         , @c_UOM2                   NVARCHAR(10)   --ML06
          , @n_Pallet                 INT
          , @n_FullPackQty            INT
          , @c_LocationType           NVARCHAR(10)
@@ -122,6 +129,7 @@ BEGIN
          , @n_Cnt                    INT
          , @n_QtyAvailable           INT
          , @c_Priority               NVARCHAR(10)
+         , @c_SourcePriority         NVARCHAR(10) = ''   --ML06
          , @c_ReplenishmentGroup     NVARCHAR(10) = ''
          , @c_ReplExclProdNearExpiry NVARCHAR(10)
          , @n_NearExpiryDay          INT
@@ -146,9 +154,12 @@ BEGIN
          , @c_TransitLOC_Exp         NVARCHAR(MAX)= ''
          , @c_TD_TransitLOC_Exp      NVARCHAR(MAX)= ''   --ML02
          , @c_TaskGrouping_Exp       NVARCHAR(MAX)= ''
+         , @c_TaskGroupKey_Exp       NVARCHAR(MAX)= ''   --ML06
          , @c_TaskPriority_Exp       NVARCHAR(MAX)= ''
+         , @c_SourcePriority_Exp     NVARCHAR(MAX)= ''   --ML06
          , @c_TaskType_Exp           NVARCHAR(MAX)= ''
          , @c_PickMethod_Exp         NVARCHAR(MAX)= ''
+         , @c_UOM_Exp                NVARCHAR(MAX)= ''   --ML06
          , @c_ReplenQty_Exp          NVARCHAR(MAX)= ''   --ML02
          , @c_SL_LocType_Exp         NVARCHAR(MAX)= ''   --ML03
          , @c_SourceKey_Exp          NVARCHAR(MAX)= ''   --ML04
@@ -157,7 +168,9 @@ BEGIN
          , @c_DelPendingTask_Exp     NVARCHAR(MAX)= ''   --ML04
          , @c_TaskType_Val           NVARCHAR(10) = ''
          , @c_PickMethod_Val         NVARCHAR(10) = ''
+         , @c_UOM_Val                NVARCHAR(10) = ''   --ML06
          , @c_TaskPriority_Val       NVARCHAR(10) = ''
+         , @c_SourcePriority_Val     NVARCHAR(10) = ''   --ML06
          , @c_SourceKey_Val          NVARCHAR(30) = ''   --ML04
          , @c_Message03_Val          NVARCHAR(20) = ''   --ML04
          , @c_NoQtyReplen_Val        NVARCHAR(10) = ''   --ML04
@@ -169,6 +182,7 @@ BEGIN
          , @c_FP_Replen              NVARCHAR(10) = ''   --ML05
          , @c_NoChkCommingleSku      NVARCHAR(10) = ''   --ML05
          , @c_QtyAvlExclQtyAlc       NVARCHAR(10) = ''   --ML05
+         , @c_ZeroSystemQty          NVARCHAR(10) = ''   --ML06
          , @c_DisableAppLock         NVARCHAR(10) = ''   --ML04
          , @c_NoErrIfAppLockFail     NVARCHAR(10) = ''   --ML04
          , @c_Clear_SourceType       NVARCHAR(250)= ''   --ML03
@@ -205,6 +219,7 @@ BEGIN
          , @c_ToLOC                  NVARCHAR(10) = ''
          , @c_FinalLOC               NVARCHAR(10) = ''
          , @c_GroupKey               NVARCHAR(10) = ''
+         , @c_TaskGroupKey           NVARCHAR(10) = ''   --ML06
          , @c_TaskGrouping           NVARCHAR(100)= ''
          , @c_TaskGrouping_Prev      NVARCHAR(100)= ''
          , @n_PendingTaskQty         INT          = 0
@@ -227,7 +242,7 @@ BEGIN
            @c_errmsg NVARCHAR(255)
 
    SET @c_Facility = @c_Zone01
-   
+
 
    --ML04-S
    SELECT @c_DisableAppLock     = ISNULL(TRIM(MAX(CASE WHEN Code = 'DisableAppLock'     AND ISNULL(Short,'')<>'N' THEN Long  END)),'')
@@ -278,9 +293,12 @@ BEGIN
         , @c_TransitLOC_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'TransitLOC'        AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML01 --ML05
         , @c_TD_TransitLOC_Exp  = ISNULL(TRIM(MAX(CASE WHEN Code = 'TD_TransitLOC'     AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML02 --ML05
         , @c_TaskGrouping_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGrouping'      AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML01 --ML05
+        , @c_TaskGroupKey_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskGroupKey'      AND ISNULL(Short,'')<>'N' THEN Notes END)),'')          --ML06
         , @c_TaskType_Exp       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML01 --ML05
         , @c_TaskPriority_Exp   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML01 --ML05
+        , @c_SourcePriority_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourcePriority'    AND ISNULL(Short,'')<>'N' THEN Notes END)),'')          --ML06
         , @c_PickMethod_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML01 --ML05
+        , @c_UOM_Exp            = ISNULL(TRIM(MAX(CASE WHEN Code = 'UOM'               AND ISNULL(Short,'')<>'N' THEN Notes END)),'')          --ML06
         , @c_ReplenQty_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'ReplenQty'         AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML02 --ML05
         , @c_SL_LocType_Exp     = ISNULL(TRIM(MAX(CASE WHEN Code = 'SL_LocType'        AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML03 --ML05
         , @c_SourceKey_Exp      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourceKey'         AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML04 --ML05
@@ -289,7 +307,9 @@ BEGIN
         , @c_DelPendingTask_Exp = ISNULL(TRIM(MAX(CASE WHEN Code = 'DeletePendingTask' AND ISNULL(Short,'')<>'N' THEN Notes END)),'')   --ML04 --ML05
         , @c_TaskType_Val       = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskType'          AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML01 --ML05
         , @c_PickMethod_Val     = ISNULL(TRIM(MAX(CASE WHEN Code = 'PickMethod'        AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML01 --ML05
+        , @c_UOM_Val            = ISNULL(TRIM(MAX(CASE WHEN Code = 'UOM'               AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML06
         , @c_TaskPriority_Val   = ISNULL(TRIM(MAX(CASE WHEN Code = 'TaskPriority'      AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML05
+        , @c_SourcePriority_Val = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourcePriority'    AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML06
         , @c_SourceKey_Val      = ISNULL(TRIM(MAX(CASE WHEN Code = 'SourceKey'         AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML04 --ML05
         , @c_Message03_Val      = ISNULL(TRIM(MAX(CASE WHEN Code = 'Message03'         AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML04 --ML05
         , @c_NoQtyReplen_Val    = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoQtyReplen'       AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML04 --ML05
@@ -301,6 +321,7 @@ BEGIN
         , @c_FP_Replen          = ISNULL(TRIM(MAX(CASE WHEN Code = 'FP_Replen'         AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML05
         , @c_NoChkCommingleSku  = ISNULL(TRIM(MAX(CASE WHEN Code = 'NoChkCommingleSku' AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML05
         , @c_QtyAvlExclQtyAlc   = ISNULL(TRIM(MAX(CASE WHEN Code = 'QtyAvlExclQtyAlc'  AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML05
+        , @c_ZeroSystemQty      = ISNULL(TRIM(MAX(CASE WHEN Code = 'ZeroSystemQty'     AND ISNULL(Short,'')<>'N' THEN Long  END)),'')          --ML06
         , @c_Clear_SourceType   = ISNULL(TRIM(MAX(CASE WHEN Code = 'Clear_SourceType'  AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML03 --ML05
         , @c_Clear_TaskType     = ISNULL(TRIM(MAX(CASE WHEN Code = 'Clear_TaskType'    AND ISNULL(Short,'')<>'N' THEN Long  END)),'')   --ML03 --ML05
         , @n_LocTolerance       = ISNULL(TRY_PARSE(ISNULL(MAX(CASE WHEN Code='LocTolerance'    AND ISNULL(Short,'')<>'N' THEN Long END),'') AS FLOAT), 1)   --ML02 --ML05
@@ -323,6 +344,8 @@ BEGIN
 
    IF @c_ReplCond_LLI_Exp LIKE 'AND %'
       SET @c_ReplCond_LLI_Exp = SUBSTRING(@c_ReplCond_LLI_Exp, 5, LEN(@c_ReplCond_LLI_Exp))
+      
+   SET @c_ZeroSystemQty = CASE WHEN ISNULL(@c_ZeroSystemQty,'') IN ('1','Y') THEN 'Y' ELSE 'N' END   --ML06
 
    IF ISNULL(@n_LocTolerance,0) = 0    --ML02
       SET @n_LocTolerance = 1          --ML02
@@ -1230,6 +1253,21 @@ BEGIN
                                       ELSE '''N'''
                                  END
    --ML04-E
+   --ML06-S
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', UOM2='         + CASE WHEN ISNULL(@c_UOM_Exp  ,'')<>'' THEN @c_UOM_Exp
+                                      WHEN ISNULL(@c_UOM_Val  ,'')<>'' THEN '''' + REPLACE(RTRIM(@c_UOM_Val),'''','''''') + ''''
+                                      ELSE ''''''
+                                 END
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', TaskGroupKey=' + CASE WHEN ISNULL(@c_TaskGroupKey_Exp  ,'')<>'' THEN @c_TaskGroupKey_Exp
+                                      ELSE ''''''
+                                 END
+   SET @c_SQLStatement = @c_SQLStatement
+     +       ', SourcePriority='+CASE WHEN ISNULL(@c_SourcePriority_Exp,'')<>'' THEN @c_SourcePriority_Exp
+                                      WHEN ISNULL(@c_SourcePriority_Val,'')<>'' THEN '''' + REPLACE(@c_SourcePriority_Val,'''','''''') + ''''
+                                      ELSE '''''' END
+   --ML06-E
      + ' FROM #TEMP_REPLENISHMENT RPL'
      + ' LEFT JOIN dbo.LOC FRLOC WITH(NOLOCK) ON RPL.FromLoc=FRLOC.Loc'
      + ' LEFT JOIN dbo.LOC TOLOC WITH(NOLOCK) ON RPL.ToLoc=TOLOC.Loc'
@@ -1261,9 +1299,13 @@ BEGIN
             @c_TransitLOC, @c_TaskGrouping, @c_TaskType, @c_PickMethod   --ML01
           , @c_TD_TransitLOC   --ML02
           , @c_SourceKey, @c_Message03, @c_NoQtyReplen   --ML04
+          , @c_UOM2, @c_TaskGroupKey, @c_SourcePriority  --ML06
 
       IF @@FETCH_STATUS <> 0
          BREAK
+
+      IF ISNULL(@c_TaskGroupKey_Exp,'')<>''   --ML06
+         SET @c_GroupKey = @c_TaskGroupKey    --ML06
 
       --ML01-S
       IF ISNULL(@c_TaskGrouping,'') <> '' AND ISNULL(@c_TaskGrouping,'') <> ISNULL(@c_TaskGrouping_Prev,'')
@@ -1375,8 +1417,17 @@ BEGIN
       END
       ELSE IF @c_ReplenType = 'T'
       BEGIN
-         SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END   --ML01
+         --ML06-S
+         IF ISNULL(@c_UOM2,'') <> ''
+            SET @c_UOM = @c_UOM2
+         ELSE
+         --ML06-E
+            SET @c_UOM = CASE WHEN ISNULL(@c_UCCNo,'')<>'' THEN '2' ELSE '6' END   --ML01
+
          SET @n_QtyReplen = CASE WHEN ISNULL(@c_NoQtyReplen,'') IN ('1','Y') THEN 0 ELSE @n_FromQty END   --ML04
+
+         IF ISNULL(@c_SourcePriority,'') = ''     --ML06
+            SET @c_SourcePriority = @c_Priority   --ML06
 
          EXEC isp_InsertTaskDetail
               @c_TaskType              = @c_TaskType    --ML01
@@ -1396,7 +1447,8 @@ BEGIN
             , @c_DropID                = @c_UCCNo
             , @c_PickMethod            = @c_PickMethod  --ML01
             , @c_Priority              = @c_Priority
-            , @c_SourcePriority        = @c_Priority
+--ML06            , @c_SourcePriority        = @c_Priority
+            , @c_SourcePriority        = @c_SourcePriority   --ML06
             , @c_SourceType            = @c_SP_Name
             , @c_SourceKey             = @c_SourceKey  --ML04
             , @c_OrderKey              = ''
@@ -1404,6 +1456,7 @@ BEGIN
             , @n_QtyReplen             = @n_QtyReplen  --ML04
             , @c_Loadkey               = ''
             , @c_AreaKey               = '?F'  -- ?F=Get from location areakey
+            , @c_ZeroSystemQty         = @c_ZeroSystemQty   --ML06
             , @c_TransitLOC            = @c_TransitLOC --ML02
             , @c_FinalLOC              = @c_FinalLOC   --ML01
             , @c_Message03             = @c_Message03  --ML04
