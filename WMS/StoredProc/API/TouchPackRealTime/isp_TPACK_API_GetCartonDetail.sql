@@ -14,6 +14,7 @@ GO
 /* 2026-02-06   2.0  GCH225     UWP-48119: 1 tote, 1 carton, 1 sku Scenario      */
 /* 2026-03-16   2.1  GCH225     FCR-11632: Check AuditLog with Status PENDAUDIT  */
 /* 2026-05-19   2.2  GCH225     FCR-13354: Fix for auto close carton scenario    */
+/* 2026-08-19   2.3  JWF011     UWP-61321: Update get carton detail logic        */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_GetCartonDetail] (
@@ -197,6 +198,12 @@ BEGIN
                   FROM PACKDETAIL (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo
                   AND CartonNo = @nCartonNo
+   )
+   AND NOT EXISTS (SELECT 1 
+                   FROM STORERCONFIG (NOLOCK)
+                   WHERE StorerKey = @cStorerKey
+                   AND ConfigKey = 'TPS-ShowPickDetailSKU'
+                   AND SValue = '1'
    )
    BEGIN
       IF @cAuthority = '1'

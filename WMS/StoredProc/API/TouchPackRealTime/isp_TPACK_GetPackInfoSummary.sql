@@ -11,6 +11,7 @@
 /* 2026-02-11   3.0  GCH225     UWP-48267: Fix AllocQty and PickQty Null issue   */
 /* 2026-04-27   3.1  GCH225     UWP-54975: Fix ToteConso display PackInfo issue  */
 /* 2026-07-07   3.2  MBR282     UWP-60522: Delete TempCarton if TPS-CtnRec 0     */
+/* 2026-08-11   3.3  OAN031     UWP-61678: Update To Display Hold Carton Number  */
 /*********************************************************************************/
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPackInfoSummary] (
      @cType                NVARCHAR(30)      = ''
@@ -42,6 +43,7 @@ BEGIN
 
          , @nTtlCurCtnPackedQty     INT
          , @nTtlPackedCtnCount      INT
+         , @nTtlHoldCtnCount        INT
          , @nTtlSkuCount            INT
          , @nTtlPackedQty           INT
          , @nTtlAllocQty            INT
@@ -64,6 +66,7 @@ BEGIN
    SET @c_ErrMsg                 = ''  
    SET @nTtlCurCtnPackedQty      = 0
    SET @nTtlPackedCtnCount       = 0
+   SET @nTtlHoldCtnCount         = 0
    SET @nTtlSkuCount             = 0
    SET @nTtlPackedQty            = 0
    SET @nTtlAllocQty             = 0
@@ -170,6 +173,41 @@ BEGIN
                               )
                   )
       END
+   END
+   -- Calculate the total HOLD carton count
+   IF @cType = 'toteid' AND @cDropID <> ''
+   BEGIN
+      -- ToteID / DropID: Count only HOLD cartons whose PACKDETAIL belongs to the current DropID.
+      SELECT @nTtlHoldCtnCount = ISNULL(COUNT(DISTINCT PD.CartonNo), 0)
+      FROM PACKDETAIL PD (NOLOCK)
+      INNER JOIN PACKINFO PI (NOLOCK) ON PI.PickSlipNo = PD.PickSlipNo
+      AND PI.CartonNo = PD.CartonNo
+      WHERE PD.DropID = @cDropID
+      AND PI.CartonStatus = 'HOLD'
+   END
+   ELSE IF @bIsCustom = 1 AND @cType = 'order'AND @cOrderKey <> ''
+   BEGIN
+      -- OrderKey: Count only HOLD cartons whose PACKDETAIL lines belong specifically to the current OrderKey.
+      SELECT @nTtlHoldCtnCount = ISNULL(COUNT(DISTINCT PD.CartonNo), 0)
+      FROM PACKDETAIL PD (NOLOCK)
+      INNER JOIN PICKDETAIL PD2 (NOLOCK) ON PD2.CaseID = PD.LabelNo
+      AND PD2.SKU = PD.SKU
+      WHERE PD.PickSlipNo = @cPickSlipNo
+      AND PD2.OrderKey = @cOrderKey
+      AND EXISTS ( SELECT 1
+                   FROM PACKINFO PI (NOLOCK)
+                   WHERE PI.PickSlipNo = PD.PickSlipNo
+                   AND PI.CartonNo = PD.CartonNo
+                   AND PI.CartonStatus = 'HOLD'
+      )
+   END
+   ELSE IF @cPickSlipNo <> '' 
+   BEGIN
+      -- PickSlip:Count all distinct HOLD cartons belonging to the current PickSlip.
+      SELECT @nTtlHoldCtnCount = ISNULL(COUNT(DISTINCT CartonNo), 0)
+      FROM PACKINFO (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND CartonStatus = 'HOLD'
    END
 
    IF @bIsDiscrete = 1
@@ -605,6 +643,7 @@ PROCEED:
    SET @b_Success = 1
    SET @cPackInfoJson = ISNULL ((SELECT     @nTtlCurCtnPackedQty AS nTtlCurCtnPackedQty
                                           , @nTtlPackedCtnCount AS nTtlPackedCtnCount
+                                          , @nTtlHoldCtnCount AS nTtlHoldCtnCount
                                           , @nTtlSkuCount AS nTtlSkuCount
                                           , @nTtlPackedQty AS nTtlPackedQty
                                           , @nTtlAllocQty AS nTtlAllocQty

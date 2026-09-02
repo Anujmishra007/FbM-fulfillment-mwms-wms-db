@@ -24,7 +24,9 @@ EXEC API.TouchPadAddMsg 10220, 10, 'Scanned Consol PickSlip Order is from a diff
 EXEC API.TouchPadAddMsg 10221, 10, 'Scanned Consol ToteID is from a different storer. Please use another valid ToteID.',    'us_english'
 EXEC API.TouchPadAddMsg 10222, 10, 'Scanned Consol ToteID is from a different facility. Please use another valid ToteID.',    'us_english'
 EXEC API.TouchPadAddMsg 10223, 10, 'All orders associated with the scanned ToteID have already been closed. Revisiting the same ToteID is not allowed as it might be used for different orders.',    'us_english'
-
+EXEC API.TouchPadAddMsg 10224, 10, 'Empty Orders UserDefine06.',    'us_english'
+EXEC API.TouchPadAddMsg 10225, 10, 'Wrong shipment ETA date',    'us_english'
+EXEC API.TouchPadAddMsg 10226, 10, 'Missing SKU ExtendedField03/21/22.',    'us_english'
 
 
 

@@ -9,7 +9,9 @@ GO
 /* Copyright      : Maersk                                                       */
 /*                                                                               */
 /* Purpose        : Pack Detail Wrapper                                          */
-/* Called By      : isp_TPACK_GetPackDetail                                      */    
+/* Called By      : isp_TPACK_API_GetCartonDetail                                */
+/*                  isp_TPACK_API_SearchSKU                                      */
+/*                  isp_TPACK_ValidateUserInput                                  */
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2026-06-12   1.0  JWF011     FCR-13553: Created                               */

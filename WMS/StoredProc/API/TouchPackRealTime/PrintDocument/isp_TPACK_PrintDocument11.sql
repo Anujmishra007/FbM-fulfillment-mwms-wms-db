@@ -14,6 +14,8 @@ GO
 /* 2026-05-27   1.1  JWF011     FCR-13123: Fix CriteriaMatching05 rule           */
 /* 2026-06-05   1.2  JWF011     FCR-13123: Fix Label Print                       */
 /* 2026-07-13   1.3  JWF011     UWP-60575: Fix Label Print                       */
+/* 2026-8-13    1.4  OAN031     FCR-15485: Add PrintAfterPacked config to control*/
+/*                              print after last carton packed                   */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument11] (
@@ -82,6 +84,7 @@ BEGIN
 
    DECLARE @cCriteriaMatching05      NVARCHAR(MAX)
          , @bIsCriteriaMatched       BIT = 0
+         , @nIsPrintAfterPacked      INT = 0 -- 0(default/disabled),1(Print after last carton packed),2(print only when packed status =9)
 
    DECLARE @tCartonList TABLE (
       CartonNo INT
@@ -165,6 +168,11 @@ BEGIN
          SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Label: No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null.'
          GOTO EXIT_SP
       END
+      -- FCR-15485 - Riman Enhancement
+      SELECT @nIsPrintAfterPacked = ISNULL(TRY_CAST(sValue AS INT), 0)
+      FROM STORERCONFIG (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND ConfigKey = 'TPS-PrintAfterPacked'
 
       DECLARE CUR_LBL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT  WMR.ReportID
@@ -237,13 +245,21 @@ BEGIN
                               UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
                            ) THEN 1 ELSE 0 END
 
-         IF (EXISTS (SELECT 1
-                     FROM STORERCONFIG (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND ConfigKey = 'TPS-PrintAfterPacked'
-                     AND sValue = '1'
-                     )
-            AND @bIsLastCarton = 1
+         -- IF (EXISTS (SELECT 1
+         --             FROM STORERCONFIG (NOLOCK)
+         --             WHERE StorerKey = @cStorerKey
+         --             AND ConfigKey = 'TPS-PrintAfterPacked'
+         --             AND sValue = '1'
+         --             )
+         --    AND @bIsLastCarton = 1
+         -- )
+         IF ( (@nIsPrintAfterPacked = 1 AND @bIsLastCarton = 1)
+            OR (@nIsPrintAfterPacked = 2 AND EXISTS (
+               SELECT 1 FROM PACKHEADER (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               AND [Status] = '9'
+               )
+            )
          )
          BEGIN 
             SET  @cSQL = ' SELECT  @cParams1 = '+ @cFieldName1  

@@ -25,6 +25,9 @@ GO
 /* 2026-05-19   3.1  GCH225     FCR-13354: Fix for auto close carton scenario    */
 /* 2026-07-21   3.2  JWF011     UWP-62055: Fix sku list for scan handler         */
 /* 2026-07-30   3.3  JWF011     UWP-62868: Fix sku list for scan handler         */
+/* 2026-08-11   3.4  GCH225     UWP-61712: Add a new wrapper for custom AD check */
+/* 2026-08-18   3.5  GCH225     UWP-27781: Added new wrapper for validate qty   */
+/* 2026-08-19   3.6  JWF011     FCR-13553 UWP-61321: Update Pack Detail SKU list */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_ValidateUserInput] (
@@ -105,6 +108,7 @@ BEGIN
          , @bAutoPickOrderFlag   BIT
          , @cAuthority           NVARCHAR(30)
          , @nSKUCount            INT
+         , @bGoToSearchSKU       BIT
 
    DECLARE @cVASCodeUDF2         NVARCHAR(60)   = ''
          , @cVASCodeUDF3         NVARCHAR(60)   = ''
@@ -164,6 +168,7 @@ BEGIN
    SET @bAutoPickOrderFlag    = 0
    SET @cAuthority            = ''
    SET @nSKUCount             = 0
+   SET @bGoToSearchSKU        = 0
 
    IF @cLoadKey <> ''
    BEGIN
@@ -828,33 +833,36 @@ SKIP_VALIDATE:
          GOTO EXIT_SP
       END
    END
-   -- Perform Check the Qty
-   EXEC [API].[isp_TPACK_ValidateQtyPack]
-        @cType             = @cType            
-      , @bIsDiscrete       = @bIsDiscrete      
-      , @bIsCustom         = @bIsCustom        
-      , @cPickSlipNo       = @cPickSlipNo       
-      , @cOrderKey         = @cOrderKey         
-      , @cLoadKey          = @cLoadKey          
-      , @cDropID           = @cDropID  
-      , @cStorerKey        = @cStorerKey        
-      , @cFacility         = @cFacility  
-      , @cInputValue1      = @cInputValue1
-      , @cScanType         = @cScanType
-      , @cSKU              = @cSKU
-      , @c_UserID          = @c_UserID
-      , @cLangCode         = @cLangCode
-      , @nQty              = @nQty
-      , @b_Success         = @b_Success   OUTPUT
-      , @n_ErrNo           = @n_ErrNo     OUTPUT
-      , @c_ErrMsg          = @c_ErrMsg    OUTPUT
+   
+   EXEC [API].[isp_TPACK_ValidateQtyPack_Wrapper]
+           @cType             = @cType            
+         , @bIsDiscrete       = @bIsDiscrete      
+         , @bIsCustom         = @bIsCustom        
+         , @cPickSlipNo       = @cPickSlipNo       
+         , @cOrderKey         = @cOrderKey
+         , @cLoadKey          = @cLoadKey          
+         , @cDropID           = @cDropID
+         , @cStorerKey        = @cStorerKey        
+         , @cFacility         = @cFacility   
+         , @cInputValue1      = @cInputValue1
+         , @cInputValue2      = @cInputValue2
+         , @cInputValue3      = @cInputValue3
+         , @cScanType         = @cScanType
+         , @cSKU              = @cSKU
+         , @nCartonNo         = @nCartonNo
+         , @nQty              = @nQty        OUTPUT
+         , @c_UserID          = @c_UserID
+         , @cLangCode         = @cLangCode
+         , @b_Success         = @b_Success   OUTPUT
+         , @n_ErrNo           = @n_ErrNo     OUTPUT
+         , @c_ErrMsg          = @c_ErrMsg    OUTPUT
 
    IF @b_Success = 0
    BEGIN
       SET @n_Continue  = 3    
       GOTO EXIT_SP
    END
-
+   
    -- Recartonization Check Rule
 
    EXEC nspGetRight    
@@ -1087,158 +1095,42 @@ SKIP_VALIDATE:
    END
    ELSE
    BEGIN
-      IF NOT EXISTS(  SELECT 1 
-                  FROM CODELKUP (NOLOCK) 
-                  WHERE Listname = 'REQEXP'
-                  AND Code = 'ADBARCODE'
-                  AND StorerKey = @cStorerKey
-      ) 
-      OR 
-      NOT EXISTS ( SELECT 1 
-                   FROM SKU (NOLOCK) 
-                   WHERE  StorerKey = @cStorerKey
-                   AND SKU = @cSKU
-                   AND SUSR4 = 'AD'
-      )
-      BEGIN
-         GOTO SKIP_AD
-      END
-
-      SELECT @cConfigValue = RTRIM(sValue)
-      FROM STORERCONFIG (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND ConfigKey = 'TPS-ExtSkipSKUADScn'
-
-      IF @@ROWCOUNT <> 0
-      BEGIN
-         IF EXISTS(  SELECT 1 
-                     FROM dbo.sysobjects 
-                     WHERE name = @cConfigValue 
-                     AND type = 'P'
-         )
-         BEGIN
-            SET @cSQL = 'EXEC [API].[' + @cConfigValue + ']' + CHAR(13)
-                      + '  @cType                ' + CHAR(13)
-                      + ', @bIsDiscrete          ' + CHAR(13)
-                      + ', @bIsCustom            ' + CHAR(13)
-                      + ', @cPickSlipNo          ' + CHAR(13)
-                      + ', @cOrderKey            ' + CHAR(13)
-                      + ', @cLoadKey             ' + CHAR(13)
-                      + ', @cDropID              ' + CHAR(13)
-                      + ', @cStorerKey           ' + CHAR(13)
-                      + ', @cFacility            ' + CHAR(13)    
-                      + ', @c_UserID             ' + CHAR(13)
-                      + ', @cLangCode            ' + CHAR(13)
-                      + ', @cSkipSKUADScn OUTPUT ' + CHAR(13)    
-                      + ', @b_Success     OUTPUT ' + CHAR(13)    
-                      + ', @n_ErrNo       OUTPUT ' + CHAR(13)    
-                      + ', @c_ErrMsg      OUTPUT ' + CHAR(13)      
-                         
-            SET @cSQLParams = '  @cType         NVARCHAR(30)          ' + CHAR(13)
-                            + ', @bIsDiscrete   BIT                   ' + CHAR(13)
-                            + ', @bIsCustom     BIT                   ' + CHAR(13)
-                            + ', @cPickSlipNo   NVARCHAR(10)          ' + CHAR(13)
-                            + ', @cOrderKey     NVARCHAR(10)          ' + CHAR(13)
-                            + ', @cLoadKey      NVARCHAR(10)          ' + CHAR(13)
-                            + ', @cDropID       NVARCHAR(20)          ' + CHAR(13)
-                            + ', @cStorerKey    NVARCHAR(15)          ' + CHAR(13)
-                            + ', @cFacility     NVARCHAR(5)           ' + CHAR(13)  
-                            + ', @c_UserID      NVARCHAR(256)         ' + CHAR(13)
-                            + ', @cLangCode     NVARCHAR(3)           ' + CHAR(13)
-                            + ', @cSkipSKUADScn NVARCHAR(1)    OUTPUT ' + CHAR(13)  
-                            + ', @b_Success     INT            OUTPUT ' + CHAR(13)  
-                            + ', @n_ErrNo       INT            OUTPUT ' + CHAR(13)  
-                            + ', @c_ErrMsg      NVARCHAR(20)   OUTPUT ' + CHAR(13)
-
-            EXEC sp_ExecuteSQL  @cSQL
-                              , @cSQLParams
-                              , @cType
-                              , @bIsDiscrete
-                              , @bIsCustom
-                              , @cPickSlipNo
-                              , @cOrderKey    
-                              , @cLoadKey
-                              , @cDropID
-                              , @cStorerKey
-                              , @cFacility
-                              , @c_UserID
-                              , @cLangCode
-                              , @cConfigValue OUTPUT    
-                              , @b_Success    OUTPUT    
-                              , @n_ErrNo      OUTPUT    
-                              , @c_ErrMsg     OUTPUT    
-
-            IF @b_Success = 0    
-            BEGIN    
-               SET @n_Continue  = 3
-               SET @n_ErrNo = @n_ErrNo    
-               SET @c_ErrMsg = @c_ErrMsg    
-               GOTO EXIT_SP    
-            END    
-         END
-
-         IF @cConfigValue = '1'
-         BEGIN
-            GOTO SKIP_AD
-         END
-      END
-
-      EXEC nspGetRight    
-         @c_Facility  = @cFacility    
-         , @c_StorerKey = @cStorerKey   
-         , @c_sku       = ''    
-         , @c_ConfigKey = 'TPS-SkipUCCADScn'    
-         , @c_authority = @cAuthority        OUTPUT    
-         , @b_Success   = @b_Success         OUTPUT
-         , @n_err       = @n_ErrNo           OUTPUT
-         , @c_errmsg    = @c_ErrMsg          OUTPUT
-
+      --Perform ExtADOrSNCheck to check if the SKU is AD or SN, if yes then prompt user to scan the AD or SN barcode, else skip this step.
+      EXEC [API].[isp_TPACK_ExtADOrSNCheck_Wrapper]
+              @cType             = @cType            
+            , @bIsDiscrete       = @bIsDiscrete      
+            , @bIsCustom         = @bIsCustom        
+            , @cPickSlipNo       = @cPickSlipNo       
+            , @cOrderKey         = @cOrderKey
+            , @cLoadKey          = @cLoadKey          
+            , @cDropID           = @cDropID
+            , @cStorerKey        = @cStorerKey        
+            , @cFacility         = @cFacility   
+            , @cInputValue1      = @cInputValue1
+            , @cInputValue2      = @cInputValue2
+            , @cInputValue3      = @cInputValue3
+            , @cScanType         = @cScanType
+            , @cSKU              = @cSKU
+            , @nCartonNo         = @nCartonNo
+            , @nQty              = @nQty
+            , @c_UserID          = @c_UserID
+            , @cLangCode         = @cLangCode
+            , @bShowADScreen     = @bShowADScreen    OUTPUT
+            , @bGoToSearchSKU    = @bGoToSearchSKU   OUTPUT
+            , @nDisplayADQty     = @nDisplayADQty    OUTPUT
+            , @nNumberOfADField  = @nNumberOfADField OUTPUT
+            , @b_Success         = @b_Success        OUTPUT
+            , @n_ErrNo           = @n_ErrNo          OUTPUT
+            , @c_ErrMsg          = @c_ErrMsg         OUTPUT
+      
       IF @b_Success = 0
       BEGIN    
-         SET @n_Continue  = 3  
+         SET @n_Continue = 3
          GOTO EXIT_SP
       END
 
-      IF @cAuthority = '1'
-      AND @cScanType = 'ucc'
+      IF @bGoToSearchSKU = 1
       BEGIN
-         GOTO SKIP_AD
-      END
-
-      EXEC [API].[isp_TPACK_GetTotalADCount]
-              @cType            = @cType            
-            , @bIsDiscrete      = @bIsDiscrete      
-            , @bIsCustom        = @bIsCustom        
-            , @cPickSlipNo      = @cPickSlipNo       
-            , @cOrderKey        = @cOrderKey
-            , @cLoadKey         = @cLoadKey          
-            , @cDropID          = @cDropID
-            , @cStorerKey       = @cStorerKey        
-            , @cFacility        = @cFacility   
-            , @cInputValue1     = @cInputValue1
-            , @cInputValue2     = @cInputValue2
-            , @cInputValue3     = @cInputValue3
-            , @cScanType        = @cScanType
-            , @cSKU             = @cSKU
-            , @nCartonNo        = @nCartonNo
-            , @nQty             = @nQty
-            , @c_UserID         = @c_UserID
-            , @cLangCode        = @cLangCode
-            , @nNumberOfADField = @nNumberOfADField   OUTPUT
-            , @nDisplayADQty    = @nDisplayADQty      OUTPUT
-            , @b_Success         = @b_Success         OUTPUT
-            , @n_ErrNo           = @n_ErrNo           OUTPUT
-            , @c_ErrMsg          = @c_ErrMsg          OUTPUT
-
-         IF @b_Success = 0
-         BEGIN
-            SET @n_Continue  = 3    
-            GOTO EXIT_SP
-         END
-
-      IF @nNumberOfADField >= 1
-      BEGIN
-         SET @bShowADScreen = 1
          GOTO SEARCHSKU
       END
    END
@@ -1552,7 +1444,8 @@ SKIP_VAS:
       IF EXISTS ( SELECT 1 
                   FROM STORERCONFIG (NOLOCK)
                   WHERE StorerKey = @cStorerKey
-                  AND ConfigKey = 'TPS-PackDetail'
+                  AND ConfigKey = 'TPS-ShowPickDetailSKU'
+                  AND SValue = '1'
       )
       BEGIN
          SET @cSKUList = ISNULL((SELECT SKU FROM @oSKUList FOR JSON AUTO),'')
