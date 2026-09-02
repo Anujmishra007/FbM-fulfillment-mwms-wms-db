@@ -291,7 +291,7 @@ BEGIN
             SELECT 
                 --COUNT(DISTINCT LLI.ID) AS TotalID,
                 COUNT(DISTINCT CASE WHEN (ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIn, 0)) > 0 THEN LLI.ID END) AS TotalActiveID,
-                SUM(ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIn, 0)) As TotalQty
+                ISNULL(SUM(ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIn, 0)), 0) As TotalQty
             FROM LOTxLOCxID LLI (NOLOCK)
             WHERE LLI.StorerKey = SL.StorerKey
               --AND LLI.Sku       = SL.Sku
