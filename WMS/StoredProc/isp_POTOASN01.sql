@@ -20,10 +20,15 @@ GO
 /* Updates:                                                              */
 /* Date        Author  Ver.  Purposes                                    */
 /* 13-Jul-2026 JH01    1.0   Initial creation (BEL Schneider PO->ASN)    */
-/* 20-Aug-2026 JH02    1.2   FCR v1.3: ReceiptDetail.Lottable02 derived  */
+/* 20-Aug-2026 JH02    1.1   FCR v1.3: ReceiptDetail.Lottable02 derived  */
 /*                           from SKU + MarksContainer (MONO / MIX). The  */
 /*                           earlier Lottable02-value rule (MIX / OHU /   */
 /*                           DHU) is removed.                            */
+/* 21-Aug-2026 JH03    1.2   FCR v1.4: on PO update (ExternStatus 0) when */
+/*                           a matching open ASN already holds the line,  */
+/*                           delete it and re-create from the new PO      */
+/*                           data; reject (error) if the existing line is */
+/*                           already received or finalized.              */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_POTOASN01]
@@ -388,13 +393,45 @@ BEGIN
       GOTO QUIT
    END
 END
+ELSE
+BEGIN
+   -- JH03 (FCR v1.4): matching open ASN already has this PO line -> re-create it.
+   -- Reject the re-create if the existing line is already received or finalized.
+   IF EXISTS ( SELECT 1
+               FROM   RECEIPTDETAIL WITH (NOLOCK)
+               WHERE  ReceiptKey   = @c_ReceiptKey
+               AND    Lottable07   = @c_ExternPOKey
+               AND    ( QtyReceived <> 0 OR UPPER(LTRIM(RTRIM(ISNULL(FinalizeFlag,'N')))) = 'Y' ) )
+   BEGIN
+      SELECT @n_Continue = 3
+           , @n_err      = 91552
+           , @c_errmsg   = 'NSQL' + CONVERT(CHAR(5),91552) + ': Cannot re-create ASN line - existing line already received or finalized. ReceiptKey [' + @c_ReceiptKey + '] POKey [' + @c_POKey + ']. (isp_POTOASN01)'
+      GOTO QUIT
+   END
+
+   -- Delete the existing (unreceived, not finalized) line(s) for this PO link key
+   DELETE FROM RECEIPTDETAIL
+   WHERE  ReceiptKey   = @c_ReceiptKey
+   AND    Lottable07   = @c_ExternPOKey
+   AND    QtyReceived  = 0
+   AND    UPPER(LTRIM(RTRIM(ISNULL(FinalizeFlag,'N')))) <> 'Y'
+
+   SELECT @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_Continue = 3
+           , @c_errmsg   = 'NSQL' + CONVERT(CHAR(5),91553) + ': DELETE (re-create) RECEIPTDETAIL failed. ReceiptKey [' + @c_ReceiptKey + '] POKey [' + @c_POKey + ']. (isp_POTOASN01) (SQLErr=' + CONVERT(NVARCHAR(20),@n_err) + ')'
+           , @n_err      = 91553
+      GOTO QUIT
+   END
+END
 
 -- Current max detail line number on this ASN
 SELECT @n_MaxLine = ISNULL(MAX(CONVERT(INT, ReceiptLineNumber)), 0)
 FROM   RECEIPTDETAIL WITH (UPDLOCK, HOLDLOCK)
 WHERE  ReceiptKey = @c_ReceiptKey
 
--- Always add a new ASN line per PO line.  
+-- Add the ASN line(s). If a matching ASN existed, the prior line(s) were re-created above (JH03).
 INSERT INTO RECEIPTDETAIL
    (  ReceiptKey
    ,  ReceiptLineNumber
