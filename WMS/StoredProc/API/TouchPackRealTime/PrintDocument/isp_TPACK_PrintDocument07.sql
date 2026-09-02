@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-10-28   1.0  GCH225     Cloned from isp_TPS_ExtPrint07 (TPS-970)         */
 /* 2026-06-29   2.0  GCH225     UWP-52413: Fix the GetReprintOpt for ReportType  */
+/* 2026-08-03   2.1  GCH225     UWP-63206: Follow the old SP logic AutoPrint     */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_PrintDocument07] (
@@ -122,6 +123,7 @@ BEGIN
                         ON WMR.ReportID =WMRD.ReportID
                         WHERE WMRD.StorerKey  = @cStorerKey 
                         AND WMRD.IsPaperPrinter <> 'Y'
+                        AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                         AND  (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                         FROM CODELKUP C (NOLOCK)
                                         WHERE C.StorerKey = WMRD.StorerKey
@@ -151,6 +153,7 @@ BEGIN
                         ON WMR.ReportID =WMRD.ReportID
                         WHERE WMRD.StorerKey  = @cStorerKey 
                         AND WMRD.IsPaperPrinter <> 'Y'
+                        AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                         AND  (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                                         FROM CODELKUP C (NOLOCK)
                                         WHERE C.StorerKey = WMRD.StorerKey
@@ -189,6 +192,7 @@ BEGIN
          ON WMR.ReportID =WMRD.ReportID
          WHERE WMRD.StorerKey  = @cStorerKey 
          AND WMRD.IsPaperPrinter <> 'Y'
+         AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
          AND  (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                          FROM CODELKUP C (NOLOCK)
                          WHERE C.StorerKey = WMRD.StorerKey
@@ -483,6 +487,7 @@ BEGIN
                   WHERE WMRD.StorerKey  = @cStorerKey 
                   AND WMR.ModuleID = @cModuleID
                   AND WMRD.IsPaperPrinter = 'Y'
+                  AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
                   AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
@@ -510,7 +515,8 @@ BEGIN
                   ON WMR.ReportID = WMRD.ReportID
                   WHERE WMRD.Storerkey = @cStorerKey
                   AND WMR.ModuleID = @cModuleID
-                  AND WMRD.IsPaperPrinter = 'Y'
+                  AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
+                  AND WMRD.AutoPrint = 'Y'
                   AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                               FROM CODELKUP C (NOLOCK)
                               WHERE C.StorerKey = WMRD.StorerKey
@@ -549,6 +555,7 @@ BEGIN
       WHERE WMRD.Storerkey = @cStorerKey
       AND WMR.ModuleID = @cModuleID
       AND WMRD.IsPaperPrinter = 'Y'
+      AND (@bIsAutoPrint = 0 OR (@bIsAutoPrint = 1 AND WMRD.AutoPrint = 'Y'))
       AND (@bIsLastCarton = 1 OR (@cReportType <> '' OR NOT EXISTS (SELECT 1 
                   FROM CODELKUP C (NOLOCK)
                   WHERE C.StorerKey = WMRD.StorerKey
