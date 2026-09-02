@@ -53,6 +53,27 @@ BEGIN
             SET @cExtendedInfo = @cDropID
          END
       END
+      ELSE IF @nStep = 8
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cExtendedInfo = @cDropID
+         END
+      END
+      ELSE IF @nStep = 9
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cExtendedInfo = @cDropID
+         END
+      END
+      ELSE IF @nStep = 16
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            SET @cExtendedInfo = @cDropID
+         END
+      END
    END
 
    QUIT:
