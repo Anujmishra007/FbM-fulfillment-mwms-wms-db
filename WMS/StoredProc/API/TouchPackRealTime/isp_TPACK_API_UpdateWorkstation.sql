@@ -48,8 +48,7 @@ BEGIN
       @cCurWorkstation     NVARCHAR(30),
       @cInUseDeviceID      NVARCHAR(50),
       @cDeviceID           NVARCHAR( 50),
-      @cTempDeviceID       NVARCHAR( 50),
-      @nWebFlag            INT
+      @cTempDeviceID       NVARCHAR( 50)
 
    SET @cInUseDeviceID = '';
 
@@ -117,10 +116,8 @@ BEGIN
    END
 
    --AppendDeviceID
-   IF @cDeviceID = 'Web'
+   IF @cDeviceID LIKE 'Web%'
    BEGIN
-      SET @cDeviceID = @cDeviceID + @c_UserID
-      SET @nWebFlag = 1
       SELECT TOP 1 @cInUseDeviceID = ISNULL(DeviceID,'') FROM api.AppWorkstation (NOLOCK) WHERE Workstation = @cWorkstation
 
       IF @cInUseDeviceID = ''

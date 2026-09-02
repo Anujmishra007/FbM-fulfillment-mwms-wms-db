@@ -13,6 +13,8 @@ GO
 /* 2025-08-29   1.0  GCH225     Created                                          */
 /* 2025-12-24   1.1  YLI237     Updated for UWP-43950                            */   
 /* 2026-03-25   1.2  GCH225     FCR-11991 Handle print carrier logic             */
+/* 2026-08-14   1.4  OAN031     FCR-15485: Add PrintAfterPacked config to control*/
+/*                              print after last carton packed                   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_GetPrintFlag] (
@@ -49,12 +51,18 @@ BEGIN
          , @c_FunID              NVARCHAR(50)   = ''
          , @nStep                INT            = 0
          , @cPrintCarrierLevel   NVARCHAR(20)   = ''
+         , @nIsPrintAfterPacked INT = 0
    
    SET @b_Success             = 0  
    SET @n_ErrNo               = 0  
    SET @c_ErrMsg              = '' 
    SET @c_FunID               = '996' -- Default for TouchPack Function ID
    SET @cPrintCarrierLevel    = ''
+
+   SELECT @nIsPrintAfterPacked = ISNULL(TRY_CAST(sValue AS INT), 0)
+   FROM STORERCONFIG (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'TPS-PrintAfterPacked'
 
    IF EXISTS(SELECT 1 
              FROM STORERCONFIG (NOLOCK)
@@ -84,14 +92,22 @@ BEGIN
              AND ConfigKey = 'TPS-DisableLblPrint'
              AND sValue = '1'
    ) 
-   OR ( @bIsLastCarton = 0
-   AND EXISTS( SELECT 1
-               FROM STORERCONFIG (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-               AND ConfigKey = 'TPS-PrintAfterPacked'
-               AND sValue = '1'
-             ) 
-   )
+--    OR ( @bIsLastCarton = 0
+--    AND EXISTS( SELECT 1
+--                FROM STORERCONFIG (NOLOCK)
+--                WHERE StorerKey = @cStorerKey
+--                AND ConfigKey = 'TPS-PrintAfterPacked'
+--                AND sValue = '1'
+--              )
+--    )
+    OR (@nIsPrintAfterPacked = 1 AND @bIsLastCarton = 0)
+    OR (@nIsPrintAfterPacked = 2 AND NOT EXISTS (
+          SELECT 1 FROM PACKHEADER (NOLOCK)
+          WHERE PickSlipNo = @cPickSlipNo
+          AND [Status] = '9'
+          )
+
+    )
    BEGIN
       SET @bPrintLabelFlag = 0
    END

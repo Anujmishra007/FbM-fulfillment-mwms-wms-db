@@ -13,6 +13,8 @@ GO
 /* 2025-09-08   1.0  GCH225     Created                                          */
 /* 2026-01-23   1.1  YLI237     Modify for UWP-45422                             */
 /* 2026-04-03   1.2  GCH225     FCR-12269: Removed PACKHEADER status check       */
+/* 2026-08-17   1.3  OAN031     FCR-15485: Add logic is to check whether user has*/
+/*                              triggered the printing after manual packconfirm  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_TPACK_API_PrintDocument] (
@@ -223,6 +225,42 @@ BEGIN
       SET @n_ErrNo = 11751
       SET @c_ErrMsg =  API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'PickSlipNo cannot be empty.'
       GOTO EXIT_SP
+   END
+    -- Below logic is to check whether user has triggered the printing after manual packconfirm.
+   IF @bPrintLabelFlag = 0
+   AND @bPrintPaperFlag = 0
+   AND @bIsLastCarton = 0
+   AND @bIsAutoPrint = 1
+   BEGIN
+        EXEC [API].[isp_TPACK_GetPrintFlag]
+          @cType            = @cType
+        , @bIsDiscrete      = @bIsDiscrete
+        , @bIsCustom        = @bIsCustom
+        , @cPickSlipNo      = @cPickSlipNo
+        , @cOrderKey        = @cOrderKey
+        , @cLoadKey         = @cLoadKey
+        , @cDropID          = @cDropID
+        , @cStorerKey       = @cStorerKey
+        , @cFacility        = @cFacility
+        , @nCartonNo        = @nCartonNo
+        , @cCartonStatus    = ''
+        , @c_UserID         = @c_UserID
+        , @cLangCode        = @cLangCode
+        , @bWeightInterface = 0
+        , @bIsLastCarton    = @bIsLastCarton
+        , @bPrintPaperFlag  = @bPrintPaperFlag OUTPUT
+        , @bPrintLabelFlag  = @bPrintLabelFlag OUTPUT
+        , @b_Success        = @b_sp_Success OUTPUT
+        , @n_ErrNo          = @n_sp_err OUTPUT
+        , @c_ErrMsg         = @c_sp_errmsg OUTPUT
+
+       IF @b_sp_Success = 0
+       BEGIN
+          SET @n_Continue = 3
+          SET @n_ErrNo = @n_sp_err
+          SET @c_ErrMsg = @c_sp_errmsg
+          GOTO EXIT_SP
+       END
    END
 
    -- IF @nCartonNo = 0 AND @isSKUScan <> 1

@@ -18,6 +18,8 @@ GO
 /* 2026-07-27   1.4  JWF011     UWP-62527: Fix incorrect sku displayed           */
 /* 2026-07-28   1.5  JWF011     UWP-62579: Support SKU format style-color_size   */
 /* 2026-07-30   1.6  JWF011     UWP-62868: Fix sku list                          */
+/* 2026-08-12   1.7  JWF011     UWP-61321: Add QtyToPack, ExpQty to all result   */
+/* 2026-08-19   1.8  JWF011     UWP-61321: Fix SKU list when cartonno = 0        */
 /*********************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPACK_PackDetail01] (
@@ -252,7 +254,8 @@ BEGIN
          SET @cSQLSelectClause = @cSQLSelectClause
                                + ', COALESCE(SUM(PAD1.QTY),0) AS packedQty ' + CHAR(13)
                                + ', COALESCE(SUM(PID.QTY),0) - COALESCE(SUM(PAD2.QTY),0) AS QtyToPack ' + CHAR(13)
-         
+                               + ', 0 AS ExpQty ' + CHAR(13)
+
          SET @cSQLFromClause = @cSQLFromClause
                              + ' LEFT JOIN ( ' + CHAR(13)
                              + ' SELECT StorerKey, SKU, SUM(Qty) AS QTY ' + CHAR(13)
@@ -292,6 +295,8 @@ BEGIN
       BEGIN
          SET @cSQLSelectClause = @cSQLSelectClause
                                + ', 0 AS packedQty ' + CHAR(13)
+                               + ', 0 AS ExpQty ' + CHAR(13)
+                               + ', 0 AS QtyToPack ' + CHAR(13)
       END
 
       IF @nSKUCount = 1
@@ -381,6 +386,8 @@ BEGIN
       SET @cSQLSelectClause = @cSQLSelectClause 
                             + ', JSON_QUERY(''[]'') AS lottables ' + CHAR(13)
                             + ', COALESCE(SUM(PAD.QTY),0) AS packedQty ' + CHAR(13)
+                            + ', 0 AS ExpQty ' + CHAR(13)
+                            + ', 0 AS QtyToPack ' + CHAR(13)
 
       SET @cSQLFromClause = @cSQLFromClause
                           + ' FROM PACKDETAIL PAD (NOLOCK) ' + CHAR(13)
@@ -429,7 +436,7 @@ BEGIN
 
    SET @cPackDetailList = @oDynamicJson
 
-   IF @cPackDetailList = '' AND @nPageIndex = 0
+   IF @cPackDetailList = '' AND @nPageIndex = 0 AND @nCartonNo <> 0
    BEGIN
       SET @n_Continue = 3
       SET @n_ErrNo = 16202      

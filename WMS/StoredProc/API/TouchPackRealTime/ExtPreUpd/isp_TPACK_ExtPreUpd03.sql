@@ -14,6 +14,7 @@ GO
 /* 2026-03-27   1.1  JWF011     UWP-52830: Fix logic                             */
 /* 2026-07-17   1.2  JWF011     UWP-52830: Fix SerialNo logic                    */
 /* 2026-07-23   1.3  JWF011     UWP-52830: Update SerialNo status                */
+/* 2026-08-05   1.4  JWF011     UWP-52830: Fix SerialNo Update Condition         */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_ExtPreUpd03] (
@@ -75,7 +76,7 @@ BEGIN
    SELECT @cCurOrderKey = OrderKey  
    FROM PICKHEADER (NOLOCK)  
    WHERE PickHeaderKey = @cPickSlipNo  
-  
+
    IF ISNULL(@cCurOrderKey, '') <> ''  
       SET @cOrderKey = @cCurOrderKey  
 
@@ -101,7 +102,7 @@ BEGIN
       WHERE UCCNo = @cUCCNo  
          AND SKU = @cSKU 
          AND StorerKey = @cStorerKey  
-  
+
       SET @CURSOR_AD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
       SELECT SerialNoKey, SUM(Qty) 
       FROM SERIALNO (NOLOCK)      
@@ -111,7 +112,7 @@ BEGIN
       AND [Status] IN ('0', '1') 
       GROUP BY SerialNoKey
       ORDER BY SerialNoKey  
-  
+
       OPEN @CURSOR_AD      
       FETCH NEXT FROM @CURSOR_AD INTO @cSerialNoKey, @nSNQTY    
       WHILE @@FETCH_STATUS = 0      
@@ -125,7 +126,7 @@ BEGIN
          AND PH.PickSlipNo = @cPickSlipNo        
          AND PD.CartonNo = @nCartonNo 
          AND PD.SKU = @cSKU   
-  
+
          SELECT @cOrderLineNumber = PD.OrderLineNumber           
          FROM dbo.PickDetail PD (NOLOCK)        
          WHERE PD.StorerKey = @cStorerKey        
@@ -136,7 +137,7 @@ BEGIN
                          WHERE S.OrderKey = PD.OrderKey        
                          AND S.OrderLineNumber = PD.OrderLineNumber        
                          AND S.SKU = PD.SKU)   
-  
+
          IF ISNULL(@cOrderLineNumber, '') = ''  
          BEGIN  
             SELECT TOP 1 @cOrderLineNumber = PD.OrderLineNumber           
@@ -145,11 +146,11 @@ BEGIN
             AND PD.OrderKey = @cOrderKey        
             AND PD.SKU = @cSKU       
          END  
-              
+
          SELECT @cSerialNo = SerialNo
          FROM dbo.SerialNo (NOLOCK) 
          WHERE SerialNoKey = @cSerialNoKey
-  
+
          INSERT INTO PACKSERIALNO (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, Qty, AddWho, AddDate, EditWho, EditDate)  
          VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLblLineNumber, @cStorerKey, @cSKU, @cSerialNo, 1, @c_UserID, GETDATE(), @c_UserID, GETDATE())  
 
@@ -160,7 +161,7 @@ BEGIN
             SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') --'Failed to Insert into PackSerialNo.'
             GOTO EXIT_SP
          END
-                                               
+
          UPDATE SerialNo WITH (ROWLOCK) SET      
             OrderKey = @cOrderKey,       
             OrderLineNumber = ISNULL(@cOrderLineNumber, ''),  
@@ -180,12 +181,12 @@ BEGIN
             SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') --'Failed to Update SerialNo.'
             GOTO EXIT_SP
          END
-  
+
          SET @nRemainQty = @nRemainQty - @nSNQTY  
 
          IF @nRemainQty = 0   
             BREAK;  
-  
+
          FETCH NEXT FROM @CURSOR_AD INTO @cSerialNoKey, @nSNQTY 
       END  
       CLOSE @CURSOR_AD
@@ -200,7 +201,6 @@ BEGIN
       END     
    END  
    ELSE IF @cScanType = 'serialno'
-   AND @cInputValue2 <> '' 
    BEGIN  
       IF @cOrderKey = ''      
       BEGIN  
@@ -209,8 +209,15 @@ BEGIN
          SET @c_ErrMsg = API.TouchPadGetMessage(@n_ErrNo, @cLangCode, 'DSP') -- 'OrderKey cannot be empty.'   
          GOTO EXIT_SP     
       END
-
+      
+      IF @cInputValue1 <> ''
+      BEGIN
+      SET @cSerialNo = @cInputValue1
+      END
+      ELSE IF @cInputValue2 <> ''
+      BEGIN
       SET @cSerialNo = @cInputValue2
+      END
 
       SELECT @cLblLineNumber = PD.LabelLine
             , @cLabelNo = PD.LabelNo 

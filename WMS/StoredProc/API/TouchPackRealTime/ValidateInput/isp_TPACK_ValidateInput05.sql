@@ -17,6 +17,7 @@ GO
 /* 2026-06-29   3.2  JWF011     FCR-13553: Fix bug                               */
 /* 2026-07-21   3.3  JWF011     UWP-62055: Support Scan By UPC                   */
 /* 2026-07-28   3.4  JWF011     UWP-62579: Support SKU format style-color_size   */
+/* 2026-07-30   3.5  JWF011     FCR-13553: Remove SKU validation                 */
 /*********************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPACK_ValidateInput05] (
@@ -106,6 +107,7 @@ BEGIN
    END
 
    --FCR-13553
+   /*
    IF EXISTS ( SELECT 1
                FROM STORERCONFIG (NOLOCK)
                WHERE StorerKey = @cStorerKey
@@ -172,6 +174,7 @@ BEGIN
       CLOSE CUR_SKU
       DEALLOCATE CUR_SKU
    END
+   */
 
 EXIT_SP:
    IF @n_Continue = 3  -- Error Occured - Process And Return      

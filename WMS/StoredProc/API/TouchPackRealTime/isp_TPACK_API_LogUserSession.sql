@@ -12,6 +12,7 @@ GO
 /*                                                                               */
 /* Date         Rev  Author     Purposes                                         */
 /* 2025-08-01   1.0  GCH225     Created                                          */
+/* 2026-08-04   1.1  OAN031     Updated to send device id for web to FE          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPACK_API_LogUserSession] (
@@ -51,13 +52,12 @@ BEGIN
       @timeOut             INT,
       @dNow                DATETIME,
       @cWorkStation        NVARCHAR(30),
-      @nWebFlag            INT,
       @cSelWorkStation     NVARCHAR(30),
       @cClrDeviceID        NVARCHAR(10),
-      @cIsSinglePKStation  NVARCHAR(10)
+      @cIsSinglePKStation  NVARCHAR(10),
+      @dtSectionTime       DATETIME
 
    SET @dNow = GETDATE()
-   SET @nWebFlag = 0
    SET @cSelWorkStation = ''
    SET @cClrDeviceID = '0'
    
@@ -118,25 +118,24 @@ BEGIN
       GOTO EXIT_SP
    END
 
+   SELECT @cClrDeviceID = ISNULL(SValue,'0') 
+   FROM StorerConfig (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND ConfigKey = 'TPS-ClrDeviceID'
+
    --AppendDeviceID
    IF @cDeviceID = 'Web'
    BEGIN
-      SET @cDeviceID = @cDeviceID + NEWID()
-      SET @nWebFlag = 1
+      SET @cDeviceID = 'Web' + CONVERT(NVARCHAR(36), NEWID())
+   END
 
-      SET @cSelWorkStation = @cWorkStation
+   SET @cSelWorkStation = @cWorkStation
       
-      IF ISNULL(@cSelWorkStation, '') = ''
-      BEGIN
-         SELECT @cSelWorkStation = ISNULL(Workstation,'') 
-         FROM Api.AppWorkstation (NOLOCK)
-         WHERE DeviceID = @cDeviceID
-      END
-
-      SELECT @cClrDeviceID = ISNULL(SValue,'0') 
-      FROM StorerConfig (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-      AND ConfigKey = 'TPS-ClrDeviceID'
+   IF ISNULL(@cSelWorkStation, '') = ''
+   BEGIN
+      SELECT @cSelWorkStation = ISNULL(Workstation,'') 
+      FROM Api.AppWorkstation WITH (NOLOCK)
+      WHERE DeviceID = @cDeviceID
    END
 
    --get StorerConfig
@@ -174,7 +173,7 @@ BEGIN
 		SET @timeOut = 900  
 
    --type: login
-   IF @cType IN( 'LOGIN' , 'PING', 'LOCK', 'CHANGE')
+   IF @cType IN( 'LOGIN', 'PING', 'LOCK', 'CHANGE')
    BEGIN
 	   --1a. DeviceID not in db
 	   IF NOT EXISTS (SELECT 1 
@@ -184,18 +183,47 @@ BEGIN
 	   BEGIN
          --SELECT  '1a'
          --User lock by others device: user not yet expired
-         IF EXISTS ( SELECT 1
-                     FROM API.AppSection WITH (NOLOCK) 
-                     WHERE UserID = @c_UserID 
-                     AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL)
-         )
+         SELECT @dtSectionTime = SectionTime
+         FROM API.AppSection WITH (NOLOCK) 
+         WHERE UserID = @c_UserID 
+
+         IF @@ROWCOUNT = 1
          BEGIN
-            --SELECT  '1ab'
-            SET @n_Continue = 3
-            SET @n_ErrNo = 10403
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current User still active in another device.'
-            GOTO EXIT_SP
+            IF @dtSectionTime IS NOT NULL AND DATEADD(s,@timeOut,@dtSectionTime) > @dNow
+            BEGIN
+               --SELECT  '1ab'
+               SET @n_Continue = 3
+               SET @n_ErrNo = 10403
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current User still active in another device.'
+               GOTO EXIT_SP
+            END
+            ELSE
+            BEGIN
+               DELETE FROM API.AppSection
+               WHERE UserID = @c_UserID
+
+               IF (@cClrDeviceID = '1' 
+               OR EXISTS ( SELECT 1 
+                     FROM Api.AppWorkstation WITH (NOLOCK) 
+                     WHERE Workstation = @cSelWorkStation 
+                     AND DefaultStorerKey = 'SHARE')
+               )
+               BEGIN
+                  UPDATE Api.AppWorkstation WITH (ROWLOCK)
+                  SET DeviceID = ''
+                  WHERE APPName = @cAppName
+                  AND DeviceID = @cDeviceID
+               END
+               ELSE
+               BEGIN
+                  UPDATE Api.AppWorkstation WITH (ROWLOCK)
+                  SET DeviceID = 'TEMP-' + @c_UserID
+                  WHERE APPName = @cAppName 
+                  AND DeviceID = @cDeviceID
+               END
+            END
          END
+
 
          --SELECT  '1aa'
          IF @cScanNo <> '' AND
@@ -230,26 +258,27 @@ BEGIN
                                     , @dNow
                                     )
 
-         GOTO SUCCESS_SP
-	   END
-      ELSE
-      BEGIN
-         IF @cType = 'LOGIN'
+         IF @@ROWCOUNT = 1
          BEGIN
-            IF EXISTS ( SELECT 1
-                        FROM API.AppSection WITH (NOLOCK) 
-                        WHERE UserID = @c_UserID 
-                        AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL)
-            )
+            --Reassign the new DeviceID for the Workstation that previously bind with UserID for web, 
+            --so that user no need to reselect the workstation after login again
+            SELECT @cSelWorkStation = ISNULL(Workstation,'') 
+            FROM API.AppWorkstation WITH (NOLOCK)
+            WHERE APPName = @cAppName 
+            AND DeviceID = 'TEMP-' + @c_UserID
+
+            IF @@ROWCOUNT = 1 AND @cSelWorkStation <> ''
             BEGIN
-               --SELECT  '1ab'
-               SET @n_Continue = 3
-               SET @n_ErrNo = 10403
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_ErrNo, @cLangCode, 'DSP')--'Current User still active in another device.'
-               GOTO EXIT_SP
+               UPDATE API.AppWorkstation WITH (ROWLOCK)
+               SET DeviceID = @cDeviceID
+               WHERE APPName = @cAppName 
+               AND DeviceID = 'TEMP-' + @c_UserID
+               AND Workstation = @cSelWorkStation
             END
          END
-      END
+         GOTO SUCCESS_SP
+	   END
+
 DEVICE_SP:
       -- 2a. Device expired
       IF EXISTS ( SELECT 1 
@@ -259,10 +288,26 @@ DEVICE_SP:
       )
       BEGIN
          --SELECT  '2a'
-         DELETE FROM API.AppSection
-         WHERE DeviceID = @cDeviceID
-         AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
-         GOTO CHECK_USER_SP
+         IF @cType = 'LOGIN'
+         BEGIN
+            UPDATE API.AppSection WITH (ROWLOCK)
+            SET UserID       = @c_UserID
+              , SectionTime  = @dNow
+              , ScanNo       = @cScanNo
+              , EditWho      = @c_UserID
+              , EditDate     = @dNow
+            WHERE DeviceID = @cDeviceID
+
+            GOTO SUCCESS_SP
+         END
+         ELSE
+         BEGIN
+            DELETE FROM API.AppSection
+            WHERE DeviceID = @cDeviceID
+            AND (DATEADD(s,@timeOut,SectionTime) < @dNow OR SectionTime IS NULL)
+
+            GOTO CHECK_USER_SP
+         END
       END
 
       --2b. Device still using
@@ -303,7 +348,7 @@ SCANNO_LOCK_SP:
 
          IF @cSelWorkStation <> '' 
          AND EXISTS (SELECT 1
-                     FROM API.AppWorkstation (NOLOCK)
+                     FROM API.AppWorkstation WITH (NOLOCK)
                      WHERE DeviceID = @cDeviceID
                      AND (DefaultStorerkey <> @cStorerKey
                      OR DefaultFacility <> @cFacility)
@@ -351,7 +396,7 @@ USER_SP:
                   WHERE DeviceID = @cDeviceID 
                   AND UserID = @c_UserID 
                   AND (DATEADD(s,@timeOut,SectionTime) > @dNow OR SectionTime IS NULL)
-      ) OR @nWebFlag = 1)
+      ))
       BEGIN
          --6a device locked: by others user for windows only
          SET @n_Continue = 3
@@ -401,15 +446,15 @@ CHECK_USER_SP:
                   FROM API.AppSection WITH (NOLOCK) 
                   WHERE DeviceID = @cDeviceID 
                   AND UserID = @c_UserID)
-      DELETE FROM API.AppSection 
-      WHERE DeviceID = @cDeviceID
-      AND UserID = @c_UserID
+      BEGIN
+         DELETE FROM API.AppSection 
+         WHERE DeviceID = @cDeviceID
+      END 
 
-      IF @nWebFlag = 1 
-      AND @cSelWorkStation <> ''
+      IF @cSelWorkStation <> ''
       AND (@cClrDeviceID = '1' OR 
       EXISTS ( SELECT 1 
-               FROM Api.AppWorkstation (NOLOCK) 
+               FROM Api.AppWorkstation WITH (NOLOCK) 
                WHERE Workstation = @cSelWorkStation 
                AND DefaultStorerKey = 'SHARE')
       )
@@ -417,6 +462,16 @@ CHECK_USER_SP:
          UPDATE Api.AppWorkstation WITH (ROWLOCK)
          SET DeviceID = ''
          WHERE Workstation = @cSelWorkStation
+      END
+      ELSE
+      BEGIN
+         -- Temporary assign the userID to the deviceID for web, 
+         -- so that the user can continue to use the same deviceID for next login
+         UPDATE API.AppWorkstation WITH (ROWLOCK)
+         SET DeviceID = 'TEMP-' + @c_UserID
+         WHERE APPName = @cAppName 
+         AND DeviceID = @cDeviceID
+         AND Workstation = @cSelWorkStation
       END
 
 	   GOTO SUCCESS_SP

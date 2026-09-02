@@ -47,7 +47,9 @@ BEGIN
       @cDeviceID           NVARCHAR( 50),
       @cDefaultWorkstation NVARCHAR( 30),
       @cTargetVersion      NVARCHAR( 12),
-      @cCurrentVersion     NVARCHAR( 12)
+      @cCurrentVersion     NVARCHAR( 12),
+      @dNow                DATETIME,
+      @n_TimeOut           INT
 
    DECLARE @tempworkstation TABLE (
       workstation NVARCHAR( 30)
@@ -60,6 +62,8 @@ BEGIN
    SET @cDefaultWorkstation   = ''
    SET @cTargetVersion        = ''
    SET @cCurrentVersion       = ''
+   SET @dNow                  = GETDATE()
+   SET @n_TimeOut             = 0
    
    EXEC [API].[isp_ECOMP_ValidateAndSetUser]
         @c_UserID      = @c_UserID,
@@ -97,6 +101,21 @@ BEGIN
          Facility    NVARCHAR(5)
    )
 
+   --get StorerConfig
+   EXECUTE dbo.nspGetRight 
+        @cFacility
+      , @cStorerKey        
+      , ''                 
+      , 'TPSectionTime'    
+      , @b_Success   OUTPUT
+      , @n_TimeOut   OUTPUT
+      , @n_ErrNo     OUTPUT
+      , @c_ErrMsg    OUTPUT
+
+   IF @n_TimeOut IS NULL OR @n_TimeOut = 0
+   BEGIN   
+      SET @n_TimeOut = 900
+   END
    IF @cDeviceID <>''
    BEGIN
       IF ISNULL(@cDeviceID,'') NOT LIKE 'Web%'
@@ -125,7 +144,10 @@ BEGIN
       END
       ELSE
       BEGIN
-         SET @cDeviceID = @cDeviceID + @c_UserID
+         SELECT @cDeviceID = DeviceID
+         FROM API.AppSection (NOLOCK)
+         WHERE UserID = @c_UserID
+         AND (DATEADD(s,@n_TimeOut,SectionTime) > @dNow OR SectionTime IS NULL)
 
          SELECT  @cDefaultWorkstation = workstation
                , @cTargetVersion = ISNULL(TargetVersion,'')
