@@ -20,6 +20,7 @@ GO
 /* 28-MAR-2025  Ansuman01  1.0   UWP-30689 Pallet Allocation for kitting*/
 /* 16-APR-2025  Ansuman02  1.1   UWP-30689 Extract LOT, LOC,            */
 /*                               ID from Other Params                   */
+/* 02-SEP-2026  Preetham01 1.2   UWP-65250 Filter KITDETAIL by Type 'F' */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALNLD01]
    @c_DocumentNo NVARCHAR(10),  --kitkey
@@ -103,6 +104,7 @@ BEGIN
         FROM KITDETAIL (nolock)
         WHERE KITDETAIL.KITKEY = @c_KitKey
         AND KITDETAIL.KITLineNumber = @c_KitLineNumber
+        AND KITDETAIL.Type = 'F'      --Preetham01
    END
 
    SET @c_SQL = N'
