@@ -2104,8 +2104,8 @@ BEGIN
                      END
 
                      BEGIN TRY
-                        INSERT INTO RDT.rdtPickLog (OrderKey, PickZone, PickDetailKey, StorerKey, Remarks, ActQty, Mobile, PickSlipNo, PickMethod, Status, DropID)
-                        SELECT OrderKey, PickZone, PickDetailKey, StorerKey, @cScannedSN, 1, Mobile, PickSlipNo, 'Pick-P', '0', IIF(@cDropIDScn = 'PickZoneScn', @cDropID, '')
+                        INSERT INTO RDT.rdtPickLog (OrderKey, PickZone, PickDetailKey, StorerKey, Remarks, ActQty, Mobile, PickSlipNo, PickMethod, Status, DropID, LOC, ID, LOT, SKU)
+                        SELECT OrderKey, PickZone, PickDetailKey, StorerKey, @cScannedSN, 1, Mobile, PickSlipNo, 'Pick-P', '0', IIF(@cDropIDScn = 'PickZoneScn', @cDropID, ''), @cScannedLOC, @cScannedID, @cScannedLot, @cScannedSKU
                         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
                         WHERE RowRef = @nrdtPickLogID
                      END TRY
@@ -3081,8 +3081,7 @@ BEGIN
                SET @cOutField15 =''
 
                -- Go to Short screen
-               IF @nTotalLocPickedQty > 0 
-                  AND EXISTS( SELECT 1
+               IF EXISTS( SELECT 1
                        FROM RDT.rdtPickLog WITH(NOLOCK)
                        WHERE PickSlipNo = @cPickSlipNo
                           AND Loc = @cSuggLOC

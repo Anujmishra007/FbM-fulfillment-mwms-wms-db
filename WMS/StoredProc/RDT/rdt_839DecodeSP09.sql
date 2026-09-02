@@ -364,6 +364,7 @@ BEGIN
                FROM dbo.SerialNo WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND SerialNo = @cSerialNo
+                  AND Status = '1'
 
                SET @nRowCount = @@ROWCOUNT
 
