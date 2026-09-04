@@ -677,7 +677,7 @@ BEGIN
                   FROM dbo.PackDetail WITH (NOLOCK)
                   WHERE StorerKey  = @cStorerKey
                      AND PickSlipNo = @cPickSlipNo
-                     AND DropID NOT LIKE 'ARC%'
+                     AND LEFT(DropID, 3) <> 'ARC'
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 262665
@@ -711,7 +711,7 @@ BEGIN
                         AND CartonNo  = @nLoopPackCartonNo
                         AND LabelNo   = @cLoopPackLabelNo
                         AND LabelLine = @cLoopPackLabelLine
-                        AND DropID NOT LIKE 'ARC%'
+                        --AND LEFT(DropID, 3) <> 'ARC'
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo  = 262666
@@ -773,7 +773,7 @@ BEGIN
                FROM dbo.PackDetail WITH (NOLOCK)
                WHERE StorerKey  = @cStorerKey
                   AND PickSlipNo = @cPickSlipNo
-                  AND DropID NOT LIKE 'ARC%'
+                  AND LEFT(DropID, 3) <> 'ARC'
             END TRY
             BEGIN CATCH
                SET @nErrNo  = 262665
@@ -807,7 +807,7 @@ BEGIN
                      AND CartonNo  = @nLoopPackCartonNo
                      AND LabelNo   = @cLoopPackLabelNo
                      AND LabelLine = @cLoopPackLabelLine
-                     AND DropID NOT LIKE 'ARC%'
+                     --AND LEFT(DropID, 3) <> 'ARC'
                END TRY
                BEGIN CATCH
                   SET @nErrNo  = 262666
@@ -978,69 +978,69 @@ BEGIN
    END-- pack confirm
 
    --V1.5 start: Archive PackDetail.DropID after pack confirm
-   IF @cArcPackDtlFlag = 'Y'
-   BEGIN
-      IF @nDebugFlag = 1
-         SELECT 'Archive PackDetail DropID', @cFromDropID AS FromDropID, @cMoveInvFlag AS MoveInvFlag, @cArcPackDtlFlag AS ArcPackDtlFlag
+   -- IF @cArcPackDtlFlag = 'Y'
+   -- BEGIN
+   --    IF @nDebugFlag = 1
+   --       SELECT 'Archive PackDetail DropID', @cFromDropID AS FromDropID, @cMoveInvFlag AS MoveInvFlag, @cArcPackDtlFlag AS ArcPackDtlFlag
 
-      BEGIN TRY
-         IF @cMoveInvFlag = '1'
-            -- UOM6: DropID was updated to LabelNo by V1.1; DropID = LabelNo is a column-to-column filter
-            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
-            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE StorerKey  = @cStorerKey
-               AND PickSlipNo = @cPickSlipNo
-               AND DropID     = LabelNo
-         ELSE
-            -- UCC: DropID is still @cFromDropID
-            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
-            SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND DropID   = @cFromDropID
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo  = 262665
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
-         GOTO RollBackTran
-      END CATCH
+   --    BEGIN TRY
+   --       IF @cMoveInvFlag = '1'
+   --          -- UOM6: DropID was updated to LabelNo by V1.1; DropID = LabelNo is a column-to-column filter
+   --          INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+   --          SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+   --          FROM dbo.PackDetail WITH (NOLOCK)
+   --          WHERE StorerKey  = @cStorerKey
+   --             AND PickSlipNo = @cPickSlipNo
+   --             AND DropID     = LabelNo
+   --       ELSE
+   --          -- UCC: DropID is still @cFromDropID
+   --          INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+   --          SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+   --          FROM dbo.PackDetail WITH (NOLOCK)
+   --          WHERE StorerKey = @cStorerKey
+   --             AND DropID   = @cFromDropID
+   --    END TRY
+   --    BEGIN CATCH
+   --       SET @nErrNo  = 262665
+   --       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPackDtlKeyFail
+   --       GOTO RollBackTran
+   --    END CATCH
 
-      SET @nPackDtlLoopRow = 0
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1
-            @nPackDtlLoopRow    = RowRef,
-            @cLoopPackSlipNo    = PickSlipNo,
-            @nLoopPackCartonNo  = CartonNo,
-            @cLoopPackLabelNo   = LabelNo,
-            @cLoopPackLabelLine = LabelLine
-         FROM @tPackDetail
-         WHERE RowRef > @nPackDtlLoopRow
-         ORDER BY RowRef
+   --    SET @nPackDtlLoopRow = 0
+   --    WHILE 1 = 1
+   --    BEGIN
+   --       SELECT TOP 1
+   --          @nPackDtlLoopRow    = RowRef,
+   --          @cLoopPackSlipNo    = PickSlipNo,
+   --          @nLoopPackCartonNo  = CartonNo,
+   --          @cLoopPackLabelNo   = LabelNo,
+   --          @cLoopPackLabelLine = LabelLine
+   --       FROM @tPackDetail
+   --       WHERE RowRef > @nPackDtlLoopRow
+   --       ORDER BY RowRef
 
-         IF @@ROWCOUNT = 0
-            BREAK
+   --       IF @@ROWCOUNT = 0
+   --          BREAK
 
-         BEGIN TRY
-            UPDATE dbo.PackDetail WITH (ROWLOCK)
-            SET DropID   = LEFT('ARC' + DropID, 20),
-                EditDate = GETDATE(),
-                EditWho  = SUSER_SNAME()
-            WHERE StorerKey = @cStorerKey
-               AND PickSlipNo = @cLoopPackSlipNo
-               AND CartonNo  = @nLoopPackCartonNo
-               AND LabelNo   = @cLoopPackLabelNo
-               AND LabelLine = @cLoopPackLabelLine
-               AND DropID NOT LIKE 'ARC%'
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo  = 262666
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --ArcPackDtlDropIDFail
-            GOTO RollBackTran
-         END CATCH
-      END
-   END
+   --       BEGIN TRY
+   --          UPDATE dbo.PackDetail WITH (ROWLOCK)
+   --          SET DropID   = LEFT('ARC' + DropID, 20),
+   --              EditDate = GETDATE(),
+   --              EditWho  = SUSER_SNAME()
+   --          WHERE StorerKey = @cStorerKey
+   --             AND PickSlipNo = @cLoopPackSlipNo
+   --             AND CartonNo  = @nLoopPackCartonNo
+   --             AND LabelNo   = @cLoopPackLabelNo
+   --             AND LabelLine = @cLoopPackLabelLine
+   --             AND LEFT(DropID, 3) <> 'ARC'
+   --       END TRY
+   --       BEGIN CATCH
+   --          SET @nErrNo  = 262666
+   --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --ArcPackDtlDropIDFail
+   --          GOTO RollBackTran
+   --       END CATCH
+   --    END
+   -- END
    --V1.5 end
 
    COMMIT TRAN rdt_838PackCfmSP12      
