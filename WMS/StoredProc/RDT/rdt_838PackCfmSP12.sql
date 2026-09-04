@@ -18,6 +18,7 @@ GO
 /* 2026-05-08 1.3.1  JackC       UWP-55429 Hotfix for PICK-TRF config on Prod   */
 /* 2026-07-28 1.4    NYE018      FCR-13548 B2C Single: only PackHeader Status=0 */
 /* 2026-08-18 1.5    NYE018      FCR-13548 Archive PackDetail.DropID            */
+/* 2026-09-04 1.6    NYE018      UWP-65029 Archive DropID on pack confirm.      */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838PackCfmSP12] (
@@ -665,6 +666,62 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
+            --V1.6 start: Archive PackDetail.DropID on pack confirm
+            IF @cPackByFromDropID = '1' AND ISNULL(@cFromDropID, '') <> ''
+            BEGIN
+               DELETE FROM @tPackDetail --clear previous loop iteration
+
+               BEGIN TRY
+                  INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+                  SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE StorerKey  = @cStorerKey
+                     AND PickSlipNo = @cPickSlipNo
+                     AND DropID NOT LIKE 'ARC%'
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo  = 262665
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END CATCH
+
+               SET @nPackDtlLoopRow = 0
+               WHILE 1 = 1
+               BEGIN
+                  SELECT TOP 1
+                     @nPackDtlLoopRow    = RowRef,
+                     @cLoopPackSlipNo    = PickSlipNo,
+                     @nLoopPackCartonNo  = CartonNo,
+                     @cLoopPackLabelNo   = LabelNo,
+                     @cLoopPackLabelLine = LabelLine
+                  FROM @tPackDetail
+                  WHERE RowRef > @nPackDtlLoopRow
+                  ORDER BY RowRef
+
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  BEGIN TRY
+                     UPDATE dbo.PackDetail WITH (ROWLOCK)
+                     SET DropID   = LEFT('ARC' + DropID, 20),
+                         EditDate = GETDATE(),
+                         EditWho  = SUSER_SNAME()
+                     WHERE StorerKey  = @cStorerKey
+                        AND PickSlipNo = @cLoopPackSlipNo
+                        AND CartonNo  = @nLoopPackCartonNo
+                        AND LabelNo   = @cLoopPackLabelNo
+                        AND LabelLine = @cLoopPackLabelLine
+                        AND DropID NOT LIKE 'ARC%'
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo  = 262666
+                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                     GOTO RollBackTran
+                  END CATCH
+               END
+            END
+            --V1.6 end
+
             BEGIN TRY
                UPDATE dbo.PackInfo WITH(ROWLOCK)
                   SET CartonStatus = ''
@@ -693,18 +750,74 @@ BEGIN
       END
       ELSE
       BEGIN
-         -- Pack confirm      
-         UPDATE PackHeader SET       
-            Status = '9'       
-         WHERE PickSlipNo = @cPickSlipNo      
-            AND Status <> '9'      
-         SET @nErrNo = @@ERROR       
-         IF @nErrNo <> 0      
-         BEGIN      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail      
-            GOTO RollBackTran      
-         END      
-         
+         -- Pack confirm
+         UPDATE PackHeader SET
+            Status = '9'
+         WHERE PickSlipNo = @cPickSlipNo
+            AND Status <> '9'
+         SET @nErrNo = @@ERROR
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
+            GOTO RollBackTran
+         END
+
+         --V1.6 start: Archive PackDetail.DropID on pack confirm
+         IF @cPackByFromDropID = '1' AND ISNULL(@cFromDropID, '') <> ''
+         BEGIN
+            DELETE FROM @tPackDetail
+
+            BEGIN TRY
+               INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+               SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+               FROM dbo.PackDetail WITH (NOLOCK)
+               WHERE StorerKey  = @cStorerKey
+                  AND PickSlipNo = @cPickSlipNo
+                  AND DropID NOT LIKE 'ARC%'
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo  = 262665
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               GOTO RollBackTran
+            END CATCH
+
+            SET @nPackDtlLoopRow = 0
+            WHILE 1 = 1
+            BEGIN
+               SELECT TOP 1
+                  @nPackDtlLoopRow    = RowRef,
+                  @cLoopPackSlipNo    = PickSlipNo,
+                  @nLoopPackCartonNo  = CartonNo,
+                  @cLoopPackLabelNo   = LabelNo,
+                  @cLoopPackLabelLine = LabelLine
+               FROM @tPackDetail
+               WHERE RowRef > @nPackDtlLoopRow
+               ORDER BY RowRef
+
+               IF @@ROWCOUNT = 0
+                  BREAK
+
+               BEGIN TRY
+                  UPDATE dbo.PackDetail WITH (ROWLOCK)
+                  SET DropID   = LEFT('ARC' + DropID, 20),
+                      EditDate = GETDATE(),
+                      EditWho  = SUSER_SNAME()
+                  WHERE StorerKey  = @cStorerKey
+                     AND PickSlipNo = @cLoopPackSlipNo
+                     AND CartonNo  = @nLoopPackCartonNo
+                     AND LabelNo   = @cLoopPackLabelNo
+                     AND LabelLine = @cLoopPackLabelLine
+                     AND DropID NOT LIKE 'ARC%'
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo  = 262666
+                  SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                  GOTO RollBackTran
+               END CATCH
+            END
+         END
+         --V1.6 end
+
          -- Assign      
          IF @cAssignPackLabelToOrdCfg = '1'      
          BEGIN      
