@@ -47,6 +47,45 @@ BEGIN
          IF ISNULL(@cCaseID, '') <> '' AND ISNULL(@cUOM, '') = '2'
             SET @cExtendedInfo1 = 'UCC: ' + @cCaseID
       END --st4
+
+      --copy from 1812ExtInfo06
+      IF @nAfterStep = 6 OR -- TOLOC
+         @nAfterStep = 7    -- Close Pallet
+      BEGIN
+        -- Get LoadKey
+         DECLARE @cLoadKey NVARCHAR(10)
+         DECLARE @cStorerkey  NVARCHAR(20)
+         DECLARE @nBookingNo NVARCHAR(10)
+
+         SELECT @cLoadKey = LoadKey,
+               @cStorerkey = storerkey
+         FROM dbo.TaskDetail WITH (NOLOCK) 
+         WHERE TaskDetailKey = @cTaskDetailKey
+
+         SELECT @nBookingNo = BookingNo 
+         FROM dbo.TMS_shipment TS WITH (NOLOCK) 
+         JOIN dbo.tms_shipmentTransOrderLink TTL WITH (NOLOCK) ON TTL.shipmentgid=TS.shipmentgid
+         JOIN dbo.tms_transportorder TTO WITH (NOLOCK) ON TTO.ProvshipmentID=TTL.ProvshipmentID
+         WHERE TTO.LoadKey = @cLoadKey
+         GROUP BY BookingNo
+         
+
+         IF EXISTS( SELECT 1 FROM dbo.codelkup WITH (NOLOCK)
+                    WHERE ListName = 'TMEXTNLDKY'
+                    AND StorerKey = @cstorerkey
+                    AND Short ='Y')
+         BEGIN
+            SELECT @cExtendedInfo1 = LEFT(CONCAT(LP.ExternLoadKey, ' ', @nBookingNo), 20)
+            FROM dbo.LoadPlan LP WITH (NOLOCK)
+            WHERE LP.LoadKey = @cLoadKey
+         END
+         ELSE
+         BEGIN
+            SELECT @cExtendedInfo1 = LEFT(CONCAT(LP.LoadKey, ' ', @nBookingNo), 20)
+            FROM dbo.LoadPlan LP WITH (NOLOCK)
+            WHERE LP.LoadKey = @cLoadKey
+         END
+      END-- st6 or 7
    END --1812
 
    Quit:
