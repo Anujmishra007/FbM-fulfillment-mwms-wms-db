@@ -8,3 +8,7 @@ execute rdt.rdtAddMsg 270504, 10, '270504^Long life > REXLOG',                  
 execute rdt.rdtAddMsg 270505, 10, '270505^DOT year mismatch',                      'us_english', 600
 execute rdt.rdtAddMsg 270506, 10, '270506^DOT 8-week rule error',                  'us_english', 600 
 execute rdt.rdtAddMsg 270507 ,10, '270507^WeekYear can not in future.',            'us_english',600
+execute rdt.rdtAddMsg 270508, 10, '270508^DOT 8-week rule error',               'us_english', 600, 0, '270508 DOT 8-week rule error'
+execute rdt.rdtAddMsg 270509, 10, '270509^DOT 8-week rule error',               'us_english', 600, 0, '270509 DOT 8-week rule error'
+execute rdt.rdtAddMsg 270510, 10, '270510^DOT year mismatch',                      'us_english', 600, 0, '270510 DOT year mismatch'
+execute rdt.rdtAddMsg 270511, 10, '270511^DOT 8-week rule error',                  'us_english', 600, 0, '270511 DOT 8-week rule error'

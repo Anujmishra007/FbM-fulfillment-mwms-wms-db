@@ -14,6 +14,7 @@ GO
 /* Date         Author    Ver.  Purposes                                      */
 /* 2026-06-24   Sreeja    1.0   FCR-13976                                     */
 /* 2026-08-13   Dennis    1.1   FCR-14211 Update REXLOG COO lookup            */
+/* 2026-08-18   Dennis    1.2   FCR-14211 Validate PCS DOT vs MAX DOT on pallet */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_POSM_MICHE02]
@@ -86,7 +87,9 @@ BEGIN
        @cSKU_BUSR5      NVARCHAR(30),
        @nWeekGap        INT,
        @n8WeekRange     INT,
-       @cCarrierName    NVARCHAR( 30)
+       @cCarrierName    NVARCHAR( 30),
+       @cID             NVARCHAR( 18),
+       @nMAXDOT_Week    INT
 
     SET @nErrNo = 0
     SET @cErrMsg = ''
@@ -195,6 +198,11 @@ BEGIN
                 SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, N'DSP')
                 GOTO Quit
             END
+
+            -- Get pallet ID from RDTMOBREC for MAX DOT check
+            SELECT @cID = ISNULL(NULLIF(V_ID, ''), ISNULL(C_String3, ''))
+            FROM rdt.RDTMOBREC WITH (NOLOCK)
+            WHERE Mobile = @nMobile
 
             -- -- If PCS DOT year is in the future, do not assign MIN DOT.
             -- -- Standard framework validation (238253) will surface the error to the user.
@@ -309,6 +317,32 @@ BEGIN
                         GOTO Quit
                     END
 
+                    -- FCR-14211: Also validate new PCS DOT vs MAX DOT already on pallet
+                    IF ISNULL(@cID, '') <> ''
+                    BEGIN
+                        SELECT @nMAXDOT_Week = MAX(TRY_CAST(LEFT(Lottable07, 2) AS INT))
+                        FROM dbo.ReceiptDetail WITH (NOLOCK)
+                        WHERE ReceiptKey  = @cSourceKey
+                          AND StorerKey   = @cStorerKey
+                          AND SKU         = @cSKU
+                          AND ToID        = @cID
+                          AND QtyReceived > 0
+                          AND LEN(ISNULL(Lottable07, '')) = 4
+                          AND Lottable07 LIKE '[0-9][0-9][0-9][0-9]'
+                          AND TRY_CAST(RIGHT(Lottable07, 2) AS INT) = @nPCSDOT_Year
+
+                        IF @nMAXDOT_Week IS NOT NULL
+                        BEGIN
+                            SET @nWeekGap = @nPCSDOT_Week - @nMAXDOT_Week
+                            IF @nWeekGap > @n8WeekRange OR @nWeekGap < -@n8WeekRange
+                            BEGIN
+                                SET @nErrNo = 270508
+                                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                                GOTO Quit
+                            END
+                        END
+                    END
+
                     IF @nPCSDOT_Week < @nMINDOT_Week
                         SET @cLottable02 = @cLottable07Value
                     ELSE
@@ -337,7 +371,7 @@ BEGIN
                     -- STEP 3.1: Check year match
                     IF @nPCSDOT_Year <> @nMINDOT_Year
                     BEGIN
-                        SET @nErrNo = 270505
+                        SET @nErrNo = 270510
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                         GOTO Quit
                     END
@@ -347,9 +381,35 @@ BEGIN
 
                     IF @nWeekGap > @n8WeekRange OR @nWeekGap < -@n8WeekRange
                     BEGIN
-                        SET @nErrNo = 270506
+                        SET @nErrNo = 270511
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
                         GOTO Quit
+                    END
+
+                    -- FCR-14211: Also validate new PCS DOT vs MAX DOT already on pallet
+                    IF ISNULL(@cID, '') <> ''
+                    BEGIN
+                        SELECT @nMAXDOT_Week = MAX(TRY_CAST(LEFT(Lottable07, 2) AS INT))
+                        FROM dbo.ReceiptDetail WITH (NOLOCK)
+                        WHERE ReceiptKey  = @cSourceKey
+                          AND StorerKey   = @cStorerKey
+                          AND SKU         = @cSKU
+                          AND ToID        = @cID
+                          AND QtyReceived > 0
+                          AND LEN(ISNULL(Lottable07, '')) = 4
+                          AND Lottable07 LIKE '[0-9][0-9][0-9][0-9]'
+                          AND TRY_CAST(RIGHT(Lottable07, 2) AS INT) = @nPCSDOT_Year
+
+                        IF @nMAXDOT_Week IS NOT NULL
+                        BEGIN
+                            SET @nWeekGap = @nPCSDOT_Week - @nMAXDOT_Week
+                            IF @nWeekGap > @n8WeekRange OR @nWeekGap < -@n8WeekRange
+                            BEGIN
+                                SET @nErrNo = 270509
+                                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+                                GOTO Quit
+                            END
+                        END
                     END
 
                     -- STEP 5: If PCS DOT is older than MIN DOT, update MIN DOT
