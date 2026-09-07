@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
   
-/************************************************************************/  
-/* Store procedure: rdt_1812ExtScn12                                    */  
-/* Copyright      : MAERSK                                              */  
-/*                                                                      */  
-/* Purpose:                                                             */  
-/*                                                                      */  
-/* Date       Rev     Author   Purposes                                 */  
-/* 2026-07-30 1.0.0   JackC    FCR-14961                                */
-/************************************************************************/
+/******************************************************************************/  
+/* Store procedure: rdt_1812ExtScn12                                          */  
+/* Copyright      : MAERSK                                                    */  
+/*                                                                            */  
+/* Purpose:                                                                   */  
+/*                                                                            */  
+/* Date       Rev     Author   Purposes                                       */  
+/* 2026-07-30 1.0.0   JackC    FCR-14961                                      */
+/* 2026-09-04 1.0.1   JackC    FCR-14961 Skip toLoc screen if nothing picked  */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1812ExtScn12] (  
    @nMobile          INT,           
@@ -360,7 +361,31 @@ BEGIN
                SET @cInField05 = '' -- clear FromID field
             END
          END
-         GOTO QUIT
+         GOTO Quit
+      END
+
+      IF @nMobRecStep = 5 AND @nMobRecScn = 6624 -- Close Pallet screen 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF @nDebugFlag = 1
+               SELECT '1812ExtScn12 - Close Pallet Screen, ENTER'
+
+            IF @cInField01 = '9' -- Close Pallet
+            BEGIN
+               --V1.0.1
+                IF NOT EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+                AND EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
+               BEGIN
+                  SET @nAfterStep = 7
+                  SET @nAfterScn = 4026
+                  SET @cOutField01 = ''
+                  GOTO Quit
+               END
+               --V1.0.1
+            END
+         END
+         GOTO Quit
       END
 
       IF @nStep = 99
