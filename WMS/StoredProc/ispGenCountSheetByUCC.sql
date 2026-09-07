@@ -59,7 +59,8 @@ GO
 /* 21-Jan-2021  WLChooi    WMS-15985 - Generate No. Of Loc by Count     */
 /*                         Sheet (WL01)                                 */
 /* 03-Mar-2021  WLChooi    WMS-15985 - Fix LocPerPage Logic (WL02)      */
-/* 27-Feb-2026  Michael    UWP-49445-Fix UCC Qty for incl QtyAlloc(ML01)*/
+/* 28-Aug-2026  Michael    FCR-15134/UWP-49445 - Fix UCC Qty for Exclude*/
+/*                         QtyAllocated (ML01)                          */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispGenCountSheetByUCC (

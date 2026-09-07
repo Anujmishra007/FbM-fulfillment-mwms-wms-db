@@ -1,4 +1,4 @@
-﻿SET ANSI_NULLS OFF
+SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -58,10 +58,11 @@ GO
 /* 18-Aug-2023  NJOW03       2.4    DEVOPS Combine Script                      */
 /* 27-May-2025  Ansuman01    2.5    UWP-32480 - Lot,Loc,Id validation          */
 /* 25-JUN-2025  SSA01        2.6    UWP-3982- Added PalletType in inventory    */
-/* 11-Aug-2025  moo01        2.5    INC8405804 add filter facility&storerkey   */
-/* 09-Oct-2025  SPC040       2.7    Replace SUSER_SNAME with fnc_GetUserName   */
-/* 25-Mar-2026  MICHAEL      2.8    UWP-52575 - Skip Check UCC Lot,Loc,Id if   */
-/*                                  Adj Create from CC Posting(UCC Level)(ML01)*/
+/* 11-Aug-2025  moo01        2.7    INC8405804 add filter facility&storerkey   */
+/* 09-Oct-2025  SPC040       2.8    Replace SUSER_SNAME with fnc_GetUserName   */
+/* 03-Sep-2026  MICHAEL      2.9    FCR-15134 - Skip Check UCC Lot,Loc,Id if   */
+/*                                  Adj Create from CC Posting and             */
+/*                                  ADJ.Userdefine10<>NoUCCPreAJ (ML01)        */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
@@ -384,6 +385,7 @@ BEGIN
          JOIN StockTakeSheetParameters (NOLOCK) ON ADJUSTMENT.CustomerRefNo = StockTakeSheetParameters.StockTakeKey
           AND ADJUSTMENT.StorerKey = StockTakeSheetParameters.StorerKey  AND ADJUSTMENT.Facility = StockTakeSheetParameters.Facility --(moo01)
          WHERE ADJUSTMENT.Adjustmentkey = @c_ADJ_AdjustmentKey
+           AND ISNULL(ADJUSTMENT.UserDefine10,'') <> 'NoUCCPreAJ'   --ML01
 
          SELECT @c_ADJ_AdjustmentLineNumber = SPACE(5)
          WHILE (1=1)
@@ -542,8 +544,104 @@ BEGIN
                 + dbo.fnc_LTRIM(dbo.fnc_RTRIM(@c_ADJ_AdjustmentLineNumber))
             SELECT @b_success = 0
 
-/* ML01-S
-            EXECUTE  nspItrnAddAdjustment
+            --ML01-S
+            SET @c_SQL = N'EXECUTE nspItrnAddAdjustment'
+                       + ' @n_ItrnSysId  = @n_ItrnSysId'
+                       + ',@c_StorerKey  = @c_StorerKey'
+                       + ',@c_Sku        = @c_Sku'
+                       + ',@c_Lot        = @c_Lot'
+                       + ',@c_ToLoc      = @c_ToLoc'
+                       + ',@c_ToID       = @c_ToID'
+                       + ',@c_Status     = @c_Status'
+                       + ',@c_lottable01 = @c_lottable01'
+                       + ',@c_lottable02 = @c_lottable02'
+                       + ',@c_lottable03 = @c_lottable03'
+                       + ',@d_lottable04 = @d_lottable04'
+                       + ',@d_lottable05 = @d_lottable05'
+                       + ',@c_lottable06 = @c_Lottable06'
+                       + ',@c_lottable07 = @c_Lottable07'
+                       + ',@c_lottable08 = @c_Lottable08'
+                       + ',@c_lottable09 = @c_Lottable09'
+                       + ',@c_lottable10 = @c_Lottable10'
+                       + ',@c_lottable11 = @c_Lottable11'
+                       + ',@c_lottable12 = @c_Lottable12'
+                       + ',@d_lottable13 = @d_Lottable13'
+                       + ',@d_lottable14 = @d_Lottable14'
+                       + ',@d_lottable15 = @d_Lottable15'
+                       + ',@c_Channel    = @c_Channel'
+                       + ',@n_Channel_ID = @n_Channel_ID OUTPUT'
+                       + ',@n_casecnt    = @n_casecnt'
+                       + ',@n_innerpack  = @n_innerpack'
+                       + ',@n_qty        = @n_qty'
+                       + ',@n_pallet     = @n_pallet'
+                       + ',@f_cube       = @f_cube'
+                       + ',@f_grosswgt   = @f_grosswgt'
+                       + ',@f_netwgt     = @f_netwgt'
+                       + ',@f_otherunit1 = @f_otherunit1'
+                       + ',@f_otherunit2 = @f_otherunit2'
+                       + ',@c_SourceKey  = @c_SourceKey'
+                       + ',@c_SourceType = @c_SourceType'
+                       + ',@c_PackKey    = @c_PackKey'
+                       + ',@c_UOM        = @c_UOM'
+                       + ',@b_UOMCalc    = @b_UOMCalc'
+                       + ',@d_EffectiveDate = @d_EffectiveDate'
+                       + ',@c_itrnkey    = @c_itrnkey OUTPUT'
+                       + ',@b_Success    = @b_Success OUTPUT'
+                       + ',@n_err        = @n_err     OUTPUT'
+                       + ',@c_errmsg     = @c_errmsg  OUTPUT'
+
+            IF EXISTS(SELECT TOP 1 1 FROM sys.parameters WHERE object_id = OBJECT_ID('dbo.nspItrnAddAdjustment') AND name = '@c_PalletType')
+               SET @c_SQL = @c_SQL + ',@c_PalletType = @c_PalletType'
+
+            SET @c_SQLParam =
+                N'@n_ItrnSysId  INT'
+              + ',@c_StorerKey  NVARCHAR(15)'
+              + ',@c_Sku        NVARCHAR(20)'
+              + ',@c_Lot        NVARCHAR(10)'
+              + ',@c_ToLoc      NVARCHAR(10)'
+              + ',@c_ToID       NVARCHAR(18)'
+              + ',@c_Status     NVARCHAR(10)'
+              + ',@c_lottable01 NVARCHAR(18)'
+              + ',@c_lottable02 NVARCHAR(18)'
+              + ',@c_lottable03 NVARCHAR(18)'
+              + ',@d_lottable04 DATETIME'
+              + ',@d_lottable05 DATETIME'
+              + ',@c_Lottable06 NVARCHAR(30)'
+              + ',@c_Lottable07 NVARCHAR(30)'
+              + ',@c_Lottable08 NVARCHAR(30)'
+              + ',@c_Lottable09 NVARCHAR(30)'
+              + ',@c_Lottable10 NVARCHAR(30)'
+              + ',@c_Lottable11 NVARCHAR(30)'
+              + ',@c_Lottable12 NVARCHAR(30)'
+              + ',@d_Lottable13 DATETIME'
+              + ',@d_Lottable14 DATETIME'
+              + ',@d_Lottable15 DATETIME'
+              + ',@c_Channel    NVARCHAR(20)'
+              + ',@n_Channel_ID BIGINT        OUTPUT'
+              + ',@n_casecnt    INT'
+              + ',@n_innerpack  INT'
+              + ',@n_qty        INT'
+              + ',@n_pallet     INT'
+              + ',@f_cube       FLOAT'
+              + ',@f_grosswgt   FLOAT'
+              + ',@f_netwgt     FLOAT'
+              + ',@f_otherunit1 FLOAT'
+              + ',@f_otherunit2 FLOAT'
+              + ',@c_SourceKey  NVARCHAR(20)'
+              + ',@c_SourceType NVARCHAR(30)'
+              + ',@c_PackKey    NVARCHAR(10)'
+              + ',@c_UOM        NVARCHAR(10)'
+              + ',@b_UOMCalc    INT'
+              + ',@d_EffectiveDate DATETIME'
+              + ',@c_itrnkey    NVARCHAR(10)  OUTPUT'
+              + ',@b_Success    INT           OUTPUT'
+              + ',@n_err        INT           OUTPUT'
+              + ',@c_errmsg     NVARCHAR(250) OUTPUT'
+              + ',@c_PalletType NVARCHAR(10)'
+            --ML01-E
+
+--ML01            EXECUTE  nspItrnAddAdjustment
+            EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam,   --ML01
                      @n_ItrnSysId  = NULL,
                      @c_StorerKey  = @c_ADJ_StorerKey,
                      @c_Sku        = @c_ADJ_Sku,
@@ -588,149 +686,6 @@ BEGIN
                      @n_err        = @n_err     OUTPUT,
                      @c_errmsg     = @c_errmsg  OUTPUT,
                      @c_PalletType = @c_PalletType
-ML01-E */
-            --ML01-S
-            SET @c_SQL = N'EXECUTE nspItrnAddAdjustment'
-                       + ' @n_ItrnSysId     = @n_ItrnSysId'
-                       + ',@c_StorerKey     = @c_StorerKey'
-                       + ',@c_Sku           = @c_Sku'
-                       + ',@c_Lot           = @c_Lot'
-                       + ',@c_ToLoc         = @c_ToLoc'
-                       + ',@c_ToID          = @c_ToID'
-                       + ',@c_Status        = @c_Status'
-                       + ',@c_lottable01    = @c_lottable01'
-                       + ',@c_lottable02    = @c_lottable02'
-                       + ',@c_lottable03    = @c_lottable03'
-                       + ',@d_lottable04    = @d_lottable04'
-                       + ',@d_lottable05    = @d_lottable05'
-                       + ',@c_lottable06    = @c_Lottable06'
-                       + ',@c_lottable07    = @c_Lottable07'
-                       + ',@c_lottable08    = @c_Lottable08'
-                       + ',@c_lottable09    = @c_Lottable09'
-                       + ',@c_lottable10    = @c_Lottable10'
-                       + ',@c_lottable11    = @c_Lottable11'
-                       + ',@c_lottable12    = @c_Lottable12'
-                       + ',@d_lottable13    = @d_Lottable13'
-                       + ',@d_lottable14    = @d_Lottable14'
-                       + ',@d_lottable15    = @d_Lottable15'
-                       + ',@c_Channel       = @c_Channel'
-                       + ',@n_Channel_ID    = @n_Channel_ID OUTPUT'
-                       + ',@n_casecnt       = @n_casecnt'
-                       + ',@n_innerpack     = @n_innerpack'
-                       + ',@n_qty           = @n_qty'
-                       + ',@n_pallet        = @n_pallet'
-                       + ',@f_cube          = @f_cube'
-                       + ',@f_grosswgt      = @f_grosswgt'
-                       + ',@f_netwgt        = @f_netwgt'
-                       + ',@f_otherunit1    = @f_otherunit1'
-                       + ',@f_otherunit2    = @f_otherunit2'
-                       + ',@c_SourceKey     = @c_SourceKey'
-                       + ',@c_SourceType    = @c_SourceType'
-                       + ',@c_PackKey       = @c_PackKey'
-                       + ',@c_UOM           = @c_UOM'
-                       + ',@b_UOMCalc       = @b_UOMCalc'
-                       + ',@d_EffectiveDate = @d_EffectiveDate'
-                       + ',@c_itrnkey       = @c_itrnkey    OUTPUT'
-                       + ',@b_Success       = @b_Success    OUTPUT'
-                       + ',@n_err           = @n_err        OUTPUT'
-                       + ',@c_errmsg        = @c_errmsg     OUTPUT'
-
-            IF EXISTS(SELECT TOP 1 1 FROM sys.parameters WHERE object_id = OBJECT_ID('dbo.nspItrnAddAdjustment') AND name = '@c_PalletType')
-               SET @c_SQL = @c_SQL + ',@c_PalletType = @c_PalletType'
-
-            SET @c_SQLParam =
-                N'@n_ItrnSysId     INT'
-              + ',@c_StorerKey     NVARCHAR(15)'
-              + ',@c_Sku           NVARCHAR(20)'
-              + ',@c_Lot           NVARCHAR(10)'
-              + ',@c_ToLoc         NVARCHAR(10)'
-              + ',@c_ToID          NVARCHAR(18)'
-              + ',@c_Status        NVARCHAR(10)'
-              + ',@c_lottable01    NVARCHAR(18)'
-              + ',@c_lottable02    NVARCHAR(18)'
-              + ',@c_lottable03    NVARCHAR(18)'
-              + ',@d_lottable04    DATETIME'
-              + ',@d_lottable05    DATETIME'
-              + ',@c_Lottable06    NVARCHAR(30)'
-              + ',@c_Lottable07    NVARCHAR(30)'
-              + ',@c_Lottable08    NVARCHAR(30)'
-              + ',@c_Lottable09    NVARCHAR(30)'
-              + ',@c_Lottable10    NVARCHAR(30)'
-              + ',@c_Lottable11    NVARCHAR(30)'
-              + ',@c_Lottable12    NVARCHAR(30)'
-              + ',@d_Lottable13    DATETIME'
-              + ',@d_Lottable14    DATETIME'
-              + ',@d_Lottable15    DATETIME'
-              + ',@c_Channel       NVARCHAR(20)'
-              + ',@n_Channel_ID    BIGINT        OUTPUT'
-              + ',@n_casecnt       INT'
-              + ',@n_innerpack     INT'
-              + ',@n_qty           INT'
-              + ',@n_pallet        INT'
-              + ',@f_cube          FLOAT'
-              + ',@f_grosswgt      FLOAT'
-              + ',@f_netwgt        FLOAT'
-              + ',@f_otherunit1    FLOAT'
-              + ',@f_otherunit2    FLOAT'
-              + ',@c_SourceKey     NVARCHAR(20)'
-              + ',@c_SourceType    NVARCHAR(30)'
-              + ',@c_PackKey       NVARCHAR(10)'
-              + ',@c_UOM           NVARCHAR(10)'
-              + ',@b_UOMCalc       INT'
-              + ',@d_EffectiveDate DATETIME'
-              + ',@c_itrnkey       NVARCHAR(10)  OUTPUT'
-              + ',@b_Success       INT           OUTPUT'
-              + ',@n_err           INT           OUTPUT'
-              + ',@c_errmsg        NVARCHAR(250) OUTPUT'
-              + ',@c_PalletType    NVARCHAR(10)'
-
-            EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam
-               , @n_ItrnSysId     = NULL
-               , @c_StorerKey     = @c_ADJ_StorerKey
-               , @c_Sku           = @c_ADJ_Sku
-               , @c_Lot           = @c_ADJ_Lot
-               , @c_ToLoc         = @c_ADJ_Loc
-               , @c_ToID          = @c_ADJ_Id
-               , @c_Status        = ''
-               , @c_lottable01    = @c_lottable01
-               , @c_lottable02    = @c_lottable02
-               , @c_lottable03    = @c_lottable03
-               , @d_lottable04    = @d_lottable04
-               , @d_lottable05    = @d_lottable05
-               , @c_Lottable06    = @c_lottable06
-               , @c_Lottable07    = @c_lottable07
-               , @c_Lottable08    = @c_lottable08
-               , @c_Lottable09    = @c_lottable09
-               , @c_Lottable10    = @c_lottable10
-               , @c_Lottable11    = @c_lottable11
-               , @c_Lottable12    = @c_lottable12
-               , @d_Lottable13    = @d_lottable13
-               , @d_Lottable14    = @d_lottable14
-               , @d_Lottable15    = @d_lottable15
-               , @c_Channel       = @c_Channel
-               , @n_Channel_ID    = @n_Channel_ID OUTPUT
-               , @n_casecnt       = @n_ADJ_CaseCnt
-               , @n_innerpack     = @n_ADJ_InnerPack
-               , @n_qty           = @n_ADJ_Qty
-               , @n_pallet        = @n_ADJ_Pallet
-               , @f_cube          = @n_ADJ_Cube
-               , @f_grosswgt      = @n_ADJ_GrossWgt
-               , @f_netwgt        = @n_ADJ_NetWgt
-               , @f_otherunit1    = @n_ADJ_OtherUnit1
-               , @f_otherunit2    = @n_ADJ_OtherUnit2
-               , @c_SourceKey     = @c_SourceKey
-               , @c_SourceType    = 'ntrAdjustmentDetailUpdate'
-               , @c_PackKey       = @c_AdJ_packkey
-               , @c_UOM           = @c_ADJ_uom
-               , @b_UOMCalc       = 0
-               , @d_EffectiveDate = @d_ADJ_EffectiveDate
-               , @c_itrnkey       = @c_ItrnKey OUTPUT
-               , @b_Success       = @b_Success OUTPUT
-               , @n_err           = @n_err     OUTPUT
-               , @c_errmsg        = @c_errmsg  OUTPUT
-               , @c_PalletType    = @c_PalletType
-            --ML01-E
-
             IF @b_success <> 1
             BEGIN
                SELECT @n_continue = 3 /* Other Error flags Set By nspItrnAddAdjustment */
