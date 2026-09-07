@@ -66,6 +66,7 @@ GO
 /*                              Cycle Count by Adjustment Serialno               */
 /* 10-OCT-2025  SSA01     3.4   UWP-42248 -Enhanced session management and       */
 /*                              cleanup                                          */
+/* 28-AUG-2026  Michael   3.6   FCR-15134 Add GenCCAdjustmentPost_SP (ML01)      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispGenCCAdjustmentPost_MultiCnt] (
@@ -162,6 +163,8 @@ BEGIN
          ,  @c_StrategyLocSQL NVARCHAR(4000)       --(Wan03)
          ,  @n_sysqty         INT = 0              --NJOW07
          ,  @C_CCSheetNo      NVARCHAR(10)=''      --NJOW07
+         , @c_GenCCAdjustmentPost_SP NVARCHAR(30)   --ML01
+
 
    --(Wan04) - START
    DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
@@ -303,6 +306,12 @@ BEGIN
       END
                 
       SET @nRDTNotAutoFinalizeAdj = rdt.rdtGetConfig( @nFunc, 'RDTNotAutoFinalizeAdj', @cStorerKey)          
+
+      --ML01-S
+      SELECT @c_GenCCAdjustmentPost_SP = Authority FROM dbo.fnc_GetRight2(@c_Facility, @c_StorerParm, '','GenCCAdjustmentPost_SP')
+      IF ISNULL(@c_GenCCAdjustmentPost_SP,'') <> ''
+         GOTO START_CUSTOM_SP
+      --ML01-E
    END
    ELSE
    BEGIN
@@ -338,6 +347,12 @@ BEGIN
             , @c_ExcludeQtyAllocated = ExcludeQtyAllocated        --(Wan03)
       FROM StockTakeSheetParameters WITH (NOLOCK)
       WHERE StockTakeKey = @c_StockTakeKey
+
+      --ML01-S
+      SELECT @c_GenCCAdjustmentPost_SP = Authority FROM dbo.fnc_GetRight2(@c_Facility, @c_StorerParm, '','GenCCAdjustmentPost_SP')
+      IF ISNULL(@c_GenCCAdjustmentPost_SP,'') <> ''
+         GOTO START_CUSTOM_SP
+      --ML01-E
 
       IF @c_CountType = 'UCC'
       BEGIN
@@ -501,6 +516,27 @@ BEGIN
       */
    END
  
+   --ML01-S
+START_CUSTOM_SP:
+   IF ISNULL(@c_GenCCAdjustmentPost_SP,'')<>''
+   BEGIN
+      IF EXISTS(SELECT TOP 1 1 FROM sys.procedures WHERE name = @c_GenCCAdjustmentPost_SP)
+      BEGIN
+         EXEC @c_GenCCAdjustmentPost_SP
+              @c_StockTakeKey  = @c_StockTakeKey
+            , @c_CountNo       = @c_CountNo
+            , @b_success       = @b_Success  OUTPUT
+            , @c_TaskDetailKey = @c_TaskDetailKey
+            , @c_ByPalletLevel = @c_ByPalletLevel
+            , @c_IDOnHold      = @c_IDOnHold
+
+         IF @b_success = 0
+            SET @n_continue = 3
+      END
+      GOTO EXIT_SP
+   END
+   --ML01-E
+
    -- Generate WithDraw Stock from Lotxlocxid table
    IF @b_debug = 1
    BEGIN
