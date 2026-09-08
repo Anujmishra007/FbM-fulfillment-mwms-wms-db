@@ -14,7 +14,7 @@ GO
 /*                                                                       */
 /* Called By: Wave                                                       */
 /*                                                                       */
-/* Version: 1.1                                                          */
+/* Version: 1.2                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
@@ -23,6 +23,8 @@ GO
 /* 14-Apr-2026 WLChooi  1.0   Initial Version                            */
 /* 28-Jul-2026 WLChooi  1.1   FCR-14984 Modify cartonization API         */
 /*                            algorithm (WL01)                           */
+/* 08-Sep-2026 WLChooi  1.2   FCR-16122 Split ECOM cartonization groups  */
+/*                            by single/multi order using Option5 (WL02) */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_TOTE]
    @c_Wavekey     NVARCHAR(10)
@@ -68,6 +70,7 @@ BEGIN
          , @c_IsCompletePack        NVARCHAR(5)    = ''
 
          , @c_CTNGroup              NVARCHAR(10)   = ''
+         , @c_ECOM_SINGLE_Flag      NVARCHAR(1)    = ''   --WL02
          , @c_CTNGroup_BTK          NVARCHAR(50)   = ''
          , @c_CartonType_Max        NVARCHAR(10)   = ''
          , @n_CartonCube_Max        FLOAT          = 0.00
@@ -416,6 +419,7 @@ BEGIN
       SELECT TOP 1
             @c_Facility  = o.Facility
          ,  @c_Storerkey = p.Storerkey
+         ,  @c_ECOM_SINGLE_Flag = o.ECOM_SINGLE_Flag   --WL02
       FROM #PickDetail_WIP p
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = p.OrderKey
 
@@ -431,7 +435,14 @@ BEGIN
 
       IF ISNULL(@c_Option5, '') <> ''
       BEGIN
-         SELECT @c_CTNGroup = dbo.fnc_GetParamValueFromString('@c_CartonGroup_B2C', @c_Option5, @c_CTNGroup)
+         --WL02 S
+         SELECT @c_CTNGroup = dbo.fnc_GetParamValueFromString( CASE WHEN @c_ECOM_SINGLE_Flag = 'S'
+                                                                    THEN '@c_CartonGroup_B2C_S'
+                                                                    ELSE '@c_CartonGroup_B2C_M'
+                                                               END
+                                                             , @c_Option5
+                                                             , @c_CTNGroup )
+         --WL02 E
       END
    END
 
