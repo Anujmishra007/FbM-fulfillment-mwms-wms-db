@@ -1,0 +1,622 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+/***************************************************************************/
+/* Stored Procedure: isp_RPT_CMR_01_WLVR                                   */
+/* Creation Date:  05/06/2026                                              */
+/* Copyright: MAERSK                                                       */
+/* Written by: WSE016                                                      */
+/*                                                                         */
+/* Purpose:                                                                */
+/*   Generate CMR report                                                   */
+/*                                                                         */
+/* Called By:                                                              */
+/*   isp_RPT_CMR_01_WLVR                                                   */
+/*                                                                         */
+/* GitLab Version: 1.0                                                     */
+/* Version:        5.4                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date        Author   Ver   Purpose                                      */
+/* 05/06/2026  WSE016   1.0  Build based on isp_RPT_CMR_01_HP for WLVR     */
+/* 07/09/2026  WSE016   1.1  Adding NOLOCK, Temp tables and Indexes on Tenp*/
+/*							 tables to improve performance.                */
+/***************************************************************************/
+
+CREATE OR ALTER     PROC [dbo].[isp_RPT_CMR_01_WLVR]
+(
+    @PARAM_WMS_c_Mbolkey NVARCHAR(80)  -- MBOL Key input parameter
+)
+AS
+BEGIN
+    -----------------------------------------------------------------------
+    -- Session settings
+    -----------------------------------------------------------------------
+    SET NOCOUNT ON;
+    SET ANSI_NULLS OFF;
+    SET QUOTED_IDENTIFIER OFF;
+    SET CONCAT_NULL_YIELDS_NULL OFF;
+
+    -----------------------------------------------------------------------
+    -- DEBUG EXAMPLES
+    -----------------------------------------------------------------------
+    -- DECLARE @PARAM_WMS_c_Mbolkey VARCHAR(50) = '0000013167';
+
+    -----------------------------------------------------------------------
+    -- MAIN DATASET (BASE CTE)
+    -----------------------------------------------------------------------
+	----------------------------------------------------------------------
+	-- REMOVE TEMPORARY TABLES FROM A PREVIOUS EXECUTION
+	-----------------------------------------------------------------------
+	DROP TABLE IF EXISTS #Orders;
+	DROP TABLE IF EXISTS #MbolPickLots;
+	DROP TABLE IF EXISTS #Marks;
+	DROP TABLE IF EXISTS #WeightCube;
+	DROP TABLE IF EXISTS #MainBase;
+
+	-----------------------------------------------------------------------
+	-- 1. PRE-FILTER ORDERS FOR THE REQUESTED MBOL
+	--
+	-- This prevents the remainder of the query from repeatedly scanning
+	-- the complete Orders table.
+	-----------------------------------------------------------------------
+	SELECT
+	    o.OrderKey,
+	    o.StorerKey,
+	    o.MbolKey,
+	    o.ConsigneeKey,
+	    o.DischargePlace,
+	    o.c_company,
+	    o.c_address1,
+	    o.c_address2,
+	    o.c_zip,
+	    o.c_city,
+	    o.c_country
+	INTO #Orders
+	FROM Orders o WITH (NOLOCK)
+	WHERE o.MbolKey = @PARAM_WMS_c_Mbolkey;
+
+	-----------------------------------------------------------------------
+	-- TEMPORARY TABLE INDEXES
+	-----------------------------------------------------------------------
+	CREATE UNIQUE CLUSTERED INDEX CIX_Orders_OrderKey_StorerKey
+	    ON #Orders
+	    (
+	        OrderKey,
+	        StorerKey
+	    );
+
+	CREATE NONCLUSTERED INDEX IX_Orders_MbolKey
+	    ON #Orders
+	    (
+	        MbolKey,
+	        OrderKey,
+	        StorerKey
+	    )
+	    INCLUDE
+	    (
+	        ConsigneeKey,
+	        DischargePlace,
+	        c_company,
+	        c_address1,
+	        c_address2,
+	        c_zip,
+	        c_city,
+	        c_country
+	    );
+
+	-----------------------------------------------------------------------
+	-- 2. PRE-STAGE PICKDETAIL AND LOTATTRIBUTE DATA
+	--
+	-- This dataset is used by both the marks calculation and the
+	-- weight/volume calculation.
+	-----------------------------------------------------------------------
+	SELECT
+	    o.MbolKey,
+	    o.OrderKey,
+	    o.StorerKey,
+	    pd.OrderLineNumber,
+	    pd.ID,
+	    pd.Lot,
+	    la.Lottable01,
+	    la.Lottable03,
+	    la.Lottable07,
+	    la.Lottable08,
+	    la.Lottable09
+	INTO #MbolPickLots
+	FROM #Orders o
+	INNER JOIN PickDetail pd WITH (NOLOCK)
+	    ON pd.OrderKey = o.OrderKey
+	   AND pd.StorerKey = o.StorerKey
+	INNER JOIN LOTATTRIBUTE la WITH (NOLOCK)
+	    ON la.Lot = pd.Lot;
+
+	-----------------------------------------------------------------------
+	-- TEMPORARY TABLE INDEXES
+	-----------------------------------------------------------------------
+	CREATE CLUSTERED INDEX CIX_MbolPickLots_Order
+	    ON #MbolPickLots
+	    (
+	        OrderKey,
+	        StorerKey,
+	        OrderLineNumber
+	    );
+
+	CREATE NONCLUSTERED INDEX IX_MbolPickLots_Lottable09
+	    ON #MbolPickLots
+	    (
+	        MbolKey,
+	        Lottable09
+	    )
+	    INCLUDE
+	    (
+	        OrderKey,
+	        StorerKey,
+	        ID,
+	        Lot,
+	        Lottable01,
+	        Lottable03,
+	        Lottable07,
+	        Lottable08
+	    );
+
+	CREATE NONCLUSTERED INDEX IX_MbolPickLots_WeightLookup
+	    ON #MbolPickLots
+	    (
+	        StorerKey,
+	        Lottable03,
+	        Lottable08,
+	        Lottable09
+	    )
+	    INCLUDE
+	    (
+	        MbolKey,
+	        OrderKey,
+	        Lot
+	    );
+
+	-----------------------------------------------------------------------
+	-- 3. PRE-CALCULATE MARKS PER MBOL AND LOTTABLE09
+	--
+	-- This replaces the first correlated OUTER APPLY.
+	-----------------------------------------------------------------------
+	SELECT
+	    marks.MbolKey,
+	    marks.Lottable09,
+	    STRING_AGG(
+	        CONVERT(VARCHAR(MAX), marks.Lottable01),
+	        ', '
+	    ) AS Lottable01
+	INTO #Marks
+	FROM
+	(
+	    SELECT DISTINCT
+	        mpl.MbolKey,
+	        mpl.Lottable09,
+	        mpl.Lottable01
+	    FROM #MbolPickLots mpl
+	) marks
+	GROUP BY
+	    marks.MbolKey,
+	    marks.Lottable09;
+
+	-----------------------------------------------------------------------
+	-- TEMPORARY TABLE INDEX
+	-----------------------------------------------------------------------
+	CREATE UNIQUE CLUSTERED INDEX CIX_Marks_MbolKey_Lottable09
+	    ON #Marks
+	    (
+	        MbolKey,
+	        Lottable09
+	    );
+
+	-----------------------------------------------------------------------
+	-- 4. PRE-CALCULATE WEIGHT AND VOLUME
+	--
+	-- This replaces the second correlated OUTER APPLY.
+	--
+	-- The join to MBOLDETAIL is retained to preserve the original query
+	-- logic.
+	-----------------------------------------------------------------------
+	SELECT
+	    mpl.MbolKey,
+	    mpl.Lottable09,
+	    SUM(rd.GrossWgt) AS GrossWeight,
+	    SUM(rd.Cube) AS Cube
+	INTO #WeightCube
+	FROM #MbolPickLots mpl
+	INNER JOIN MBOLDETAIL md WITH (NOLOCK)
+	    ON md.OrderKey = mpl.OrderKey
+	   AND md.MbolKey = mpl.MbolKey
+	INNER JOIN RECEIPTDETAIL rd WITH (NOLOCK)
+	    ON rd.StorerKey = mpl.StorerKey
+	   AND rd.Lottable03 = mpl.Lottable03
+	   AND rd.Lottable08 = mpl.Lottable08
+	   AND rd.Lottable09 = mpl.Lottable09
+	GROUP BY
+	    mpl.MbolKey,
+	    mpl.Lottable09;
+
+	-----------------------------------------------------------------------
+	-- TEMPORARY TABLE INDEX
+	-----------------------------------------------------------------------
+	CREATE UNIQUE CLUSTERED INDEX CIX_WeightCube_MbolKey_Lottable09
+	    ON #WeightCube
+	    (
+	        MbolKey,
+	        Lottable09
+	    );
+
+	-----------------------------------------------------------------------
+	-- 5. BUILD THE EQUIVALENT OF THE ORIGINAL MAIN_BASE CTE
+	--
+	-- The business output and grouping logic remain unchanged.
+	-----------------------------------------------------------------------
+	SELECT
+	    c.Code2 AS PAGENUM,
+
+	    -------------------------------------------------------------------
+	    -- CONSIGNOR
+	    -------------------------------------------------------------------
+	    'Maersk Maasvlakte Cross Dock' AS [1_Consignor_Name],
+	    'On behalf of Wolverine Europe B.V.' AS [1_Consignor_Behalf],
+	    'Amoerweg 29' AS [1_Consignor_Address],
+	    '3199 KD Maasvlakte-Rotterdam, NLD'
+	        AS [1_Consignor_City_Country],
+
+	    -------------------------------------------------------------------
+	    -- CONSIGNEE
+	    -------------------------------------------------------------------
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_company
+	        ELSE st2.Company
+	    END AS [2_Consignee_Name],
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_address1
+	        ELSE st2.Address1
+	    END AS [2_Consignee_Address1],
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_address2
+	        ELSE st2.Address2
+	    END AS [2_Consignee_Address2],
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_zip + ' ' + o.c_city
+	        ELSE st2.Zip + ' ' + st2.City
+	    END AS [2_Consignee_City],
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_country
+	        ELSE st2.Country
+	    END AS [2_Consignee_City_Country],
+
+	    -------------------------------------------------------------------
+	    -- DELIVERY
+	    -------------------------------------------------------------------
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_city + ' ' + o.c_country
+	        ELSE
+	            st2.Zip + ' ' +
+	            st2.City + ' ' +
+	            st2.Country
+	    END AS [3_Place_of_Delivery],
+
+	    'Maasvlakte Rotterdam, Netherlands ' +
+	        CONVERT(VARCHAR(10), GETDATE(), 120)
+	        AS [4_Place_of_Taking_Over],
+
+	    '' AS [5_Additional_Documents],
+
+	    -------------------------------------------------------------------
+	    -- MARKS
+	    -------------------------------------------------------------------
+	    MAX(m.Lottable01) AS [6_Marks_and_Numbers],
+
+	    -------------------------------------------------------------------
+	    -- SPLIT STATISTICAL NUMBER
+	    -------------------------------------------------------------------
+	    mpl.Lottable07 AS [10_Statistical_Number_1],
+	    mpl.Lottable09 AS [10_Statistical_Number_2],
+
+	    -------------------------------------------------------------------
+	    -- SPLIT PACKAGE COUNTS
+	    -------------------------------------------------------------------
+	    COUNT(DISTINCT mpl.ID) AS pallet_count,
+	    COUNT(mpl.Lottable08) AS carton_count,
+
+	    -------------------------------------------------------------------
+	    -- SPLIT METHOD OF PACKING
+	    -------------------------------------------------------------------
+	    'Pallets STC:' AS [8_Method_of_Packing_1],
+	    'Cartons' AS [8_Method_of_Packing_2],
+
+	    'Footwear' AS [9_Nature_of_Goods],
+
+	    -------------------------------------------------------------------
+	    -- WEIGHT AND VOLUME
+	    -------------------------------------------------------------------
+	    MAX(ISNULL(wc.GrossWeight, 0)) AS [11_Gross_Weight_KG],
+	    MAX(ISNULL(wc.Cube, 0)) AS [12_Volume_m3],
+
+	    CONVERT(
+	        VARCHAR(33),
+	        mb.ArrivalDateFinalDestination,
+	        121
+	    ) AS [13_DeliveryDate],
+
+	    mb.BookingReference AS [13_BookingReference],
+
+	    'DDP' AS [14_Directions_to_Freight_Payment],
+	    NULL AS [15_Established_In],
+
+	    '' AS [16_Carrier_Address_SorerKey],
+	    '' AS [16_Carrier_Address_Address1],
+	    '' AS [16_Carrier_Address_ZipCity],
+	    '' AS [16_Carrier_Address_Country],
+
+	    '' AS [18_Carriers_Reservations],
+	    '' AS [18_Carriers_Reservations_Door],
+
+	    mb.SealNo AS [19_Special_Agreements_Data_1],
+	    '' AS [19_Special_Agreements_Data_2],
+
+	    'Maasvlakte Rotterdam, Netherlands ' +
+	        CONVERT(VARCHAR(10), GETDATE(), 120)
+	        AS [21_Established_In],
+
+	    'Maersk on behalf of Wolverine'
+	        AS [22_Signature_and_dstamp]
+
+	INTO #MainBase
+	FROM #Orders o
+
+	INNER JOIN OrderDetail od WITH (NOLOCK)
+	    ON od.OrderKey = o.OrderKey
+	   AND od.StorerKey = o.StorerKey
+
+	INNER JOIN #MbolPickLots mpl
+	    ON mpl.OrderKey = od.OrderKey
+	   AND mpl.StorerKey = od.StorerKey
+	   AND mpl.OrderLineNumber = od.OrderLineNumber
+
+	INNER JOIN SKU s WITH (NOLOCK)
+	    ON s.SKU = od.SKU
+	   AND s.StorerKey = od.StorerKey
+
+	INNER JOIN Storer st WITH (NOLOCK)
+	    ON st.StorerKey = s.StorerKey
+
+	LEFT JOIN Storer st2 WITH (NOLOCK)
+	    ON st2.StorerKey = o.ConsigneeKey
+
+	INNER JOIN MBOL mb WITH (NOLOCK)
+	    ON mb.MbolKey = o.MbolKey
+
+	LEFT JOIN BI.V_Codelkup c WITH (NOLOCK)
+	    ON c.ListName = 'LGRPTCMR'
+	   AND c.StorerKey = o.StorerKey
+	   AND c.Code = 'CMRPage'
+
+	LEFT JOIN #Marks m
+	    ON m.MbolKey = o.MbolKey
+	   AND m.Lottable09 = mpl.Lottable09
+
+	LEFT JOIN #WeightCube wc
+	    ON wc.MbolKey = o.MbolKey
+	   AND wc.Lottable09 = mpl.Lottable09
+
+	GROUP BY
+	    c.Code2,
+	    mpl.Lottable09,
+	    mpl.Lottable07,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_company
+	        ELSE st2.Company
+	    END,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_address1
+	        ELSE st2.Address1
+	    END,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_address2
+	        ELSE st2.Address2
+	    END,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_zip + ' ' + o.c_city
+	        ELSE st2.Zip + ' ' + st2.City
+	    END,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_country
+	        ELSE st2.Country
+	    END,
+
+	    CASE
+	        WHEN UPPER(o.DischargePlace) LIKE '%DIRECT%'
+	            THEN o.c_city + ' ' + o.c_country
+	        ELSE
+	            st2.Zip + ' ' +
+	            st2.City + ' ' +
+	            st2.Country
+	    END,
+
+	    mb.SealNo,
+	    mb.ArrivalDateFinalDestination,
+	    mb.BookingReference
+
+	OPTION (RECOMPILE);
+
+	-----------------------------------------------------------------------
+	-- INDEX THE MATERIALIZED MAIN RESULT
+	-----------------------------------------------------------------------
+	CREATE NONCLUSTERED INDEX IX_MainBase_FinalGrouping
+	    ON #MainBase
+	    (
+	        PAGENUM,
+	        [10_Statistical_Number_1],
+	        [10_Statistical_Number_2]
+	    )
+	    INCLUDE
+	    (
+	        pallet_count,
+	        carton_count,
+	        [6_Marks_and_Numbers],
+	        [11_Gross_Weight_KG],
+	        [12_Volume_m3]
+	    );
+
+	-----------------------------------------------------------------------
+	-- 6. FINAL SELECT
+	-----------------------------------------------------------------------
+	SELECT
+	    PAGENUM,
+
+	    [1_Consignor_Name],
+	    [1_Consignor_Behalf],
+	    [1_Consignor_Address],
+	    [1_Consignor_City_Country],
+
+	    [2_Consignee_Name],
+	    [2_Consignee_Address1],
+	    [2_Consignee_Address2],
+	    [2_Consignee_City],
+	    [2_Consignee_City_Country],
+
+	    [3_Place_of_Delivery],
+
+	    [4_Place_of_Taking_Over],
+	    [5_Additional_Documents],
+	    [6_Marks_and_Numbers],
+
+	    -------------------------------------------------------------------
+	    -- SPLIT PACKAGE OUTPUT
+	    -------------------------------------------------------------------
+	    SUM(pallet_count) AS [7_Number_of_Packages_Pallets],
+	    SUM(carton_count) AS [7_Number_of_Packages_Cartons],
+
+	    -------------------------------------------------------------------
+	    -- SPLIT METHOD
+	    -------------------------------------------------------------------
+	    [8_Method_of_Packing_1],
+	    [8_Method_of_Packing_2],
+
+	    [9_Nature_of_Goods],
+
+	    -------------------------------------------------------------------
+	    -- SPLIT STATISTICAL NUMBER
+	    -------------------------------------------------------------------
+	    [10_Statistical_Number_1],
+	    [10_Statistical_Number_2],
+
+	    [11_Gross_Weight_KG],
+	    [12_Volume_m3],
+
+	    [13_DeliveryDate],
+	    [13_BookingReference],
+
+	    [14_Directions_to_Freight_Payment],
+	    [15_Established_In],
+
+	    [16_Carrier_Address_SorerKey],
+	    [16_Carrier_Address_Address1],
+	    [16_Carrier_Address_ZipCity],
+	    [16_Carrier_Address_Country],
+
+	    [18_Carriers_Reservations],
+	    [18_Carriers_Reservations_Door],
+
+	    [19_Special_Agreements_Data_1],
+	    [19_Special_Agreements_Data_2],
+
+	    [21_Established_In],
+	    [22_Signature_and_dstamp]
+
+	FROM #MainBase
+
+	GROUP BY
+	    PAGENUM,
+
+	    [1_Consignor_Name],
+	    [1_Consignor_Behalf],
+	    [1_Consignor_Address],
+	    [1_Consignor_City_Country],
+
+	    [2_Consignee_Name],
+	    [2_Consignee_Address1],
+	    [2_Consignee_Address2],
+	    [2_Consignee_City],
+	    [2_Consignee_City_Country],
+
+	    [3_Place_of_Delivery],
+
+	    [4_Place_of_Taking_Over],
+	    [5_Additional_Documents],
+	    [6_Marks_and_Numbers],
+
+	    [8_Method_of_Packing_1],
+	    [8_Method_of_Packing_2],
+
+	    [9_Nature_of_Goods],
+
+	    [10_Statistical_Number_1],
+	    [10_Statistical_Number_2],
+
+	    [11_Gross_Weight_KG],
+	    [12_Volume_m3],
+
+	    [13_DeliveryDate],
+	    [13_BookingReference],
+
+	    [14_Directions_to_Freight_Payment],
+	    [15_Established_In],
+
+	    [16_Carrier_Address_SorerKey],
+	    [16_Carrier_Address_Address1],
+	    [16_Carrier_Address_ZipCity],
+	    [16_Carrier_Address_Country],
+
+	    [18_Carriers_Reservations],
+	    [18_Carriers_Reservations_Door],
+
+	    [19_Special_Agreements_Data_1],
+	    [19_Special_Agreements_Data_2],
+
+	    [21_Established_In],
+	    [22_Signature_and_dstamp]
+
+	ORDER BY
+	    PAGENUM
+
+	OPTION (RECOMPILE);
+
+	-----------------------------------------------------------------------
+	-- 7. CLEAN UP
+	-----------------------------------------------------------------------
+	DROP TABLE IF EXISTS #MainBase;
+	DROP TABLE IF EXISTS #WeightCube;
+	DROP TABLE IF EXISTS #Marks;
+	DROP TABLE IF EXISTS #MbolPickLots;
+	DROP TABLE IF EXISTS #Orders;
+
+
+END
+GO
