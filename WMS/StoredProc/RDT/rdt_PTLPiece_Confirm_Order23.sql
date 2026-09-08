@@ -584,6 +584,21 @@ AfterToteAssign:
      AND ID = @cFromID
      AND LOT = @cLOT
 
+   -- Debug: Block same-location move and log details
+   IF (@cFromLOC = @cFinalToLOC) AND (@cFromID = @cSortToteID)
+   BEGIN
+      SET @nErrNo = 99999
+      SET @cErrMsg = 'DEBUG- FROMLOC = TOLOC '
+      GOTO RollBackTran
+   END
+
+   IF EXISTS (SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK) WHERE DeviceID = @cStation AND LOC = @cFromLOC AND StorerKey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 272820
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Can not move from PTLSlot
+      GOTO RollBackTran
+   END
+
    -- Step 1: rdt_Move_PickDetail - Split PickDetail and stamp MoveRefKey
    EXEC rdt.rdt_Move_PickDetail
       @nMobile       = @nMobile,
@@ -1028,6 +1043,18 @@ RollBackTran:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount
       COMMIT TRAN
+
+   IF @nErrNo = 99999
+   BEGIN
+      -- Debug: Log same-location move details after rollback (ignore failures)
+      BEGIN TRY
+         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3)
+         VALUES ('rdt_PTLPiece_Confirm_Order23', GETDATE(), @cPickDetailKey, @cSKU, @cLOT, @cFromID, @cDropID, @cFromLOC, @cFinalToLOC, @cSortToteID)
+      END TRY
+      BEGIN CATCH
+         -- Ignore TraceInfo insert failures
+      END CATCH
+   END
 
 END
 GO

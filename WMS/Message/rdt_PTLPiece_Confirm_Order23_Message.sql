@@ -36,3 +36,6 @@ execute rdt.rdtAddMsg 272818, 10, '272818 Upd Prof Fail', 'us_english', 803, 0, 
 
 -- Double-depth errors (FCR-13139)
 execute rdt.rdtAddMsg 272819, 10, '272819 Upd Prof Fail', 'us_english', 803, 0, '272819 Failed to update DeviceProfile (Double-depth)'
+
+-- Debug: Block move from PTLSlot location
+execute rdt.rdtAddMsg 272820, 10, '272820 PTLSlot Move ', 'us_english', 803, 0, '272820 Can not move from PTLSlot Location'
