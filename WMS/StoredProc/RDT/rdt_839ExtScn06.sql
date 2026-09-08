@@ -369,16 +369,27 @@ BEGIN
       BEGIN
          IF @nInputKey = 0
          BEGIN
-            IF EXISTS(SELECT 1 
-                     FROM rdt.rdtPickLog 
-                     WHERE (Mobile = @nMobile OR AddWho = @cUserName)
-                        AND PickSlipNo = @cPickSlipNo)
+            IF EXISTS( SELECT 1
+                       FROM RDT.rdtPickLog WITH(NOLOCK)
+                       WHERE PickSlipNo = @cPickSlipNo
+                          AND Loc = @cSuggLOC
+                          AND (Mobile = @nMobile OR AddWho = @cUserName)
+                          AND (
+                               PickMethod = 'Pick-P'
+                               OR (PickMethod = 'GetTask-U' AND Status = '9')
+                             )
+                  )
+            BEGIN
+               SET @nAfterScn = 6777
+               SET @nAfterStep = 99
+            END
+            ELSE-- Go to Abort screen
             BEGIN
                SET @nAfterScn = 6840
                SET @nAfterStep = 99
-
-               SET @nPre_Step = @nCurrentStep
+               SET @cOutField01 = ''
             END
+            SET @nPre_Step = @nCurrentStep
          END
       END
       -- Use the existing screen 4644 for step 5, but set next step to 99
@@ -462,17 +473,28 @@ BEGIN
       BEGIN
          IF @nInputKey = 0 -- ESC
          BEGIN
-            IF EXISTS(SELECT 1 
-                     FROM rdt.rdtPickLog WITH(NOLOCK)
-                     WHERE (Mobile = @nMobile OR AddWho = @cUserName)
-                        AND PickSlipNo = @cPickSlipNo)
+            IF EXISTS( SELECT 1
+                       FROM RDT.rdtPickLog WITH(NOLOCK)
+                       WHERE PickSlipNo = @cPickSlipNo
+                          AND Loc = @cSuggLOC
+                          AND (Mobile = @nMobile OR AddWho = @cUserName)
+                          AND (
+                               PickMethod = 'Pick-P'
+                               OR (PickMethod = 'GetTask-U' AND Status = '9')
+                             )
+                  )
+            BEGIN
+               SET @nAfterScn = 6777
+               SET @nAfterStep = 99
+            END
+            ELSE-- Go to Abort screen
             BEGIN
                SET @nAfterScn = 6840
                SET @nAfterStep = 99
                SET @cOutField01 = ''
             END
+            SET @nPre_Step = @nStep_ConfirmLOC
          END
-         SET @nPre_Step = @nStep_ConfirmLOC
       END
       ELSE IF @nCurrentStep = 99
       BEGIN
@@ -3099,8 +3121,9 @@ BEGIN
                BEGIN
                   SET @nAfterScn = 6840
                   SET @nAfterStep = 99
+                  SET @cOutField01 = ''
                END
-               
+
                GOTO UPD_RDTMOBREC
             END
 
@@ -4254,8 +4277,7 @@ BEGIN
                END
 
                -- Validate option
-               IF @cOption <> '1' AND
-                  @cOption <> '2'
+               IF @cOption NOT IN ('1', '2')
                BEGIN
                   SET @nErrNo = 255527
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
@@ -4272,35 +4294,48 @@ BEGIN
                END
                ELSE IF @cOption = '2'
                BEGIN
-                  --Do nthing, just pick later and go to get task
+                  EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
+                     ,@cPickSlipNo
+                     ,@cPickZone
+                     ,'ALLDROPID'
+                     ,@cSuggLOC
+                     ,@cSuggSKU
+                     ,@nActQTY
+                     ,@cLottableCode
+                     ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
+                     ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
+                     ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
+                     ,@cPackData1,  @cPackData2,  @cPackData3 
+                     ,@cSuggID
+                     ,@cSerialNo   = '' 
+                     ,@nSerialQTY  = 0
+                     ,@nBulkSNO    = 0
+                     ,@nBulkSNOQTY = 0
+                     ,@nErrNo      = @nErrNo  OUTPUT
+                     ,@cErrMsg     = @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+
+                  -- Scan out
+                  SET @nErrNo = 0
+                  EXEC rdt.rdt_PickPiece_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                     ,@cPickSlipNo
+                     ,@nErrNo       OUTPUT
+                     ,@cErrMsg      OUTPUT
+
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
                   -- Prepare next screen var
+                  SET @cOutField01 = '' -- PickSlipNo
 
-                  PRINT 'DO Nothing'
-
-                  -- EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CLOSE',
-                  --    @cPickSlipNo
-                  --    ,@cPickZone
-                  --    ,'ALLDROPID'
-                  --    ,@cSuggLOC
-                  --    ,@cSuggSKU
-                  --    ,0
-                  --    ,@cLottableCode
-                  --    ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
-                  --    ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
-                  --    ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
-                  --    ,@cPackData1,  @cPackData2,  @cPackData3
-                  --    ,@cSuggID
-                  --    ,@cSerialNo   = '' 
-                  --    ,@nSerialQTY  = 0
-                  --    ,@nBulkSNO    = 0
-                  --    ,@nBulkSNOQTY = 0
-                  --    ,@nErrNo      = @nErrNo  OUTPUT
-                  --    ,@cErrMsg     = @cErrMsg OUTPUT
-
-                  -- IF @nErrNo <> 0
-                  -- BEGIN
-                  --    GOTO Quit
-                  -- END
+                  -- Go to PickSlipNo screen
+                  SET @nAfterScn = @nScn_PickSlipNo
+                  SET @nAfterStep = @nStep_PickSlipNo
+                  GOTO Quit
                END
 
                -- Get task in same LOC
@@ -4862,7 +4897,6 @@ BEGIN
             CONFIRM OPTION?
             1 = Yes
             2 = No
-            9 = Close ALL Pallet
             OPTION:        (field01)
          ********************************************************************************/
          ELSE IF @nCurrentScn = 6840
@@ -4878,7 +4912,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF @cOption NOT IN ('1', '2', '9')
+               IF @cOption NOT IN ('1', '2')
                BEGIN
                   SET @nErrNo = 255541
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Invalid Option
@@ -5042,48 +5076,6 @@ BEGIN
                      SET @nAfterScn = @nScn_VerifyID
                      SET @nAfterStep = @nStep_VerifyID
                   END
-               END
-               ELSE IF @cOption = '9'
-               BEGIN
-                  EXEC RDT.rdt_PickPiece_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
-                     ,@cPickSlipNo
-                     ,@cPickZone
-                     ,'ALLDROPID'
-                     ,@cSuggLOC
-                     ,@cSuggSKU
-                     ,@nActQTY
-                     ,@cLottableCode
-                     ,@cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05
-                     ,@cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10
-                     ,@cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
-                     ,@cPackData1,  @cPackData2,  @cPackData3 
-                     ,@cSuggID
-                     ,@cSerialNo   = '' 
-                     ,@nSerialQTY  = 0
-                     ,@nBulkSNO    = 0
-                     ,@nBulkSNOQTY = 0
-                     ,@nErrNo      = @nErrNo  OUTPUT
-                     ,@cErrMsg     = @cErrMsg OUTPUT
-                  IF @nErrNo <> 0
-                     GOTO Quit
-
-                  -- Scan out
-                  SET @nErrNo = 0
-                  EXEC rdt.rdt_PickPiece_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-                     ,@cPickSlipNo
-                     ,@nErrNo       OUTPUT
-                     ,@cErrMsg      OUTPUT
-
-                  IF @nErrNo <> 0
-                     GOTO Quit
-
-                  -- Prepare next screen var
-                  SET @cOutField01 = '' -- PickSlipNo
-
-                  -- Go to PickSlipNo screen
-                  SET @nAfterScn = @nScn_PickSlipNo
-                  SET @nAfterStep = @nStep_PickSlipNo
-                  GOTO Quit
                END
             END
             ELSE IF @nInputKey = 0 -- ESC

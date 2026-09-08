@@ -265,6 +265,7 @@ BEGIN
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
          AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND RPL.PickMethod = 'GetTask-U'
+         AND ISNULL(RPL.Remarks, '') <> ''
 
       INSERT INTO @tPiecePickDetailKey ( PickDetailKey)
       SELECT DISTINCT RPL.PickDetailKey
