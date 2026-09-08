@@ -380,6 +380,9 @@ BEGIN
                              )
                   )
             BEGIN
+               SET @cOption = ''
+               SET @cOutField01 = ''
+
                SET @nAfterScn = 6777
                SET @nAfterStep = 99
             END
@@ -484,6 +487,9 @@ BEGIN
                              )
                   )
             BEGIN
+               SET @cOption = ''
+               SET @cOutField01 = ''
+
                SET @nAfterScn = 6777
                SET @nAfterStep = 99
             END
@@ -3114,6 +3120,9 @@ BEGIN
                              )
                     )
                BEGIN
+                  SET @cOption = ''
+                  SET @cOutField01 = ''
+
                   SET @nAfterScn = 6777
                   SET @nAfterStep = 99
                END
@@ -5259,6 +5268,9 @@ BEGIN
       END
       ELSE IF @nAfterStep = 5
       BEGIN
+         SET @cOption = ''
+         SET @cOutField01 = ''
+
          SET @nAfterScn = 6777
          SET @nAfterStep = 99
       END
