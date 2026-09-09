@@ -500,6 +500,7 @@ FullUCCSort:
      AND PD.DropID = @cDropID
      AND PD.SKU = @cSKU
      AND PD.Qty > 0
+     AND PD.status = '3'
    ORDER BY PD.OrderKey
 
    IF @cPickDetailKey IS NULL
@@ -584,11 +585,11 @@ AfterToteAssign:
      AND ID = @cFromID
      AND LOT = @cLOT
 
-   -- Debug: Block same-location move and log details
+   -- Block same-location move to prevent qty discrepancy
    IF (@cFromLOC = @cFinalToLOC) AND (@cFromID = @cSortToteID)
    BEGIN
-      SET @nErrNo = 99999
-      SET @cErrMsg = 'DEBUG- FROMLOC = TOLOC '
+      SET @nErrNo = 272827
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Same LOC ID
       GOTO RollBackTran
    END
 
@@ -628,8 +629,8 @@ AfterToteAssign:
       @cErrMsg       = @cErrMsg OUTPUT,
       @cTaskDetailKey = '',
       @cOrderKey     = @cOrderKey,
-      @cDropID       = @cDropID,
-      @cCaseID       = @cVirtualCartonID
+      @cDropID       = @cDropID
+      --@cCaseID       = @cVirtualCartonID
 
    IF @nErrNo <> 0
    BEGIN
@@ -639,54 +640,62 @@ AfterToteAssign:
    END
 
    -- Step 2: Update PickDetail.DropID for the moved record (use PickDetailKey, not MoveRefKey)
-   UPDATE dbo.PickDetail WITH (ROWLOCK)
-   SET DropID = @cSortToteID,
-       EditDate = GETDATE(),
-       EditWho = SUSER_SNAME()
-   WHERE PickDetailKey = @cPickDetailKey
-   IF @@ERROR <> 0
-   BEGIN
+   BEGIN TRY
+      UPDATE dbo.PickDetail WITH (ROWLOCK)
+      SET DropID = @cSortToteID,
+          EditDate = GETDATE(),
+          EditWho = SUSER_SNAME()
+      WHERE PickDetailKey = @cPickDetailKey
+   END TRY
+   BEGIN CATCH
       SET @nErrNo = 272806
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
       GOTO RollBackTran
-   END
+   END CATCH
 
    -- Step 3: Move LOTxLOCxID inventory to final destination (front or back)
-   EXEC dbo.nspItrnAddMove
-      @n_ItrnSysId     = NULL,
-      @c_StorerKey     = @cStorerKey,
-      @c_Sku           = @cSKU,
-      @c_Lot           = @cLOT,
-      @c_FromLoc       = @cFromLOC,
-      @c_FromID        = @cFromID,
-      @c_ToLoc         = @cFinalToLOC,  -- Final destination (front or back)
-      @c_ToID          = @cSortToteID,
-      @c_Status        = '',
-      @c_lottable01    = '',
-      @c_lottable02    = '',
-      @c_lottable03    = '',
-      @d_lottable04    = '',
-      @d_lottable05    = '',
-      @n_casecnt       = 0,
-      @n_innerpack     = 0,
-      @n_qty           = 1,
-      @n_pallet        = 0,
-      @f_cube          = 0,
-      @f_grosswgt      = 0,
-      @f_netwgt        = 0,
-      @f_otherunit1    = 0,
-      @f_otherunit2    = 0,
-      @c_SourceKey     = '',
-      @c_SourceType    = 'rdt_PTLPiece_Confirm_Order23',
-      @c_PackKey       = @cPackKey,
-      @c_UOM           = @cPackUOM3,
-      @b_UOMCalc       = 1,
-      @d_EffectiveDate = '',
-      @c_itrnkey       = '',
-      @b_Success       = @bSuccess OUTPUT,
-      @n_err           = @nErrNo OUTPUT,
-      @c_errmsg        = @cErrMsg OUTPUT,
-      @c_MoveRefKey    = @cMoveRefKey
+   BEGIN TRY
+      EXEC dbo.nspItrnAddMove
+         @n_ItrnSysId     = NULL,
+         @c_StorerKey     = @cStorerKey,
+         @c_Sku           = @cSKU,
+         @c_Lot           = @cLOT,
+         @c_FromLoc       = @cFromLOC,
+         @c_FromID        = @cFromID,
+         @c_ToLoc         = @cFinalToLOC,  -- Final destination (front or back)
+         @c_ToID          = @cSortToteID,
+         @c_Status        = '',
+         @c_lottable01    = '',
+         @c_lottable02    = '',
+         @c_lottable03    = '',
+         @d_lottable04    = '',
+         @d_lottable05    = '',
+         @n_casecnt       = 0,
+         @n_innerpack     = 0,
+         @n_qty           = 1,
+         @n_pallet        = 0,
+         @f_cube          = 0,
+         @f_grosswgt      = 0,
+         @f_netwgt        = 0,
+         @f_otherunit1    = 0,
+         @f_otherunit2    = 0,
+         @c_SourceKey     = '',
+         @c_SourceType    = 'rdt_PTLPiece_Confirm_Order23',
+         @c_PackKey       = @cPackKey,
+         @c_UOM           = @cPackUOM3,
+         @b_UOMCalc       = 1,
+         @d_EffectiveDate = '',
+         @c_itrnkey       = '',
+         @b_Success       = @bSuccess OUTPUT,
+         @n_err           = @nErrNo OUTPUT,
+         @c_errmsg        = @cErrMsg OUTPUT,
+         @c_MoveRefKey    = @cMoveRefKey
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 272813
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Inv Move Fail
+      GOTO RollBackTran
+   END CATCH
 
    IF @nErrNo <> 0
    BEGIN
@@ -699,10 +708,12 @@ AfterToteAssign:
    -- FCR-13139: Added LOT and UOM to prevent merging different lots or UOM types
    -- ========================================================================
    DECLARE @cExistingPDKey NVARCHAR(10)
+   DECLARE @cCurrentPDQty INT
    SET @cExistingPDKey = NULL
 
    -- Find existing record in SortTote with same CaseID/OrderKey/OrderLineNumber/SKU/LOT/UOM
-   SELECT TOP 1 @cExistingPDKey = E.PickDetailKey
+   SELECT TOP 1 @cExistingPDKey = E.PickDetailKey,
+                @cCurrentPDQty = C.qty
    FROM dbo.PickDetail C WITH (NOLOCK)
    JOIN dbo.PickDetail E WITH (NOLOCK)
       ON E.StorerKey = C.StorerKey
@@ -716,62 +727,101 @@ AfterToteAssign:
      AND E.PickDetailKey <> C.PickDetailKey
      AND E.Qty > 0
    WHERE C.PickDetailKey = @cPickDetailKey
+     AND C.status = '3'
+     AND E.status = '3'
 
+   IF ISNULL (@cCurrentPDQty,0) > 1
+   BEGIN
+      SET @nErrNo = 272821
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+      GOTO RollBackTran
+   END
+
+   --Merge pickdetail with same SKU LOT DROPID
    IF @cExistingPDKey IS NOT NULL
    BEGIN
       -- Merge: increment existing record qty
-      UPDATE dbo.PickDetail WITH (ROWLOCK)
-      SET Qty = Qty + 1,
-          TrafficCop = NULL,
-          EditDate = GETDATE(),
-          EditWho = SUSER_SNAME()
-      WHERE PickDetailKey = @cExistingPDKey
-
-      IF @@ERROR <> 0
-      BEGIN
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH (ROWLOCK)
+         SET Qty = Qty + 1,
+             TrafficCop = NULL,
+             EditDate = GETDATE(),
+             EditWho = SUSER_SNAME()
+         WHERE PickDetailKey = @cExistingPDKey
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 272807
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Merge Qty Fail
          GOTO RollBackTran
-      END
+      END CATCH
 
       -- Delete RefKeyLookup for current record
-      DELETE FROM dbo.RefKeyLookup WHERE PickDetailKey = @cPickDetailKey
+      BEGIN TRY
+         DELETE FROM dbo.RefKeyLookup WHERE PickDetailKey = @cPickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 272822
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Del RefKey Fail
+         GOTO RollBackTran
+      END CATCH
 
       -- Delete current record (merged into existing)
       -- First set Qty=0 with TrafficCop=NULL to avoid trigger QtyAllocated adjustment
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH (ROWLOCK)
+         SET Qty = 0, TrafficCop = NULL
+         WHERE PickDetailKey = @cPickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 272823
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Upd PD Qty Fail
+         GOTO RollBackTran
+      END CATCH
+
       -- Then delete the record
-      UPDATE dbo.PickDetail WITH (ROWLOCK)
-      SET Qty = 0, TrafficCop = NULL
-      WHERE PickDetailKey = @cPickDetailKey
-
-      DELETE FROM dbo.PickDetail WHERE PickDetailKey = @cPickDetailKey
-
-      IF @@ERROR <> 0
-      BEGIN
+      BEGIN TRY
+         DELETE FROM dbo.PickDetail
+         WHERE PickDetailKey = @cPickDetailKey AND QTY = 0
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 272808
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Merge Del Fail
          GOTO RollBackTran
-      END
+      END CATCH
    END
 
    -- Delete source Qty=0 records if any
-   DELETE FROM dbo.RefKeyLookup
-   WHERE PickDetailKey IN (
-      SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
+   BEGIN TRY
+      DELETE FROM dbo.RefKeyLookup
+      WHERE PickDetailKey IN (
+         SELECT PickDetailKey FROM dbo.PickDetail WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+           AND CaseID = @cVirtualCartonID
+           AND SKU = @cSKU
+           AND DropID = @cDropID
+           AND Qty = 0
+      )
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 272824
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Del RefKey0 Fail
+      GOTO RollBackTran
+   END CATCH
+
+   BEGIN TRY
+      DELETE FROM dbo.PickDetail
       WHERE StorerKey = @cStorerKey
         AND CaseID = @cVirtualCartonID
         AND SKU = @cSKU
         AND DropID = @cDropID
         AND Qty = 0
-   )
-
-   DELETE FROM dbo.PickDetail
-   WHERE StorerKey = @cStorerKey
-     AND CaseID = @cVirtualCartonID
-     AND SKU = @cSKU
-     AND DropID = @cDropID
-     AND Qty = 0
-     AND TrafficCop IS NULL
+        AND TrafficCop IS NULL
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 272825
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Del PD Qty0 Fail
+      GOTO RollBackTran
+   END CATCH
 
    -- Transaction will be committed at Quit label
 
@@ -1044,7 +1094,7 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount
       COMMIT TRAN
 
-   IF @nErrNo = 99999
+   IF @nErrNo = 272827
    BEGIN
       -- Debug: Log same-location move details after rollback (ignore failures)
       BEGIN TRY

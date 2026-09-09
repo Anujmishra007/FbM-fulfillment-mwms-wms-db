@@ -26,3 +26,9 @@ execute rdt.rdtAddMsg 274515, 10, '274515 Partial Done ', 'us_english', 803, 0, 
 
 --FCR-13139: Update SortTote failed
 execute rdt.rdtAddMsg 274516, 10, '274516 Upd Tote Fail', 'us_english', 803, 0, '274516 Failed to update SortTote assignment'
+
+--FCR-13139: Update PTLPieceLog CartonID failed
+execute rdt.rdtAddMsg 274517, 10, '274517 Upd Log Ctn  ', 'us_english', 803, 0, '274517 Failed to update PTLPieceLog CartonID'
+
+--UWP-66208: Confirm SP exception
+execute rdt.rdtAddMsg 274518, 10, '274518 Confirm Fail ', 'us_english', 803, 0, '274518 Confirm SP failed with exception'

@@ -388,6 +388,7 @@ BEGIN
             ORDER BY EditDate DESC
 
             IF EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUserDropID_6920 AND StorerKey = @cStorerKey)
+            BEGIN
                DECLARE @nVCCount_6920 INT = 0
                DECLARE @nUCCQty_6920 INT = 0
                DECLARE @nPDQty_6920 INT = 0
@@ -496,16 +497,17 @@ BEGIN
             END
 
             -- ========================================================================
-            -- Transaction: Update SortTote + Call ConfirmSP (rollback all if fail)
+            -- Update SortTote + Call ConfirmSP in same transaction scope
+            -- If ConfirmSP fails, rollback the UPDATE as well
             -- ========================================================================
-            DECLARE @nTranCount INT
-            SET @nTranCount = @@TRANCOUNT
+            DECLARE @nExtScnTranCount INT
+            SET @nExtScnTranCount = @@TRANCOUNT
 
+            BEGIN TRAN ExtScn04_SortTote
+
+            -- Update ALL users' rdtPTLPieceLog records with SortTote
+            -- Multi-user: SortTote is shared across all users of the same slot
             BEGIN TRY
-               BEGIN TRAN
-
-               -- Update ALL users' rdtPTLPieceLog records with SortTote
-               -- Multi-user: SortTote is shared across all users of the same slot
                UPDATE rdt.rdtPTLPieceLog WITH (ROWLOCK)
                SET CartonID = @cSortToteID,
                    EditDate = GETDATE(),
@@ -513,8 +515,17 @@ BEGIN
                WHERE Station = @cStation
                  AND Position = @cPosition
                  AND UserDefine02 = 'INPROGRESS'
+            END TRY
+            BEGIN CATCH
+               IF @@TRANCOUNT > @nExtScnTranCount
+                  ROLLBACK TRAN ExtScn04_SortTote
+               SET @nErrNo = 274517
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Update PTLLog CartonID
+               GOTO Quit
+            END CATCH
 
-               -- Call ConfirmSP with Step=99 to process inventory
+            -- Call ConfirmSP with Step=99 to process inventory
+            BEGIN TRY
                EXEC rdt.rdt_PTLPiece_Confirm_Order23
                   @nMobile,
                   @nFunc,
@@ -541,24 +552,25 @@ BEGIN
                   @cResult08 OUTPUT,
                   @cResult09 OUTPUT,
                   @cResult10 OUTPUT
-
-               IF @nErrNo <> 0
-               BEGIN
-                  -- FCR-13139: Check @@TRANCOUNT before rollback
-                  -- ConfirmOrder23 may have already rolled back the transaction
-                  IF @@TRANCOUNT > @nTranCount
-                     ROLLBACK TRAN
-                  GOTO Quit
-               END
-
-               COMMIT TRAN
             END TRY
             BEGIN CATCH
-               IF @@TRANCOUNT > @nTranCount ROLLBACK TRAN
-               SET @nErrNo = 274516  -- Update SortTote failed
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+               IF @@TRANCOUNT > @nExtScnTranCount
+                  ROLLBACK TRAN ExtScn04_SortTote
+               SET @nErrNo = 274518
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Confirm SP Fail
                GOTO Quit
             END CATCH
+
+            IF @nErrNo <> 0
+            BEGIN
+               -- ConfirmSP returned error via OUTPUT, rollback UPDATE as well
+               IF @@TRANCOUNT > @nExtScnTranCount
+                  ROLLBACK TRAN ExtScn04_SortTote
+               GOTO Quit
+            END
+
+            -- Both succeeded, commit
+            COMMIT TRAN ExtScn04_SortTote
 
             -- FCR-13139: Check if ConfirmLOC is required
             -- Config: ConfirmLOC = '1' to enable LOC confirmation screen

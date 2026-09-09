@@ -245,7 +245,7 @@ BEGIN
       -- Check blank
       IF @cDropID = ''
       BEGIN
-         SET @nErrNo = 187951
+         SET @nErrNo = 272759
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Need DropID
          GOTO Quit
       END
@@ -259,8 +259,44 @@ BEGIN
            AND DropID = @cDropID
       )
       BEGIN
-         SET @nErrNo = 187952
+         SET @nErrNo = 272760
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Bad DropID
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      -- ========================================================================
+      -- CHECK 3b: Validate DropID inventory is in single LOC
+      -- ========================================================================
+      IF (SELECT COUNT(DISTINCT LOC) FROM dbo.PickDetail WITH (NOLOCK)
+          WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Qty > 0) > 1
+      BEGIN
+         SET @nErrNo = 272757
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Multi LOC
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      -- ========================================================================
+      -- CHECK 3c: Validate DropID inventory is in single ID
+      -- ========================================================================
+      IF (SELECT COUNT(DISTINCT ID) FROM dbo.PickDetail WITH (NOLOCK)
+          WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Qty > 0) > 1
+      BEGIN
+         SET @nErrNo = 272758
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Multi ID
+         SET @cOutField01 = ''
+         GOTO Quit
+      END
+
+      -- ========================================================================
+      -- CHECK 3d: Validate all PickDetail have status = '3' (allocated)
+      -- ========================================================================
+      IF EXISTS (SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)
+          WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Qty > 0 AND Status <> '3')
+      BEGIN
+         SET @nErrNo = 272762
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Bad PD Status
          SET @cOutField01 = ''
          GOTO Quit
       END
@@ -313,6 +349,13 @@ BEGIN
                  AND UserDefine01 IS NOT NULL
            )
          ORDER BY Code2
+      END
+
+      IF ISNULL(@cUserColor, '') = ''
+      BEGIN
+         SET @nErrNo = 272756
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
+         GOTO Quit
       END
 
       -- FCR-13139 FIX: Update C_String1 with the final color for screen display
@@ -406,7 +449,7 @@ BEGIN
                )
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 187957
+               SET @nErrNo = 272761
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- INS Log fail
                GOTO Quit
             END CATCH

@@ -39,3 +39,13 @@ execute rdt.rdtAddMsg 272819, 10, '272819 Upd Prof Fail', 'us_english', 803, 0, 
 
 -- Debug: Block move from PTLSlot location
 execute rdt.rdtAddMsg 272820, 10, '272820 PTLSlot Move ', 'us_english', 803, 0, '272820 Can not move from PTLSlot Location'
+
+execute rdt.rdtAddMsg 272821, 10, '272821 PD Qty Not 1 ', 'us_english', 803, 0, '272821 PickDetail qty is not 1, cannot merge'
+
+-- Merge cleanup errors
+execute rdt.rdtAddMsg 272822, 10, '272822 Del RefKey   ', 'us_english', 803, 0, '272822 Failed to delete RefKeyLookup'
+execute rdt.rdtAddMsg 272823, 10, '272823 Upd PD Qty   ', 'us_english', 803, 0, '272823 Failed to update PickDetail qty to 0'
+execute rdt.rdtAddMsg 272824, 10, '272824 Del RefKey0  ', 'us_english', 803, 0, '272824 Failed to delete RefKeyLookup (Qty=0)'
+execute rdt.rdtAddMsg 272825, 10, '272825 Del PD Qty0  ', 'us_english', 803, 0, '272825 Failed to delete PickDetail (Qty=0)'
+--UWP-66208: Same LOC/ID validation
+execute rdt.rdtAddMsg 272827, 10, '272827 Same LOC ID  ', 'us_english', 803, 0, '272827 FromLOC/ID equals ToLOC/ID, cannot move'
