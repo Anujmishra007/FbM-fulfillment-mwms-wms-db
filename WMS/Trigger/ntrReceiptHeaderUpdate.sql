@@ -732,7 +732,7 @@ BEGIN
                  WHERE RECEIPT.ReceiptKey = INSERTED.ReceiptKey
                  AND   INSERTED.ReceiptKey = DELETED.ReceiptKey
                  AND   DELETED.ASNStatus = @c_XBPS_Update
-                 AND   INSERTED.OpenQty = 0
+                 AND   INSERTED.OpenQty > 0
             END
          END
       END TRY

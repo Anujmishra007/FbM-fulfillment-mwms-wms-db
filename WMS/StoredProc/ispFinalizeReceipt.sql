@@ -90,6 +90,7 @@ GO
 /* 10-OCT-2025 SSA01      UWP-42248 -Enhanced session management        */
 /*                             and cleanup.                             */
 /*13-JAN-2026  SSA02      FCR-9773 - ASN - KCB Inspection Hold LPNs     */
+/*09-SEP-2026  USH022-01  FCR-15217- Skip ASNStatus and Status update   */
 /************************************************************************/  
 
   
@@ -1946,27 +1947,50 @@ BEGIN
   
   
          IF @c_CloseASNStatus = '1' OR @c_CloseASNUponFinalize = '1'  
-         BEGIN  
-  
-            UPDATE RECEIPT WITH (ROWLOCK)  
-               SET ASNStatus = CASE WHEN @c_CloseASNStatus = '1' THEN '9' ELSE ASNStatus END,  
-                   Status    = CASE WHEN @c_CloseASNUponFinalize = '1' THEN '9' ELSE Status END,  
-                   -- SOS#125406 Convert to varchar else will caused system error  
-                   UserDefine02 = CASE WHEN @c_PalletCalculation = '1'  
-                                            THEN CAST(@n_StockBalQty as NVARCHAR(30))  
-                                       ELSE UserDefine02  
-                                  END,   
-                   EditDate = dbo.fnc_GetDate(),   --(SSA01)
-                   EditWho = dbo.fnc_GetUserName()         --(SSA01)
-            WHERE ReceiptKey = @c_ReceiptKey  
-            SET @n_err = @@ERROR  
-            IF @n_err <> 0  
-            BEGIN  
-               SET @n_continue = 3  
-               SET @c_ErrMsg = CONVERT(char(250),@n_err)  
-               SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '  
-            END  
-  
+         BEGIN
+                --USH022-01 (start)
+                DECLARE @c_ASNXBPSCase  NVARCHAR(1) = ''
+                SELECT @b_Success = 0
+                    Execute nspGetRight
+                                       @c_Facility,           -- facility
+                                       @c_StorerKey,          -- Storerkey
+                                       NULL,                  -- Sku
+                                       'ASNXBPSReceived',     -- Configkey
+                                       @b_Success               OUTPUT,
+                                       @c_ASNXBPSCase           OUTPUT,
+                                       @n_err2                  OUTPUT,
+                                       @c_ErrMsg                OUTPUT
+                        IF @b_Success <> 1
+                BEGIN
+                    SELECT @n_err = 163082 -- @n_err2
+                    SELECT @n_continue = 3, @c_ErrMsg = RTRIM(@c_ErrMsg) + ' ispFinalizeReceipt'
+                END
+
+               IF @c_ASNXBPSCase = '1'
+               BEGIN
+                  SELECT 1;
+               END
+               ELSE                                 --USH022-01 (end)
+               BEGIN
+                   UPDATE RECEIPT WITH (ROWLOCK)
+                   SET ASNStatus = CASE WHEN @c_CloseASNStatus = '1' THEN '9' ELSE ASNStatus END,
+                       Status    = CASE WHEN @c_CloseASNUponFinalize = '1' THEN '9' ELSE Status END,
+                       -- SOS#125406 Convert to varchar else will caused system error
+                       UserDefine02 = CASE WHEN @c_PalletCalculation = '1'
+                                                THEN CAST(@n_StockBalQty as NVARCHAR(30))
+                                           ELSE UserDefine02
+                                      END,
+                       EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                       EditWho = dbo.fnc_GetUserName()         --(SSA01)
+                    WHERE ReceiptKey = @c_ReceiptKey
+                    SET @n_err = @@ERROR
+                    IF @n_err <> 0
+                    BEGIN
+                       SET @n_continue = 3
+                       SET @c_ErrMsg = CONVERT(char(250),@n_err)
+                       SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': Finalize Receipt Fail. (''ispFinalizeReceipt'')' + ' ( ' + ' SQLSvr MESSAGE=' + RTrim(@c_ErrMsg) + ' ) '
+                    END
+               END
          END  
          SET @d_step2 = GETDATE() - @d_step2 -- (tlting01)  
          SET @c_Col2 = 'Stp2-GetRight'  
