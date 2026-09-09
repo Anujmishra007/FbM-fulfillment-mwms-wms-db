@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2026-02-12 1.0  SSR259     FCR-9672 Add screen 4 (Confirmation screen)     */
+/* 2026-09-09 1.1  NickT      FCR-14856 Add TRANSMITLOG2 insert on Scn 6829   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC  [RDT].[rdt_825ExtScn03] (
@@ -77,6 +78,16 @@ BEGIN
         @cStackability   NVARCHAR( 10),
         @cCaptureInfo    NVARCHAR( 10)
 
+    -- FCR-14856: TRANSMITLOG2 variables
+    DECLARE
+        @cTransmitLogKey        NVARCHAR( 10),  -- generated TransmitLogKey2
+        @bSuccess               INT,            -- nspg_GetKey result
+        @nRowCount              INT,
+        @cLOT                   NVARCHAR( 10),  -- LOTxLOCxID.Lot
+        @cLot03                 NVARCHAR( 18),  -- LOTATTRIBUTE.Lottable03 (avoid conflict with @cLottable03 param)
+        @cReceiptKey            NVARCHAR( 10),  -- RECEIPTDETAIL.ReceiptKey (GRN path)
+        @cReceiptLineNo         NVARCHAR(  5)   -- RECEIPTDETAIL.ReceiptLineNumber (GRN path)
+
     -- Initialize output parameters
     SET @nAfterScn = @nScn
     SET @nAfterStep = @nStep
@@ -99,6 +110,91 @@ BEGIN
         BEGIN
             IF @nInputKey = 1 -- ENTER - Confirm and proceed with update
             BEGIN
+
+                -- FCR-14856: Insert TRANSMITLOG2 on Scn 6829 ENTER
+                -- Generate TransmitLogKey2
+                EXECUTE dbo.nspg_GetKey
+                    'TransmitLogKey2',
+                    10,
+                    @cTransmitLogKey OUTPUT,
+                    @bSuccess        OUTPUT,
+                    @nErrNo          OUTPUT,
+                    @cErrMsg         OUTPUT
+                IF @bSuccess <> 1
+                BEGIN
+                    SET @nErrNo = 280551
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280551 TransmitLog2 key generation failed
+                    GOTO Quit
+                END
+
+                -- Get LOT from LOTxLOCxID using PalletKey (ID)
+                SELECT TOP 1 @cLOT = Lot
+                FROM dbo.LOTxLOCxID WITH (NOLOCK)
+                WHERE Id = @cSavedPalletKey
+                  AND StorerKey = @cStorerKey
+                ORDER BY SKU, Lot
+                SET @nRowCount = @@ROWCOUNT
+
+                IF @nRowCount = 0
+                BEGIN
+                    SET @nErrNo = 280555
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280555 Inventory not found for PalletKey
+                    GOTO Quit
+                END
+
+                -- Get Lottable03 from LOTATTRIBUTE (if LOT found; else @cLot03 stays NULL -> GRN Patch path)
+                IF NULLIF(@cLOT, '') IS NOT NULL
+                BEGIN
+                    SELECT @cLot03 = Lottable03
+                    FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
+                    WHERE Lot = @cLOT
+                      AND StorerKey = @cStorerKey
+
+                    SET @cLot03 = ISNULL(@cLot03, '')  -- Avoid NULL for comparison
+                END
+
+                -- Route: GRN (Lottable03 = PalletKey) vs GRN Patch (all other cases incl. LOT not found)
+                IF @cLot03 = @cSavedPalletKey
+                BEGIN
+                    -- GRN path (WSNSCPRECCFM): get ReceiptKey + ReceiptLineNumber
+                    SELECT TOP 1
+                        @cReceiptKey    = ReceiptKey,
+                        @cReceiptLineNo = ReceiptLineNumber
+                    FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                    WHERE ToId = @cSavedPalletKey
+                      AND StorerKey = @cStorerKey
+                    ORDER BY ReceiptKey ASC, ReceiptLineNumber ASC
+
+                    IF NULLIF(@cReceiptKey, '') IS NULL
+                    BEGIN
+                        SET @nErrNo = 280552
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280552 Receipt detail not found for pallet
+                        GOTO Quit
+                    END
+
+                    BEGIN TRY
+                        INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
+                        VALUES (@cTransmitLogKey, 'WSNSCPRECCFM', @cReceiptKey, @cReceiptLineNo, @cStorerKey, '0')
+                    END TRY
+                    BEGIN CATCH
+                        SET @nErrNo = 280553
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280553 TransmitLog2 insert failed (GRN)
+                        GOTO Quit
+                    END CATCH
+                END
+                ELSE
+                BEGIN
+                    -- GRN Patch path (WSNSCPPLTCFM): Key1 = first 10 chars of PalletKey, Key2 = full PalletKey
+                    BEGIN TRY
+                        INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
+                        VALUES (@cTransmitLogKey, 'WSNSCPPLTCFM', LEFT(@cSavedPalletKey, 10), @cSavedPalletKey, @cStorerKey, '0')
+                    END TRY
+                    BEGIN CATCH
+                        SET @nErrNo = 280554
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280554 TransmitLog2 insert failed (GRN Patch)
+                        GOTO Quit
+                    END CATCH
+                END
 
                 -- Clear fields for next pallet
                 SELECT @cFieldAttr01 = '', @cFieldAttr02 = '', @cFieldAttr03 = '', @cFieldAttr04 = '', @cFieldAttr05 = '', @cFieldAttr07 = ''
