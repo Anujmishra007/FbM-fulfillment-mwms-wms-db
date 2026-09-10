@@ -377,7 +377,8 @@ BEGIN
                SET
                   Status = '5',
                   EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
+                  EditWho = SUSER_SNAME(),
+                  TrafficCop = NULL
                WHERE UCCNo = @cUCC
                   AND StorerKey = @cStorerkey
             END TRY
@@ -487,7 +488,8 @@ BEGIN
                SET
                   Status = '5',
                   EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
+                  EditWho = SUSER_SNAME(),
+                  TrafficCop = NULL
                WHERE UCCNo = @cUCC
                   AND StorerKey = @cStorerkey
             END TRY
@@ -871,7 +873,7 @@ BEGIN
                   Status = '5',
                   EditDate = GETDATE(),
                   EditWho = SUSER_SNAME(),
-                  UserDefine01 = '5'
+                  TrafficCop = NULL
                WHERE SerialNo = @cPieceSN
                   AND StorerKey = @cStorerKey
             END TRY
