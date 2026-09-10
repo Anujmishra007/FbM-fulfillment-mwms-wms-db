@@ -1968,7 +1968,33 @@ BEGIN
 
                IF @c_ASNXBPSCase = '1'
                BEGIN
-                  SELECT 1;
+                DECLARE @c_XBPS_Received NVARCHAR(2) = '';
+                DECLARE @c_XBPS_Update NVARCHAR(2) = '';
+
+                SELECT @c_XBPS_Received = ISNULL(LTRIM(RTRIM(C.Code)),'')
+                FROM CODELKUP C (NOLOCK)
+                WHERE C.LISTNAME = 'ASNStatus'
+                  AND C.Short = 'XBPSR'
+
+                SELECT @c_XBPS_Update = ISNULL(LTRIM(RTRIM(C.Code)),'')
+                FROM CODELKUP C (NOLOCK)
+                WHERE C.LISTNAME = 'ASNStatus'
+                  AND C.Short = 'XBPSU'
+
+                IF @c_XBPS_Received <> '' OR @c_XBPS_Update <> ''
+                BEGIN
+                    UPDATE RECEIPT WITH (ROWLOCK)
+                    SET ASNStatus = @c_XBPS_Received,
+                    Status    = CASE WHEN @c_CloseASNUponFinalize = '1' THEN '9' ELSE Status END,
+                                UserDefine02 = CASE WHEN @c_PalletCalculation = '1'
+                                                THEN CAST(@n_StockBalQty as NVARCHAR(30))
+                                                ELSE UserDefine02
+                                END,
+                    EditDate = dbo.fnc_GetDate(),
+                    EditWho = dbo.fnc_GetUserName()
+                    WHERE ReceiptKey = @c_ReceiptKey
+                    AND ASNStatus = @c_XBPS_Update
+                END
                END
                ELSE                                 --USH022-01 (end)
                BEGIN
