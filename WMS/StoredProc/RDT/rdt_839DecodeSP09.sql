@@ -360,7 +360,7 @@ BEGIN
                   @cScannedID = ID,
                   @cScannedUCCLoc = Loc,
                   @cScannedUCCSKU = SKU,
-                  @cSerialNoStatus = TRIM(ISNULL(UserDefine01, ''))
+                  @cSerialNoStatus = Status
                FROM dbo.SerialNo WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND SerialNo = @cSerialNo

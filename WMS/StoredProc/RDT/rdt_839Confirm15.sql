@@ -373,6 +373,21 @@ BEGIN
             END CATCH
 
             BEGIN TRY
+               UPDATE dbo.SerialNo WITH(ROWLOCK)
+               SET
+                  Status = '5',
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE UCCNo = @cUCC
+                  AND StorerKey = @cStorerkey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 255648
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
+               GOTO RollBackTran
+            END CATCH
+
+            BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
                SET
                   Status = @cPickConfirmStatus,
@@ -449,7 +464,7 @@ BEGIN
                GOTO RollBackTran
             END CATCH
 
-            -- Mark UCC as 6
+            -- Mark UCC as 5
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
                SET
@@ -464,6 +479,21 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 255608
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC failed
+               GOTO RollBackTran
+            END CATCH
+
+            BEGIN TRY
+               UPDATE dbo.SerialNo WITH(ROWLOCK)
+               SET
+                  Status = '5',
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME()
+               WHERE UCCNo = @cUCC
+                  AND StorerKey = @cStorerkey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 255649
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
                GOTO RollBackTran
             END CATCH
 
@@ -838,6 +868,9 @@ BEGIN
             BEGIN TRY
                UPDATE dbo.SerialNo WITH(ROWLOCK)
                SET UCCNo = '',
+                  Status = '5',
+                  EditDate = GETDATE(),
+                  EditWho = SUSER_SNAME(),
                   UserDefine01 = '5'
                WHERE SerialNo = @cPieceSN
                   AND StorerKey = @cStorerKey
