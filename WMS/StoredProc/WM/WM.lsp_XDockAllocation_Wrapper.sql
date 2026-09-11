@@ -33,6 +33,9 @@ GO
 /* 16-May-2025 JH01     1.5   UWP-31657 - Change to map Receipt/        */
 /*                            ReceiptDetail                             */
 /* 02-SEP-2025 SWT01    1.6   Enhanced session management pattern       */
+/* 21-May-2026 TK01     1.7   UWP-56374 - Resize ExternPOKey = 50       */
+/* 04-Aug-2026 SSA01    1.8   FCR13885 - Updated allocation process based*/
+/*                            on XDAutoAllocWithPOSkipLot03 config      */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
@@ -56,7 +59,7 @@ BEGIN
            @c_Orderkey                     NVARCHAR(10),   /*JH01*/
            @c_Print_GRN_When_Allocate      NVARCHAR(10),
            @n_POCnt                        INT,
-           @c_ExternPOKey                  NVARCHAR(20),
+           @c_ExternPOKey                  NVARCHAR(50),    --(TK01)
            @c_ExternStatus                 NVARCHAR(10),
            @c_POType                       NVARCHAR(10),
            @CUR_ALC                        CURSOR,  --NJOW01
