@@ -32,6 +32,7 @@ GO
 /*                            Add Container Validate as per Exceed      */
 /*                            DevOps Combine Script                     */
 /* 2025-09-02  SWT01    1.3   Enhanced session management pattern       */
+/* 2026-09-10  AndyWu01 1.4   UWP-65435 fix and enhancement             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveShip] 
       @c_WaveKey              NVARCHAR(10)                     -- Mandatory to pass In Wavekey                                                                                               
@@ -148,6 +149,14 @@ BEGIN
             SET @c_ShipMode = 'MBOL'
          END  
       END
+
+      --AndyWu01 Start
+      IF ISNULL(@n_WarningNo,'') = ''
+		   SET @n_WarningNo = 0
+
+      IF ISNULL(@n_LogWarningNo,'') = ''
+		   SET @n_LogWarningNo = 0
+      --AndyWu01 End
 
       IF @n_WarningNo < 2
       BEGIN
@@ -323,7 +332,8 @@ BEGIN
                                        
                      WHILE @@FETCH_STATUS <> -1
                      BEGIN
-                        SET @n_LogWarningNo = 2
+                        IF NOT EXISTS (SELECT 1 FROM @t_WMSErrorList WHERE WriteType = 'ERROR')--AndyWu01
+                           SET @n_LogWarningNo = 2--AndyWu01
                         
                         --(Wan02) - START               
                         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
@@ -515,10 +525,12 @@ BEGIN
                   GOTO NEXT_MBOL
                END CATCH
                
-               SET @c_ErrMsg = 'Shipment is successfull.'
+               --SET @c_ErrMsg = 'Shipment is successfull.' --AndyWu01
+					SET @c_ErrMsg = 'WAVE Shipment is successfull.' --AndyWu01
 
                INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
-               VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'MESSAGE', 0, @n_err, @c_errmsg)  
+               --VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'MESSAGE', 0, @n_err, @c_errmsg)  --AndyWu01
+					VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLkey, '', 'MESSAGE', @n_LogWarningNo, @n_err, @c_errmsg) --AndyWu01 
          
                --SET @c_WriteType = 'MESSAGE'  
                --EXEC [WM].[lsp_WriteError_List] 
@@ -926,11 +938,13 @@ BEGIN
             END
             --(Wan01) - END
 
-            SET @c_ErrMsg = 'Shipment is successful.'
+            --SET @c_ErrMsg = 'Shipment is successful.' --AndyWu01
+				SET @c_ErrMsg = 'MBOL Shipment is successful.' --AndyWu01
 
             --(Wan02) - START
             INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
-            VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'MESSAGE', 0, @n_err, @c_errmsg)  
+            --VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'MESSAGE', 0, @n_err, @c_errmsg) --AndyWu01
+            VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_MBOLKey, '', 'MESSAGE', @n_LogWarningNo, @n_err, @c_errmsg) --AndyWu01	
             SET @c_WriteType = 'MESSAGE'  
             --EXEC [WM].[lsp_WriteError_List] 
             --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
