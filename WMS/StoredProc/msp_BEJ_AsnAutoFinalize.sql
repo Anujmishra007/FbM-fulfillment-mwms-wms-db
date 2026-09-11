@@ -143,8 +143,12 @@ BEGIN
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
-       --Calling finalize wrapper for each receipt line and receipt key
-       --to be processed
+        --Auto Receiving code to update receiptdetail
+        UPDATE RECEIPTDETAIL WITH (ROWLOCK) SET BeforeReceivedQty = QtyExpected
+        WHERE BeforeReceivedQty = QtyExpected
+          AND ReceiptKey = @c_ReceiptKey
+        --Calling finalize wrapper for each receipt line and receipt key
+        --to be processed
         BEGIN TRY
         EXEC WM.lsp_FinalizeReceipt_Wrapper
                 @c_ReceiptKey           = @c_ReceiptKey
