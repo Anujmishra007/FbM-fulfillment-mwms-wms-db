@@ -20,6 +20,8 @@ GO
 /* Updates:                                                              */    
 /* Date        Author   Ver   Purposes                                   */
 /* 10-Feb-2026 WLChooi  1.0   Initial Version                            */
+/* 08-Sep-2026 WLChooi  1.1   FCR-16122 Split ECOM cartonization groups  */
+/*                            by single/multi order using Option5 (WL02) */
 /*************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV10_VLDN]       
    @c_Wavekey     NVARCHAR(10)
@@ -55,6 +57,7 @@ BEGIN
          , @c_Option5            NVARCHAR(MAX) = ''
          , @c_PackECOM           NVARCHAR(10)   = 'N'
          , @c_CartonGroup_B2C    NVARCHAR(10)   = ''
+         , @c_ECOM_SINGLE_Flag   NVARCHAR(1)    = ''   --WL02
          , @n_MaxCube_B2C        FLOAT          = 0.00
          , @c_ECOMPackingByTote  NVARCHAR(10)   = 'Y'
 
@@ -143,6 +146,7 @@ BEGIN
       SELECT TOP 1 
                @c_Facility  = o.Facility
             ,  @c_Storerkey = o.StorerKey
+            ,  @c_ECOM_SINGLE_Flag = o.ECOM_SINGLE_Flag   --WL02
       FROM #PickDetail_WIP AS pw
       JOIN ORDERS o (NOLOCK) On o.OrderKey = pw.OrderKey
       ORDER BY pickdetailkey
@@ -153,7 +157,14 @@ BEGIN
       IF ISNULL(@c_Option5, '') <> ''
       BEGIN
          SELECT @c_PackECOM = dbo.fnc_GetParamValueFromString('@c_PackECOM', @c_Option5, @c_PackECOM)
-         SELECT @c_CartonGroup_B2C = dbo.fnc_GetParamValueFromString('@c_CartonGroup_B2C', @c_Option5, @c_CartonGroup_B2C)
+         --WL02 S
+         SELECT @c_CartonGroup_B2C = dbo.fnc_GetParamValueFromString( CASE WHEN @c_ECOM_SINGLE_Flag = 'S'
+                                                                            THEN '@c_CartonGroup_B2C_S'
+                                                                            ELSE '@c_CartonGroup_B2C_M'
+                                                                       END
+                                                                     , @c_Option5
+                                                                     , @c_CartonGroup_B2C )
+         --WL02 E
          SELECT @c_ECOMPackingByTote = dbo.fnc_GetParamValueFromString('@c_ECOMPackingByTote', @c_Option5, @c_ECOMPackingByTote)
       END
    END
