@@ -137,7 +137,8 @@ CREATE TABLE [dbo].[RECEIPT]
 [HoldChannel] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RECEIPT_HoldChannel] DEFAULT ('0'),
 [TrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_TrackingNo] DEFAULT (''),
 [TotalExpectedQty] [int] NULL CONSTRAINT [DF_RECEIPT_TotalExpectedQty] DEFAULT ((0)),
-[TotalReceivedQty] [int] NULL CONSTRAINT [DF_RECEIPT_TotalReceivedQty] DEFAULT ((0))
+[TotalReceivedQty] [int] NULL CONSTRAINT [DF_RECEIPT_TotalReceivedQty] DEFAULT ((0)),
+[AMSStatus] NVARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_AMSStatus] DEFAULT (' ')
 ) ON [PRIMARY]
 
 ALTER TABLE [dbo].[RECEIPT] WITH NOCHECK ADD CONSTRAINT [CK_RECEIPT_Status] CHECK ((rtrim([Status]) like '[0-9]'))
@@ -447,6 +448,14 @@ ELSE
                   EXEC sp_addextendedproperty N'MS_Description', 'Total received quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalReceivedQty'
             END
 
+--FCR-15713
+ IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = 'AMSStatus' AND Object_ID = Object_ID('RECEIPT'))
+            BEGIN
+                  ALTER TABLE RECEIPT
+                  ADD AMSStatus NVARCHAR (10) NULL CONSTRAINT [DF_RECEIPT_AMSStatus]  DEFAULT (' ');
+                  EXEC sp_addextendedproperty N'MS_Description', 'AMSStatus', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'AMSStatus'
+            END
+			
 
 -- ALTER COLUMN 
 

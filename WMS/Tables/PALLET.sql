@@ -1,3 +1,9 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PALLET]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[PALLET]
 (
 [PalletKey] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -15,34 +21,53 @@ CREATE TABLE [dbo].[PALLET]
 [Width] [float] NOT NULL CONSTRAINT [DF_PALLET_Width] DEFAULT ((0)),
 [Height] [float] NOT NULL CONSTRAINT [DF_PALLET_Height] DEFAULT ((0)),
 [GrossWgt] [float] NOT NULL CONSTRAINT [DF_PALLET_GrossWgt] DEFAULT ((0)),
-[PalletType] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PALLET_PalletType] DEFAULT ('')
+[PalletType] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PALLET_PalletType] DEFAULT (''),
+[Hierarchy] NVARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PALLET_Hierarchy]  DEFAULT (' '),
+[Cube] [float] NULL
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[PALLET] WITH NOCHECK ADD CONSTRAINT [CK_PALLET_Status] CHECK (([Status]='9' OR [Status]='0' OR [Status]='5' OR [Status]='3'))
-GO
+
 ALTER TABLE [dbo].[PALLET] ADD CONSTRAINT [PKPALLET] PRIMARY KEY CLUSTERED ([PalletKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 GRANT SELECT ON  [dbo].[PALLET] TO [JReportRole]
-GO
+
 GRANT DELETE ON  [dbo].[PALLET] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[PALLET] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[PALLET] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[PALLET] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Pallet.', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'PalletKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer records.', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'StorerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN', N'TrafficCop'
+
+END
 GO
+
+--FCR-15713
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Hierarchy' AND Object_ID = Object_ID('PALLET'))
+BEGIN
+     ALTER TABLE PALLET
+	 ADD Hierarchy NVARCHAR (10) NULL CONSTRAINT [DF_PALLET_Hierarchy]  DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'Hierarchy' , 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN',N'Hierarchy'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Cube' AND Object_ID = Object_ID('PALLET'))
+BEGIN
+     ALTER TABLE PALLET
+	 ADD Cube [float] NULL; 
+     EXEC sp_addextendedproperty N'MS_Description', 'Cube' , 'SCHEMA', N'dbo', 'TABLE', N'PALLET', 'COLUMN',N'Cube'
+END

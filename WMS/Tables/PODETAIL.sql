@@ -1,3 +1,9 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PODETAIL]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[PODETAIL]
 (
 [POKey] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -56,137 +62,193 @@ CREATE TABLE [dbo].[PODETAIL]
 [Lottable13] [datetime] NULL,
 [Lottable14] [datetime] NULL,
 [Lottable15] [datetime] NULL,
-[Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PODETAIL_Channel] DEFAULT ('')
+[Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PODETAIL_Channel] DEFAULT (''),
+[Hierarchy] NVARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_PODETAIL_Hierarchy] DEFAULT (''),
+[GrossWgt] [float] NULL,
+[Cube] [float] NULL,
+[Length] [float] NULL,
+[Width] [float] NULL,
+[Height] [float] NULL
 ) ON [PRIMARY]
-GO
+
 GRANT SELECT ON  [dbo].[PODETAIL] TO [JReportRole]
-GO
+
 GRANT DELETE ON  [dbo].[PODETAIL] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[PODETAIL] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[PODETAIL] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[PODETAIL] TO [NSQL]
-GO
+
 
 ALTER TABLE [dbo].[PODETAIL] ADD CONSTRAINT [PKPODETAIL] PRIMARY KEY CLUSTERED ([POKey], [POLineNumber]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IX_ExternPODETAIL] ON [dbo].[PODETAIL] ([ExternPOKey], [ExternLineNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [AK_PODETAIL_01] ON [dbo].[PODETAIL] ([StorerKey], [Sku], [POKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[PODETAIL] WITH NOCHECK ADD CONSTRAINT [FK_PODETAIL_SKU_01] FOREIGN KEY ([StorerKey], [Sku]) REFERENCES [dbo].[SKU] ([StorerKey], [Sku])
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Alternate Commodity ID to be linked to the Master Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'AltSku'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Update to ''9'' for archiving purpose', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'ArchiveCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Best before date', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Best_bf_Date'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Enter the date on which the transfer should take place', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'EffectiveDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'External purchase order detail line number imported', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'ExternLineNo'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Purchase Orders used by the Storer.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'ExternPOKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The warehouse in which the SKU will be delivered to', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Facility'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Lottable01', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Lottable02 - Batch No', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Lottable03', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Product expiry date', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Product receipt date', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable06', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable07', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable08', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable09', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable10', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable11', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable11'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable12', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable12'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable13', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable13'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable14', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable14'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable15', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Lottable15'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Manufacturer SKU', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'ManufacturerSku'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Marks container', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'MarksContainer'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Additional information about Purchase Orders detail.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Notes'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Packing configuration of the SKU. Will be defaulted to the pack key assigned in the Commodity screen', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'PackKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Purchase Orders detail.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'PODetailKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Purchase Orders.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'POKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Podetail line number', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'POLineNumber'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'PO line status', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'POLineStatus'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Quantity adjusted', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'QtyAdjusted'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Quantity ordered', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'QtyOrdered'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Quantity received', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'QtyReceived'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Retail SKU', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'RetailSku'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Shortcode', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'shortcode'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The SKU being ordered', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Sku'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Description of the SKU', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'SKUDescription'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer record.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'StorerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Movable Unit', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'ToId'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'TrafficCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unit price', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UnitPrice'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unit of measurement in which the SKU will be shipped', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 1', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 2', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 3', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 4', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 5', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 6', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 7', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 8', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 9', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field 10', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'UserDefine10'
+
+END 
 GO
+
+
+
+--FCR-15713
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'Hierarchy')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD Hierarchy NVARCHAR (10) NULL CONSTRAINT [DF_PODETAIL_Hierarchy]  DEFAULT (' ');
+EXEC sp_addextendedproperty N'MS_Description', 'Hierarchy', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Hierarchy'
+END
+
+
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'GrossWgt')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD GrossWgt [float] NULL;
+EXEC sp_addextendedproperty N'MS_Description', 'GrossWwight', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'GrossWgt'
+END
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'Cube')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD Cube [float] NULL; 
+EXEC sp_addextendedproperty N'MS_Description', 'Cube', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Cube'
+END
+
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'Length')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD Length [float] NULL; 
+EXEC sp_addextendedproperty N'MS_Description', 'Length', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Length'
+END
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'Width')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD Width [float] NULL; 
+EXEC sp_addextendedproperty N'MS_Description', 'Width', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Width'
+END
+
+IF NOT EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'DBO' AND TABLE_NAME = 'PODETAIL' AND COLUMN_NAME = 'Height')
+BEGIN
+ALTER TABLE dbo.PODETAIL 
+ADD Height [float] NULL; 
+EXEC sp_addextendedproperty N'MS_Description', 'Height', 'SCHEMA', N'dbo', 'TABLE', N'PODETAIL', 'COLUMN', N'Height'
+END
