@@ -90,6 +90,10 @@ IF NOT EXISTS (SELECT *
             [PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_RECEIPTDETAIL_PalletType] DEFAULT (''),
             [Notes] [nvarchar] (500) NULL CONSTRAINT DF_RECEIPTDETAIL_Notes DEFAULT (''),
             [Notes2] [nvarchar] (500) NULL CONSTRAINT DF_RECEIPTDETAIL_Notes2 DEFAULT (''),
+			[Hierarchy] NVARCHAR (10) NULL  CONSTRAINT [DF_RECEIPTDETAIL_Hierarchy] DEFAULT (''),
+			[Length] [float] NULL,
+			[Width] [float] NULL,
+			[Height] [float] NULL
 
             ) ON [PRIMARY]
 
@@ -297,6 +301,39 @@ BEGIN
             ALTER TABLE RECEIPTDETAIL ADD Notes2 NVARCHAR(500) NULL CONSTRAINT [DF_RECEIPTDETAIL_Notes2] DEFAULT ('');
             EXEC sp_addextendedproperty N'MS_Description', 'Additional information' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Notes2'
        END
+
+	   
+--FCR-15713
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Hierarchy' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+BEGIN
+     ALTER TABLE RECEIPTDETAIL 
+	 ADD Hierarchy NVARCHAR (10) NULL CONSTRAINT [DF_RECEIPTDETAIL_Hierarchy] DEFAULT ('');
+     EXEC sp_addextendedproperty N'MS_Description', 'Hierarchy' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Hierarchy'
+END
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Length' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+BEGIN
+     ALTER TABLE RECEIPTDETAIL
+	 ADD Length [float] NULL;
+     EXEC sp_addextendedproperty N'MS_Description', 'Length' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Length'
+END
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Width' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+BEGIN
+     ALTER TABLE RECEIPTDETAIL
+	 ADD Width [float] NULL; 
+     EXEC sp_addextendedproperty N'MS_Description', 'Width' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Width'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'Height' AND Object_ID = Object_ID('RECEIPTDETAIL'))
+BEGIN
+     ALTER TABLE RECEIPTDETAIL 
+	 ADD Height [float] NULL; 
+     EXEC sp_addextendedproperty N'MS_Description', 'Height' , 'SCHEMA', N'dbo', 'TABLE', N'RECEIPTDETAIL', 'COLUMN',N'Height'
+END
+
 END
 
 

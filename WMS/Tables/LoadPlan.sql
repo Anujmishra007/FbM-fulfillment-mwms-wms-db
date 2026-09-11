@@ -1,3 +1,9 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[LoadPlan]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[LoadPlan]
 (
 [LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -75,120 +81,219 @@ CREATE TABLE [dbo].[LoadPlan]
 [DefaultStrategykey] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BookingNo] [int] NULL,
 [OTM_DispatchDate] [datetime] NOT NULL CONSTRAINT [DF_LoadPlan_OTM_DispatchDate] DEFAULT (''),
-PickupDate DATETIME NULL 
+PickupDate DATETIME NULL,
+[AMSStatus] NVARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_AMSStatus]  DEFAULT (' '),
+[DockLoc] NVARCHAR (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_DockLoc]  DEFAULT (' '),
+[CLPFlag] NVARCHAR (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_CLPFlag]  DEFAULT ('N'),
+[PortOfLoading] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_PortOfLoading]   DEFAULT (' '),
+[PortOfDischarge] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_PortOfDischarge]   DEFAULT (' '),
+[SealNo] NVARCHAR (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_SealNo]   DEFAULT (' '),
+[ContainerNo] NVARCHAR (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_ContainerNo]   DEFAULT (' '),
+[SLCutOff] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_SLCutOff]   DEFAULT (' '),
+[CYCutOff] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_CYCutOff]   DEFAULT (' '),
+[VVL] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_VVL]   DEFAULT (' '),
+[TrackingNo] NVARCHAR (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_LOADPLAN_TrackingNo]   DEFAULT (' ')
 ) ON [PRIMARY]
-GO
+
 
 ALTER TABLE [dbo].[LoadPlan] WITH NOCHECK ADD CONSTRAINT [CK_LoadPlan_Loadkey_Numeric] CHECK ((isnumeric([Loadkey])=(1)))
-GO
+
 ALTER TABLE [dbo].[LoadPlan] ADD CONSTRAINT [PK_LoadPlan] PRIMARY KEY CLUSTERED ([LoadKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IX_LoadPlan_UserDefine10] ON [dbo].[LoadPlan] ([UserDefine10], [LoadKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 GRANT SELECT ON  [dbo].[LoadPlan] TO [JReportRole]
-GO
+
 GRANT DELETE ON  [dbo].[LoadPlan] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[LoadPlan] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[LoadPlan] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[LoadPlan] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Load Plan Header consists of load details with reference to the load size, transporter information, route to be taken, truck size, allocation method', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', NULL, NULL
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The date in which the load is created', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated case count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedCaseCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated cubic for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedCube'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated customers for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedCustCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated orders for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedOrderCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated pallet count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedPalletCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total allocated weight for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'AllocatedWeight'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Transporter code. Vendor which performs the transportation', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'CarrierKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total case count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'CaseCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total cubic count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Cube'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total  orders count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'CustCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'An area where the goods for an order will be moved to before shipment', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Delivery_Zone'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Case Pick Task Dispatch Method', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'DispatchCasePickMethod'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'dispatchpalletpickmethod', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'DispatchPalletPickMethod'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Piece Pick Task Dispatch Method', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'DispatchPiecePickMethod'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Free text - user notes', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Driver'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Not being used', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'DummyRoute'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Load customer reference number', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'ExternLoadKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Warehouse for the order to withdraw the stock', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'facility'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Based on storer set-up. If configured, user will not be able to do other tasks after the load is finalized', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'FinalizeFlag'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User Defined #1:', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Load_Userdef1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User Defined #2:', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Load_Userdef2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Load plan unique key. It''s used to identify a specific load plan record. Automatically generated.', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'LoadKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'It consists of Consolidate & Discrete pick method', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'LoadPickMethod'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The MBOL unique key', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'MBOLKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total orders count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'OrderCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'OTM Dispatch Date', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'OTM_DispatchDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total pallet count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'PalletCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Release the tasks to RF', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'PROCESSFLAG'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Expected cubic - to be collected', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Return_Cube'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Expected weight - to be collected', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Return_Weight'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The route in which the load will be delivered to', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Route'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The name of the section in the warehouse.', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'SectionKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The stauts of loadplan progress : Fully Allocated, Pick in progress, Pick slip printed, Picked, Checked, Closed', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Status'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Flag to indicate whether the orders in the load will be batched for allocation processing i.e. all orders will be consolidated and pick by items', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'SuperOrderFlag'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'TrafficCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A room reference or room number where the goods will be transferred to before truck loading', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'TrfRoom'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Truck Type will be ordered for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Truck_Type'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Truck Size', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'TruckSize'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Vehicle Type', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Vehicle_Type'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Maximum volume for the load - calculated in batch planning only', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'volumelimit'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total weight count for the load', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'Weight'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Maximum weight for the load - calculated in batch planning only', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'weightlimit'
+
+END
 GO
+
+
+--FCR-15713
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'AMSStatus' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD AMSStatus NVARCHAR (10) NULL CONSTRAINT [DF_LOADPLAN_AMSStatus]  DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'AMSStatus' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'AMSStatus'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'DockLoc' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD DockLoc NVARCHAR (10) NULL CONSTRAINT [DF_LOADPLAN_DockLoc]  DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'DockLoc' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'DockLoc'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'CLPFlag' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD CLPFlag NVARCHAR (1) NULL CONSTRAINT [DF_LOADPLAN_CLPFlag]  DEFAULT ('N');
+     EXEC sp_addextendedproperty N'MS_Description', 'CLPFlag' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'CLPFlag'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'PortOfLoading' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD PortOfLoading NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_PortOfLoading]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'PortOfLoading' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'PortOfLoading'
+END
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'PortOfDischarge' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD PortOfDischarge NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_PortOfDischarge]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'PortOfDischarge' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'PortOfDischarge'
+END
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'SealNo' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD SealNo NVARCHAR (30) NULL CONSTRAINT [DF_LOADPLAN_SealNo]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'SealNo' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'SealNo'
+END
+
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'ContainerNo' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD ContainerNo NVARCHAR (30) NULL CONSTRAINT [DF_LOADPLAN_ContainerNo]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'ContainerNo' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'ContainerNo'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'SLCutOff' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD SLCutOff NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_SLCutOff]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'SLCutOff' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'SLCutOff'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'CYCutOff' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD CYCutOff NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_CYCutOff]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'CYCutOff' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'CYCutOff'
+END
+
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'VVL' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD VVL NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_VVL]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'VVL' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'VVL'
+END
+
+IF NOT EXISTS ( SELECT * FROM sys.columns WHERE Name = 'TrackingNo' AND Object_ID = Object_ID('Loadplan'))
+BEGIN
+     ALTER TABLE Loadplan 
+	 ADD TrackingNo NVARCHAR (18) NULL CONSTRAINT [DF_LOADPLAN_TrackingNo]   DEFAULT (' ');
+     EXEC sp_addextendedproperty N'MS_Description', 'TrackingNo' , 'SCHEMA', N'dbo', 'TABLE', N'Loadplan', 'COLUMN',N'TrackingNo'
+END
+
+
 
 
 /*
@@ -197,7 +302,7 @@ GO
 
 ALTER TABLE dbo.LoadPlan
 ADD PickupDate DATETIME NULL 
-GO
+
 
 
 EXEC sp_addextendedproperty N'MS_Description', N'Pickup Date', 'SCHEMA', N'dbo', 'TABLE', N'LoadPlan', 'COLUMN', N'PickupDate'
