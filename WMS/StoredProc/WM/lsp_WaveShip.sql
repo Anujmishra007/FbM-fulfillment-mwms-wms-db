@@ -150,8 +150,13 @@ BEGIN
          END  
       END
 
-      IF ISNULL(@n_WarningNo,'') = ''--AndyWu01
-		   SET @n_WarningNo = 0--AndyWu01
+      --AndyWu01 Start
+      IF ISNULL(@n_WarningNo,'') = ''
+		   SET @n_WarningNo = 0
+
+      IF ISNULL(@n_LogWarningNo,'') = ''
+		   SET @n_LogWarningNo = 0
+      --AndyWu01 End
 
       IF @n_WarningNo < 2
       BEGIN
