@@ -20,6 +20,8 @@ GO
 /* Updates:                                                               */    
 /* Date        Author   Ver   Purposes                                    */ 
 /* 2026-07-07  Wan      1.0   Fix Issue compare taskdetailkey with tasktype*/
+/* 2026-09-11  AlexK    1.1   UWP-65352 filtered RDT splitted pickdetail  */
+/*                            during sortation. (AlexK01)                 */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_DATA]        
@@ -118,7 +120,18 @@ BEGIN
                             +                '  AND td.SourceType    = ''mspRLWAV13'''
                             +                '  AND td.[Status]      <> ''X'''
                             +                ' )'
- 
+                            -- (AlexK01) START
+                            --+ ' AND NOT EXISTS (SELECT TOP 1 1'
+                            --+                '  FROM ARCHIVE.TASKDETAIL td (NOLOCK)' 
+                            --+                '  WHERE td.TaskdetailKey = PICKDETAIL.TaskdetailKey'
+                            --+                '  AND td.AddDate > DATEADD(DAY, -30, CAST(GETDATE() AS DATE))'
+                            --+                '  AND td.TaskType = ''FCP'''          
+                            --+                '  AND td.SourceType    = ''mspRLWAV13'''
+                            --+                '  AND td.[Status]      <> ''X'''
+                            --+                ' )'
+                            + ' AND NOT (PickDetail.[Status] >= ''3'' AND (TaskDetailKey = '''' OR TaskDetailKey Is NULL))' --filter RDT split records
+                            -- (AlexK01) END
+
    EXEC isp_CreatePickdetail_WIP 
       @c_Loadkey = ''                                 
    ,  @c_Wavekey   = @c_Wavekey

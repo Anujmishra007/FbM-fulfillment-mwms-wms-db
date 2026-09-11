@@ -21,6 +21,8 @@ GO
 /* Date        Author   Ver   Purposes                                    */ 
 /* 2026-07-07  Wan      1.0   FCR-12980: CR v8.5 - v8.7                   */
 /* 2026-07-29                 CR v9.0 ToLoc for UOM ='2'                  */
+/* 2026-09-11  AlexK    1.1   UWP-65352 Hotfix for link taskdetailkey     */
+/*                            to correct pickdetail records (AlexK01)     */
 /**************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_FCP]        
    @c_Wavekey     NVARCHAR(10)
@@ -335,6 +337,7 @@ BEGIN
          SET @c_TaskStatus = '0'
          SET @c_RefTaskkey = ''
          SET @c_LinkTaskToPick_SQL = ' PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey' 
+                                   + CASE WHEN ISNULL(@c_UCCNo, '') <> '' THEN ' AND (PICKDETAIL.DropId = @c_CaseID) ' ELSE '' END --(AlexK01)
                                    + ' ORDER BY PICKDETAIL.QTY'
 
          IF @c_Taskdetail_RPF > ''
