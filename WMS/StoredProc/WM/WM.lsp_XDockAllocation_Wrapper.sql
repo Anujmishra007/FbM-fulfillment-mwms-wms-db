@@ -34,7 +34,7 @@ GO
 /*                            ReceiptDetail                             */
 /* 02-SEP-2025 SWT01    1.6   Enhanced session management pattern       */
 /* 21-May-2026 TK01     1.7   UWP-56374 - Resize ExternPOKey = 50       */
-/* 04-Aug-2026 SSA01    1.8   FCR13885 - Updated allocation process based*/
+/* 04-Aug-2026 SSA01    1.8   FCR13385 - Updated allocation process based*/
 /*                            on XDAutoAllocWithPOSkipLot03 config      */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
