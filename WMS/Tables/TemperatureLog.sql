@@ -29,7 +29,7 @@ CREATE TABLE [dbo].[TemperatureLog](
 (
 	[TemperatureLogID] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 90, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY],
-UNIQUE NONCLUSTERED 
+ CONSTRAINT IDX_TemperatureLog_Facility_PalletID_UCCNo_CheckDate UNIQUE NONCLUSTERED 
 (
 	[Facility] ASC,
 	[PalletId] ASC,
@@ -71,19 +71,6 @@ ALTER TABLE [dbo].[TemperatureLog] ADD  CONSTRAINT [DF_TemperatureLog_Userdefine
 ALTER TABLE [dbo].[TemperatureLog] ADD  CONSTRAINT [DF_TemperatureLog_EditDate]  DEFAULT (getdate()) FOR [EditDate]
 
 ALTER TABLE [dbo].[TemperatureLog] ADD  CONSTRAINT [DF_TemperatureLog_EditWho]  DEFAULT (suser_sname()) FOR [EditWho]
-
---ALTER TABLE [dbo].[TemperatureLog]  WITH CHECK ADD  CONSTRAINT [FK_MBOL_MbolKey] FOREIGN KEY([MbolKey])
---REFERENCES [dbo].[MBOL] ([MbolKey])
-
-
---ALTER TABLE [dbo].[TemperatureLog] CHECK CONSTRAINT [FK_MBOL_MbolKey]
-
-
---ALTER TABLE [dbo].[TemperatureLog]  WITH CHECK ADD  CONSTRAINT [FK_Receipt_ReceiptKey] FOREIGN KEY([ReceiptKey])
---REFERENCES [dbo].[RECEIPT] ([ReceiptKey])
-
-
---ALTER TABLE [dbo].[TemperatureLog] CHECK CONSTRAINT [FK_Receipt_ReceiptKey]
 
 
 EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'Unique key to the Storer record. Owner of the commodity' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'TemperatureLog', @level2type=N'COLUMN',@level2name=N'StorerKey'
@@ -139,4 +126,5 @@ EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'When the data 
 
 END 
 GO
+
 
