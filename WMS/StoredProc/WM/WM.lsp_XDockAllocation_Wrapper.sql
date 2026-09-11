@@ -34,6 +34,8 @@ GO
 /*                            ReceiptDetail                             */
 /* 02-SEP-2025 SWT01    1.6   Enhanced session management pattern       */
 /* 21-May-2026 TK01     1.7   UWP-56374 - Resize ExternPOKey = 50       */
+/* 04-Aug-2026 SSA01    1.8   FCR13885 - Updated allocation process based*/
+/*                            on XDAutoAllocWithPOSkipLot03 config      */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
@@ -60,30 +62,32 @@ BEGIN
            @c_ExternPOKey                  NVARCHAR(50),    --(TK01)
            @c_ExternStatus                 NVARCHAR(10),
            @c_POType                       NVARCHAR(10),
-           @CUR_ALC                        CURSOR  --NJOW01
+           @CUR_ALC                        CURSOR,  --NJOW01
+           @c_XDAutoAllocWithPOSkipLot03   NVARCHAR(10)  --SSA01
                                                       
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
    
    -- Start enhanced session management (SWT01)
-	 SET @n_Err = 0
-	 DECLARE @b_ExecuteAs        BIT = 0
-	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
-	 BEGIN
-	    EXEC [WM].[lsp_SetUser] 
-	         @c_UserName = @c_UserName  OUTPUT
-	      ,  @n_Err      = @n_Err       OUTPUT
-	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-	    IF @n_Err <> 0
-	    BEGIN
-	       GOTO EXIT_SP
-	    END
+      IF @n_Err <> 0
+      BEGIN
+         GOTO EXIT_SP
+      END
 
-	    IF @b_ExecuteAs = 1
-	       EXECUTE AS LOGIN = @c_UserName
-	 END                                    
-	 -- End enhanced session management (SWT01)
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    
    BEGIN TRY                              --(Wan01) - START
       SELECT @c_Storerkey = Storerkey,
@@ -94,8 +98,9 @@ BEGIN
       SELECT @c_XDFinalizeAutoAllocatePickSO = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'XDFinalizeAutoAllocatePickSO')
       SELECT @c_STDXDFinalizeAutoAllocate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'STDXDFinalizeAutoAllocate')   /*JH01*/
       SELECT @c_Print_GRN_When_Allocate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PRINT_GRN_WHEN_ALLOCATE')
+      SELECT @c_XDAutoAllocWithPOSkipLot03= dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'XDAutoAllocWithPOSkipLot03')  /*SSA01*/
       
-      IF @n_continue IN(1,2) AND @c_XDFinalizeAutoAllocatePickSO = '1'  AND @c_STDXDFinalizeAutoAllocate <> '1'    /*JH01*/
+      IF @n_continue IN(1,2) AND @c_XDFinalizeAutoAllocatePickSO = '1'  AND @c_STDXDFinalizeAutoAllocate <> '1' AND @c_XDAutoAllocWithPOSkipLot03 <> '1'   /*JH01*//*SSA01*/
       BEGIN
          --(Wan01) - Start Try..Catch
          BEGIN TRY  
@@ -125,7 +130,7 @@ BEGIN
          --(Wan01) - END Try..Catch    
       END
    
-      IF @n_continue IN(1,2) AND @c_STDXDFinalizeAutoAllocate = '1'    /*JH01 Start*/
+      IF @n_continue IN(1,2) AND @c_STDXDFinalizeAutoAllocate = '1'  /*JH01 Start*/
       BEGIN
          SELECT O.Orderkey 
          INTO #TMP_XDOCK  
@@ -197,8 +202,67 @@ BEGIN
             CLOSE Cur_XDOCK  
            DEALLOCATE Cur_XDOCK  
       END                                                             /*JH01 End*/
+      IF @n_continue IN(1,2) AND @c_XDAutoAllocWithPOSkipLot03 = '1'  /*SSA01 Start*/
+      BEGIN
+        SELECT O.Orderkey
+        INTO #TMP_XDOCK_SKIPLOT03
+        FROM RECEIPT R (NOLOCK)
+                 JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+                 JOIN ORDERDETAIL OD (NOLOCK) ON OD.Storerkey = RD.Storerkey
+            AND OD.ExternPOKey = RD.ExternPOkey
+            AND OD.Sku = RD.Sku
+                 JOIN ORDERS O (NOLOCK) ON OD.Orderkey = O.Orderkey
+        WHERE R.Receiptkey = @c_Receiptkey
+          AND O.Status <> '9'
+        GROUP BY O.Orderkey
 
-      IF @n_continue IN(1,2)  AND @c_STDXDFinalizeAutoAllocate <> '1'    /*JH01*/
+        IF NOT EXISTS (SELECT 1 FROM #TMP_XDOCK_SKIPLOT03)
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_ErrMsg = CONVERT(NVARCHAR(250),@n_err), @n_err=553908
+            SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': CrossDock Allocation Orders Not Found. (lsp_XDockAllocation_Wrapper)'
+            GOTO EXIT_SP
+        END
+
+        DECLARE Cur_XDOCK_SKIPLOT03 CURSOR FAST_FORWARD READ_ONLY FOR
+        SELECT Orderkey
+        FROM #TMP_XDOCK_SKIPLOT03 T
+        --WHERE ReceivedQty > 0
+        GROUP BY Orderkey
+        ORDER BY Orderkey
+
+        OPEN Cur_XDOCK_SKIPLOT03
+
+        FETCH NEXT FROM Cur_XDOCK_SKIPLOT03 INTO @c_Orderkey
+
+        WHILE @@FETCH_STATUS <> -1
+        BEGIN
+
+        EXEC nsporderprocessing
+                    @c_Orderkey,
+                    '', --@c_oskey
+                    'N', -- @c_docarton,
+                    'N', -- @c_doroute,
+                    '', --@c_tblprefix
+                    @b_success OUTPUT,
+                    @n_err OUTPUT,
+                    @c_errmsg OUTPUT
+
+        IF @b_success <> 1 AND @n_err <> 0
+        BEGIN
+            SELECT @n_continue = 3
+            GOTO EXIT_SP
+        END
+        ELSE
+        EXEC isp_InsertAllocShortageLog @cOrderKey = @c_orderkey
+
+        FETCH NEXT FROM Cur_XDOCK_SKIPLOT03 INTO @c_Orderkey
+        END
+        CLOSE Cur_XDOCK_SKIPLOT03
+        DEALLOCATE Cur_XDOCK_SKIPLOT03
+      END                                                             /*SSA01 End*/
+
+      IF @n_continue IN(1,2)  AND @c_STDXDFinalizeAutoAllocate <> '1' AND @c_XDAutoAllocWithPOSkipLot03 <> '1' AND @c_XDFinalizeAutoAllocatePickSO <> '1'  /*SSA01*/   /*JH01*/
       BEGIN 
          SELECT @c_ExternPOKey = MAX(RD.ExternPOKey),
                 @c_ExternStatus = MAX(PO.ExternStatus),
@@ -471,3 +535,4 @@ END
 GO
 GRANT EXECUTE ON [WM].[lsp_XDockAllocation_Wrapper] TO nSQL 
 GO
+
