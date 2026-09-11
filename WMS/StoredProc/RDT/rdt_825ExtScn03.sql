@@ -108,30 +108,16 @@ BEGIN
         -- Handle confirmation screen (Screen 4 - Scn 6829)
         IF @nMobScn = 6829 -- Confirmation Screen
         BEGIN
+            SET @cPalletKey = ISNULL(NULLIF(@cOrigPalletKey, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
             IF @nInputKey = 1 -- ENTER - Confirm and proceed with update
             BEGIN
-
                 -- FCR-14856: Insert TRANSMITLOG2 on Scn 6829 ENTER
-                -- Generate TransmitLogKey2
-                EXECUTE dbo.nspg_GetKey
-                    'TransmitLogKey2',
-                    10,
-                    @cTransmitLogKey OUTPUT,
-                    @bSuccess        OUTPUT,
-                    @nErrNo          OUTPUT,
-                    @cErrMsg         OUTPUT
-                IF @bSuccess <> 1
-                BEGIN
-                    SET @nErrNo = 280551
-                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280551 TransmitLog2 key generation failed
-                    GOTO Quit
-                END
-
                 -- Get LOT from LOTxLOCxID using PalletKey (ID)
                 SELECT TOP 1 @cLOT = Lot
                 FROM dbo.LOTxLOCxID WITH (NOLOCK)
-                WHERE Id = @cSavedPalletKey
+                WHERE Id = @cPalletKey
                   AND StorerKey = @cStorerKey
+                  AND Qty > 0
                 ORDER BY SKU, Lot
                 SET @nRowCount = @@ROWCOUNT
 
@@ -139,7 +125,7 @@ BEGIN
                 BEGIN
                     SET @nErrNo = 280555
                     SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280555 Inventory not found for PalletKey
-                    GOTO Quit
+                    GOTO SCN_6829_Fail
                 END
 
                 -- Get Lottable03 from LOTATTRIBUTE (if LOT found; else @cLot03 stays NULL -> GRN Patch path)
@@ -153,15 +139,30 @@ BEGIN
                     SET @cLot03 = ISNULL(@cLot03, '')  -- Avoid NULL for comparison
                 END
 
+                -- Generate TransmitLogKey2
+                EXECUTE dbo.nspg_GetKey
+                    'TransmitLogKey2',
+                    10,
+                    @cTransmitLogKey OUTPUT,
+                    @bSuccess        OUTPUT,
+                    @nErrNo          OUTPUT,
+                    @cErrMsg         OUTPUT
+                IF @bSuccess <> 1
+                BEGIN
+                    SET @nErrNo = 280551
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280551 TransmitLog2 key generation failed
+                    GOTO SCN_6829_Fail
+                END
+
                 -- Route: GRN (Lottable03 = PalletKey) vs GRN Patch (all other cases incl. LOT not found)
-                IF @cLot03 = @cSavedPalletKey
+                IF @cLot03 = @cPalletKey
                 BEGIN
                     -- GRN path (WSNSCPRECCFM): get ReceiptKey + ReceiptLineNumber
                     SELECT TOP 1
                         @cReceiptKey    = ReceiptKey,
                         @cReceiptLineNo = ReceiptLineNumber
                     FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                    WHERE ToId = @cSavedPalletKey
+                    WHERE ToId = @cPalletKey
                       AND StorerKey = @cStorerKey
                     ORDER BY ReceiptKey ASC, ReceiptLineNumber ASC
 
@@ -169,30 +170,44 @@ BEGIN
                     BEGIN
                         SET @nErrNo = 280552
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280552 Receipt detail not found for pallet
-                        GOTO Quit
+                        GOTO SCN_6829_Fail
                     END
 
                     BEGIN TRY
-                        INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
-                        VALUES (@cTransmitLogKey, 'WSNSCPRECCFM', @cReceiptKey, @cReceiptLineNo, @cStorerKey, '0')
+                        IF NOT EXISTS(SELECT 1 FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                                       WHERE TableName = 'WSNSCPRECCFM'
+                                         AND Key1 = @cReceiptKey
+                                         AND Key2 = @cReceiptLineNo
+                                         AND Key3 = @cStorerKey)
+                        BEGIN
+                            INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
+                            VALUES (@cTransmitLogKey, 'WSNSCPRECCFM', @cReceiptKey, @cReceiptLineNo, @cStorerKey, '0')
+                        END
                     END TRY
                     BEGIN CATCH
                         SET @nErrNo = 280553
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280553 TransmitLog2 insert failed (GRN)
-                        GOTO Quit
+                        GOTO SCN_6829_Fail
                     END CATCH
                 END
                 ELSE
                 BEGIN
                     -- GRN Patch path (WSNSCPPLTCFM): Key1 = first 10 chars of PalletKey, Key2 = full PalletKey
                     BEGIN TRY
-                        INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
-                        VALUES (@cTransmitLogKey, 'WSNSCPPLTCFM', LEFT(@cSavedPalletKey, 10), @cSavedPalletKey, @cStorerKey, '0')
+                        IF NOT EXISTS(SELECT 1 FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                                       WHERE TableName = 'WSNSCPPLTCFM'
+                                         AND Key1 = LEFT(@cPalletKey, 10)
+                                         AND Key2 = @cPalletKey
+                                         AND Key3 = @cStorerKey)
+                        BEGIN
+                            INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
+                            VALUES (@cTransmitLogKey, 'WSNSCPPLTCFM', LEFT(@cPalletKey, 10), @cPalletKey, @cStorerKey, '0')
+                        END
                     END TRY
                     BEGIN CATCH
                         SET @nErrNo = 280554
                         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280554 TransmitLog2 insert failed (GRN Patch)
-                        GOTO Quit
+                        GOTO SCN_6829_Fail
                     END CATCH
                 END
 
@@ -217,7 +232,6 @@ BEGIN
             IF @nInputKey = 0 -- ESC - Go back to edit screen (Screen 3)
             BEGIN
                 -- Use @cInField values (from confirmation screen) or saved PalletKey
-                SET @cPalletKey = ISNULL(NULLIF(@cInField01, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
                 SET @cLength = @cInField02
                 SET @cWidth = @cInField03
                 SET @cHeight = @cInField04
@@ -242,6 +256,22 @@ BEGIN
 
                 GOTO Quit
             END
+            SCN_6829_Fail:
+                SET @cLength = @cInField02
+                SET @cWidth = @cInField03
+                SET @cHeight = @cInField04
+                SET @cWeight = @cInField05
+                SET @cStackability = @cInField07
+
+                -- Populate confirmation screen with display-only data
+                SET @cOutField01 = @cPalletKey
+                SET @cOutField02 = @cLength
+                SET @cOutField03 = @cWidth
+                SET @cOutField04 = @cHeight
+                SET @cOutField05 = @cWeight
+                SET @cOutField06 = @cCaptureInfo
+                SET @cOutField07 = @cStackability
+                GOTO Quit
         END
 
         -- Coming from Screen 3 (Scn 5112)
@@ -251,7 +281,7 @@ BEGIN
             BEGIN
                 -- Use @cInField values directly (from screen input)
                 -- PalletKey: try @cInField01, then saved C_String1, then original V_String41
-                SET @cPalletKey = ISNULL(NULLIF(@cInField01, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
+                SET @cPalletKey = ISNULL(NULLIF(@cOrigPalletKey, ''), ISNULL(NULLIF(@cSavedPalletKey, ''), @cOrigPalletKey))
                 SET @cLength = @cInField02
                 SET @cWidth = @cInField03
                 SET @cHeight = @cInField04
