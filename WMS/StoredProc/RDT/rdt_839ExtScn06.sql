@@ -2171,68 +2171,68 @@ BEGIN
                END
                ELSE
                BEGIN
-                  IF @cUOM = '2'
-                  BEGIN
-                     SELECT TOP 1 @nrdtPickLogID = RowRef,
-                        @cCurrentOrderKey = OrderKey
-                     FROM RDT.rdtPickLog WITH(NOLOCK) 
-                     WHERE PickSlipNo = @cPickSlipNo 
-                        AND (Mobile = @nMobile OR AddWho = @cUserName)
-                        AND Descr = @cSuggUCC
-                        AND PickMethod = 'GetTask-U'
+                  -- IF @cUOM = '2'
+                  -- BEGIN
+                  --    SELECT TOP 1 @nrdtPickLogID = RowRef,
+                  --       @cCurrentOrderKey = OrderKey
+                  --    FROM RDT.rdtPickLog WITH(NOLOCK) 
+                  --    WHERE PickSlipNo = @cPickSlipNo 
+                  --       AND (Mobile = @nMobile OR AddWho = @cUserName)
+                  --       AND Descr = @cSuggUCC
+                  --       AND PickMethod = 'GetTask-U'
 
-                     BEGIN TRY
-                        UPDATE RDT.rdtPickLog WITH(ROWLOCK)
-                        SET
-                           Status = '4'
-                        WHERE RowRef = @nrdtPickLogID
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo = 255531
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
-                        EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                        GOTO STEP_SKUQTY_FAIL
-                     END CATCH
-                  END
-                  ELSE IF @cUOM = '6'
-                  BEGIN
-                     DELETE FROM @tRDTPickLog
+                  --    BEGIN TRY
+                  --       UPDATE RDT.rdtPickLog WITH(ROWLOCK)
+                  --       SET
+                  --          Status = '4'
+                  --       WHERE RowRef = @nrdtPickLogID
+                  --    END TRY
+                  --    BEGIN CATCH
+                  --       SET @nErrNo = 255531
+                  --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
+                  --       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                  --       GOTO STEP_SKUQTY_FAIL
+                  --    END CATCH
+                  -- END
+                  -- ELSE IF @cUOM = '6'
+                  -- BEGIN
+                  --    DELETE FROM @tRDTPickLog
 
-                     INSERT INTO @tRDTPickLog ( RowRef)
-                     SELECT RPL.RowRef
-                     FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-                     WHERE RPL.PickSlipNo = @cPickSlipNo 
-                        AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
-                        AND RPL.PickMethod = 'GetTask-P'
-                        AND RPL.Status = '0'
-                        AND RPL.PickLockQty = 0
-                        AND RPL.Descr = @cSuggLOT
-                     ORDER BY RPL.RowRef
+                  --    INSERT INTO @tRDTPickLog ( RowRef)
+                  --    SELECT RPL.RowRef
+                  --    FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+                  --    WHERE RPL.PickSlipNo = @cPickSlipNo 
+                  --       AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
+                  --       AND RPL.PickMethod = 'GetTask-P'
+                  --       AND RPL.Status = '0'
+                  --       AND RPL.PickLockQty = 0
+                  --       AND RPL.Descr = @cSuggLOT
+                  --    ORDER BY RPL.RowRef
 
-                     SET @nLoopIndex = -1
-                     WHILE 1 = 1
-                     BEGIN
-                        SELECT TOP 1 @nLoopIndex = RowRef 
-                        FROM @tRDTPickLog 
-                        WHERE RowRef > @nLoopIndex
-                        ORDER BY RowRef
+                  --    SET @nLoopIndex = -1
+                  --    WHILE 1 = 1
+                  --    BEGIN
+                  --       SELECT TOP 1 @nLoopIndex = RowRef 
+                  --       FROM @tRDTPickLog 
+                  --       WHERE RowRef > @nLoopIndex
+                  --       ORDER BY RowRef
 
-                        IF @@ROWCOUNT = 0
-                           BREAK
+                  --       IF @@ROWCOUNT = 0
+                  --          BREAK
 
-                        BEGIN TRY
-                           UPDATE RDT.rdtPickLog WITH(ROWLOCK)
-                           SET Status = '4'
-                           WHERE RowRef = @nLoopIndex
-                        END TRY
-                        BEGIN CATCH
-                           SET @nErrNo = 255532
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
-                           EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-                           GOTO STEP_SKUQTY_FAIL
-                        END CATCH
-                     END
-                  END
+                  --       BEGIN TRY
+                  --          UPDATE RDT.rdtPickLog WITH(ROWLOCK)
+                  --          SET Status = '4'
+                  --          WHERE RowRef = @nLoopIndex
+                  --       END TRY
+                  --       BEGIN CATCH
+                  --          SET @nErrNo = 255532
+                  --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
+                  --          EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
+                  --          GOTO STEP_SKUQTY_FAIL
+                  --       END CATCH
+                  --    END
+                  -- END
                   SET @nAfterScn = 6777
                   SET @nAfterStep = 99
                   -- Prepare next screen var
