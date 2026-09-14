@@ -1,12 +1,13 @@
 /*****************************************************************************/
 /* Store procedure: rdt_1836ExtUpd08                                         */
 /* Copyright      : Maersk                                                   */
-/* Client         : ONBR                                                     */
+/* Client         : AMERICAN EAGLE                                           */
 /*                                                                           */
 /* Modifications log:                                                        */
 /*                                                                           */
 /* Date         Author    Ver.    Purposes                                   */
 /* 2026-06-16   DennisW   1.0.0   FCR-12981 Release FCP task on hold         */
+/* 2026-09-14   NickT     1.1.0   UWP-66508 Delete RFPutaway data.           */
 /*****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ExtUpd08]
@@ -30,6 +31,10 @@ BEGIN
    DECLARE @cUserName         NVARCHAR( 128)
    DECLARE @cLot              NVARCHAR( 10)
    DECLARE @cGroupKey         NVARCHAR( 10)
+   DECLARE @cSKU              NVARCHAR( 20)
+   DECLARE @nRowCount         INT
+   DECLARE @nPABookingKey     INT
+   DECLARE @nQTY              INT
    DECLARE @nTranCount        INT
 
    SELECT
@@ -50,7 +55,9 @@ BEGIN
             -- Derive FinalLoc from RPF task via ASTRPT.SourceKey → RPF.TaskDetailKey
             SELECT
                @cLot      = T1.Lot,
-               @cFinalLOC = T2.FinalLoc
+               @cFinalLOC = T2.FinalLoc,
+               @cSKU      = T1.SKU,
+               @nQTY      = T1.Qty
             FROM dbo.TaskDetail T1 WITH (NOLOCK)
             JOIN dbo.TaskDetail T2 WITH (NOLOCK)
                ON  T2.TaskDetailKey = T1.SourceKey
@@ -102,6 +109,64 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')-- 270001 Update TaskDetail failed
                GOTO RollBackTran
             END CATCH
+
+            SET @nPABookingKey = 0
+            SELECT @nPABookingKey = PABookingKey
+            FROM dbo.RFPutaway WITH (NOLOCK)
+            WHERE StorerKey      = @cStorerKey
+              AND SuggestedLOC   = @cFinalLOC
+              AND Lot            = @cLot
+              AND SKU            = @cSKU
+              AND Qty            = @nQTY
+
+            SELECT @nRowCount = @@ROWCOUNT
+
+            IF @nRowCount > 0 OR ISNULL(@nPABookingKey, 0) <> 0
+            BEGIN
+               BEGIN TRY
+                  EXEC rdt.rdt_Putaway_PendingMoveIn 
+                     ''
+                     ,'UNLOCK'
+                     ,'' --FromLOC
+                     ,'' --FromID
+                     ,'' --SuggestedLOC
+                     ,'' --Storer
+                     ,@nErrNo  OUTPUT
+                     ,@cErrMsg OUTPUT
+                     ,@nPABookingKey = @nPABookingKey OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 270002
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--  Delete RFPutaway failed
+                  GOTO RollBackTran
+               END CATCH
+            END
+            ELSE
+            BEGIN
+               BEGIN TRY
+                  EXEC rdt.rdt_Putaway_PendingMoveIn
+                     @cUserName        = ''
+                     ,@cType            = 'UNLOCK'
+                     ,@cFromLoc        = ''
+                     ,@cFromID         = ''
+                     ,@cSuggestedLOC   = @cFinalLOC
+                     ,@cStorerKey      = @cStorerKey
+                     ,@nErrNo          = @nErrNo    OUTPUT
+                     ,@cErrMsg         = @cErrMsg OUTPUT
+                     ,@cSKU            = @cSKU
+                     ,@nPutawayQTY     = @nQTY
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 270003
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--  Delete RFPutaway failed
+                  GOTO RollBackTran
+               END CATCH
+            END
+
+            IF @nErrNo <>0
+            BEGIN
+               GOTO RollBackTran  
+            END
 
             COMMIT TRAN rdt_1836ExtUpd08
          END -- enter
