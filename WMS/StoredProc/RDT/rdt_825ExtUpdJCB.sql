@@ -19,6 +19,7 @@ GO
 /* 17/06/2025   2.0   PPA374   Not allowing to capture pallet with >1 zero SKUs and not updatng it   */
 /* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK								                 */
 /* 06/08/2025   2.2   PPA374   Allowing to measure pallet up to 999 rather than 400                  */
+/* 14/09/2026   2.3   PPA374   Adding CODELKUP logic to control dims and weight                      */
 /*****************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_825ExtUpdJCB] (
