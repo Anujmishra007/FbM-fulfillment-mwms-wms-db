@@ -18,6 +18,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2026-07-01  1.0  Dennis   FCR-12996 Created                          */
 /* 2026-08-03  1.1  Dennis   FCR-12996 Loop all ChildIDs in DROPIDDETAIL*/
+/* 2026-09-14  1.2  NickT    UWP-66509 Fetch available inventory.       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721UpdateId02] (
@@ -126,8 +127,10 @@ BEGIN
 
       SELECT TOP 1 @cFromLOC = Loc
       FROM dbo.LOTxLOCxID WITH (NOLOCK)
-      WHERE Id        = @cChildID
-      AND   StorerKey = @cStorerKey
+      WHERE Id = @cChildID
+         AND StorerKey = @cStorerKey
+         AND Qty  > 0
+      ORDER BY Loc, ID
 
       IF ISNULL(@cFromLOC, '') = ''
       BEGIN
