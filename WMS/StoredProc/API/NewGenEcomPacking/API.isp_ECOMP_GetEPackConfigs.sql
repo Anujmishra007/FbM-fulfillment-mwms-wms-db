@@ -29,8 +29,6 @@
 /* 25-Sep-2025    JWF011   #UWP-41771 - Add configs for TrackNo         */
 /* 07-Jan-2026    JWF011   #FCR-10065 - Add CCTV API02 UDF Config       */
 /* 24-Feb-2026    JWF011   #FCR-10065 - Fix CCTV API02 UDF Config       */
-/* 10-Apr-2026    JWF011   #FCR-12163 - Add EPACKCCTVEndPreRec and      */
-/*                                      EPACKCCTVHOLDSEC                */
 /* 27-May-2026    Sean     #FCR-12877 - Add EPACKCCTVClickOrderSliceRec */
 /* 16-Jul-2026    Sean     #FCR-13894 - Add EPACKCCTVSingleScanSliceRec, */
 /*                         EPACKCCTVOFFSETSEC3, EPACKCCTVOFFSETSEC4     */
@@ -75,8 +73,6 @@ BEGIN
          , @c_CCTVREFRESHTRACKNO       NVARCHAR(1)  = ''
          , @c_CCTVJDONLINE             NVARCHAR(1)  = ''
 
-         , @c_EPACKCCTVEndPreRec               NVARCHAR(1)   = ''
-         , @c_EPACKCCTVHOLDSEC                NVARCHAR(3)   = ''
          , @c_EPACKCCTVClickOrderSliceRec     NVARCHAR(1)   = ''
 
          , @c_EPACKCCTVSingleScanSliceRec     NVARCHAR(1)   = ''
@@ -261,9 +257,6 @@ BEGIN
       END
       -- FCR-10065 CCTV API02 UDF (End)
 
-      -- FCR-12163 - Add EPACKCCTVEndPreRec and EPACKCCTVHOLDSEC
-      SET @c_EPACKCCTVEndPreRec = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec')
-      SET @c_EPACKCCTVHOLDSEC = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVHOLDSEC')
 
       INSERT INTO @t_EPACKConfig (ConfigName, [Value]) 
       SELECT 'EPACKCCTVWMTYPE'     , @c_EPACKCCTVWMTYPE    
@@ -299,10 +292,6 @@ BEGIN
       SELECT 'CCTV_API02_UDF03'    , @c_CCTV_API02_UDF03
       UNION ALL
       SELECT 'CCTV_API02_UDF04'    , @c_CCTV_API02_UDF04
-      UNION ALL
-      SELECT 'EPACKCCTVEndPreRec'  , @c_EPACKCCTVEndPreRec
-      UNION ALL
-      SELECT 'EPACKCCTVHOLDSEC'    , @c_EPACKCCTVHOLDSEC
 
       IF @c_PackMode = 'M'
       BEGIN

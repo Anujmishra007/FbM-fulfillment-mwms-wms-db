@@ -34,6 +34,8 @@
 /* 07-Apr-2026    Sean04   FCR-11940 - TH - Add errcode in message      */
 /* 23-Apr-2026    Sean05   FCR-11940 - TH - Add Debug Para for Sub SP   */
 /* 23-Jun-2026    Sean06   #FCR-12417 Display UPC instead of SKU        */
+/* 24-Aug-2026    Sean07   #FCR-13894 fix get CCTV Storer Config        */
+/* 03-Sep-2026    CSC166   FCR-13430 Pass PickSlipNo to Decode SP       */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU](
      @b_Debug           INT            = 0 
@@ -117,7 +119,7 @@ BEGIN
          , @c_sc_SKUDECODE                NVARCHAR(30)   = ''
          , @c_sc_GetSNFromScanLabel       NVARCHAR(30)   = ''
 
-         , @c_OrderMode                   NVARCHAR(1)    = ''
+         , @c_OrderMode                   NVARCHAR(1)    = 'S'       --Sean07
          , @b_ScanQRInSKULabel            BIT            = 0         --Alex02
          , @c_sc_DisplayUPCMode           NVARCHAR(1)    = ''        --Sean06 #FCR-12417
          , @c_DisplaySKU                 NVARCHAR(500)  = ''        --Sean06 #FCR-12417
@@ -244,6 +246,7 @@ BEGIN
       ,  @c_errmsg      = @c_sp_errmsg       OUTPUT
       ,  @c_SerialNo    = @c_SerialNo        OUTPUT
       ,  @c_TaskBatchNo = @c_TaskBatchID 
+      ,  @c_PickSlipNo  = @c_PickSlipNo		--FCR13430	  
 
       IF @b_sp_Success <> 1
       BEGIN

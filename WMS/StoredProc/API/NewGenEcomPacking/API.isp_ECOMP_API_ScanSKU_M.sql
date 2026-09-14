@@ -37,6 +37,7 @@
 /* 07-Apr-2026    Sean05   FCR-11940 - TH - Add errcode in message      */
 /* 23-Apr-2026    Sean06   FCR-11940 - TH - Add Debug Para for Sub SP   */
 /* 23-Jun-2026    Sean07    FCR-12417 Display UPC instead of SKU        */
+/* 03-Sep-2026    CSC166   FCR-13430 Pass PickSlipNo to Decode SP       */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU_M](
      @b_Debug           INT            = 0
@@ -313,6 +314,7 @@ BEGIN
       ,  @c_errmsg      = @c_sp_errmsg   OUTPUT
       ,  @c_SerialNo    = @c_SerialNo    OUTPUT
       ,  @c_TaskBatchNo = @c_TaskBatchID 
+      ,  @c_PickSlipNo  = @c_PickSlipNo		--FCR13430	  
 
       IF @b_sp_Success <> 1
       BEGIN

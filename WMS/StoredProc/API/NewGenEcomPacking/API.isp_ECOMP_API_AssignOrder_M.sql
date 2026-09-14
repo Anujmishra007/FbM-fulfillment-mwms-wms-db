@@ -26,6 +26,7 @@
 /* 24-Mar-2026    Sean01   #UWP-52654 - replace RevertUser with ResetUser*/
 /* 07-Apr-2026    Sean02   FCR-11940 - TH - Add errcode in message      */
 /* 14-May-2026    Sean03   #FCR-12417 Display UPC instead of SKU        */
+/* 29-Aug-2026    Sean04   #FCR-12877 Order by RowRef DESC              */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_AssignOrder_M](
      @b_Debug           INT            = 0
@@ -235,7 +236,7 @@ BEGIN
    SELECT TOP 1
       @c_NewTaskBatchID = ISNULL(RTRIM(TaskBatchNo), '')
    FROM [dbo].[PACKTASKDETAIL] WITH (NOLOCK) 
-   WHERE OrderKey = @c_NewOrderKey
+   WHERE OrderKey = @c_NewOrderKey ORDER BY RowRef DESC
 
    IF @b_Debug = 1
    BEGIN
@@ -292,7 +293,7 @@ BEGIN
             SELECT TOP 1
                @c_NewTaskBatchID = ISNULL(RTRIM(TaskBatchNo), '')
             FROM [dbo].[PACKTASKDETAIL] WITH (NOLOCK) 
-            WHERE OrderKey = @c_NewOrderKey
+            WHERE OrderKey = @c_NewOrderKey ORDER BY RowRef DESC
          END
          --IF @c_NewOrderKey = @c_ExistingOrderKey
          --BEGIN

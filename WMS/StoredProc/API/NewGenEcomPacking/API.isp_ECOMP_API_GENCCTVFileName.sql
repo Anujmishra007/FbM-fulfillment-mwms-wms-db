@@ -19,12 +19,8 @@
 /* 28-AUG-2025    Jiawen   #UWP-40141 Update REDO filename              */
 /* 15-OCT-2025    Jiawen   #UWP-42320 Update REPACK, REDO filename      */
 /* 16-DEC-2025    Jiawen   #FCR-9127 Update filename                    */
-/* 13-APR-2026    JWF011   #FCR-12163 Add 'EPACKCCTVEndPreRec' rule     */
 /* 27-MAY-2026    Sean     #FCR-12877 Add 'CLICKORDER' FuncName for     */
 /*                                    Batch Multi-item click orderkey   */
-/* 16-JUL-2026    Sean     #FCR-13894 Add 'SINGLEBATCHSLICE' FuncName   */
-/*                                    for Batch Single Mode scan-SKU    */
-/*                                    slicing                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GENCCTVFileName] (
@@ -113,11 +109,6 @@ BEGIN
    END
 
    IF @c_FuncName IN ('PENDPACKEXIT', 'CANC')
-      AND (@c_OrderMode <> 'M'
-         OR (@c_OrderMode = 'M'
-            AND dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec') = '0'
-         )
-      )
    BEGIN
       SET @c_FileName = 'HD_' + @c_CurrentTimeStamp + '.mp4'
    END
@@ -139,27 +130,22 @@ BEGIN
       END
    END
    ELSE IF @c_FuncName = 'PACKCONFIRM'
-      OR (@c_FuncName IN ('PENDPACKEXIT', 'CANC')
-         AND @c_OrderMode = 'M'
-         AND dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKCCTVEndPreRec') = '1'
-      )
       OR @c_FuncName = 'CLICKORDER'  -- FCR-12877
       OR @c_FuncName = 'SINGLEBATCHSLICE'  -- FCR-13894
    BEGIN
       -- FCR-12877 (Start) - For CLICKORDER, if the previous order was NOT yet
       -- packed when user clicked the next orderkey, fall back to HD_<OrderKey>_<ts>.mp4
-      -- FCR-13894 - SINGLEBATCHSLICE (Batch Single Mode scan-SKU slicing) follows
-      -- the same fallback rule.
-      IF @c_FuncName IN ('CLICKORDER', 'SINGLEBATCHSLICE') AND @c_OrderKey <> ''
+      IF @c_FuncName = 'CLICKORDER' AND @c_OrderKey <> ''
       BEGIN
          DECLARE @c_LastOrderPacked  INT = 0
          
-         -- An order is considered "packed" if there is a PackHeader row 
-         -- linked to this OrderKey with PackStatus = '9' (confirmed)
+         -- An order is considered "packed" if there is a PackHeader row
+         -- linked to this OrderKey with [Status] = '9' (confirmed).
+         -- [Status] is the pack lifecycle column ('0' open -> '9' confirmed);
          SELECT TOP 1 @c_LastOrderPacked = 1
          FROM [dbo].[PackHeader] WITH (NOLOCK)
          WHERE OrderKey = @c_OrderKey
-           AND ISNULL(RTRIM(PackStatus), '') = '9'
+           AND ISNULL(RTRIM([Status]), '') = '9'
 
          IF @c_LastOrderPacked = 0
          BEGIN
