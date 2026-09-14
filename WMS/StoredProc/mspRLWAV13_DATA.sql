@@ -22,6 +22,8 @@ GO
 /* 2026-07-07  Wan      1.0   Fix Issue compare taskdetailkey with tasktype*/
 /* 2026-09-11  AlexK    1.1   UWP-65352 filtered RDT splitted pickdetail  */
 /*                            during sortation. (AlexK01)                 */
+/* 2026-09-14  AlexK    1.2   UWP-65352 Exclude completed picking         */
+/*                                      pickdetail where Status = '3'     */
 /**************************************************************************/   
  
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV13_DATA]        
@@ -105,7 +107,7 @@ BEGIN
    END
 
    --@n_Err Start 62010
-   SET @c_PickCondition_SQL = 'PICKDETAIL.Status < ''5'' AND PICKDETAIL.Qty > 0'
+   SET @c_PickCondition_SQL = 'PICKDETAIL.Status < ''3'' AND PICKDETAIL.Qty > 0' --(AlexK02)
 
    IF @n_debug = 5
    BEGIN
@@ -129,7 +131,7 @@ BEGIN
                             --+                '  AND td.SourceType    = ''mspRLWAV13'''
                             --+                '  AND td.[Status]      <> ''X'''
                             --+                ' )'
-                            + ' AND NOT (PickDetail.[Status] >= ''3'' AND (TaskDetailKey = '''' OR TaskDetailKey Is NULL))' --filter RDT split records
+                            --+ ' AND NOT (PickDetail.[Status] >= ''3'' AND (TaskDetailKey = '''' OR TaskDetailKey Is NULL))' --filter RDT split records
                             -- (AlexK01) END
 
    EXEC isp_CreatePickdetail_WIP 
