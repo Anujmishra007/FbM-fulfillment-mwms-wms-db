@@ -17,11 +17,11 @@ GO
 /* 17/06/2025   2.0   PPA374   Inserts other non-captured U non-captured pallets (U type)            */
 /* 17/06/2025   2.0   PPA374   Updates receipt detail for the pallet and same U type pallets         */
 /* 17/06/2025   2.0   PPA374   Not allowing to capture pallet with >1 zero SKUs and not updatng it   */
-/* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK						     */
+/* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK								                 */
 /* 06/08/2025   2.2   PPA374   Allowing to measure pallet up to 999 rather than 400                  */
 /*****************************************************************************************************/
 
-CREATE OR ALTER    PROC [RDT].[rdt_825ExtUpdJCB] (
+CREATE OR ALTER PROC [RDT].[rdt_825ExtUpdJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -70,7 +70,11 @@ BEGIN
    @cCheckNotes    AS NVARCHAR(20),
    @nDivWeight     AS Float,
    @cInvXRD        AS NVARCHAR(5),
-   @cSKUonPal      AS INT
+   @cSKUonPal      AS INT,
+   @cLengthVal     AS INT,
+   @cHeightVal     AS INT,
+   @cWidthVal      AS INT,
+   @cWeightVal     AS INT
 
    IF @nFunc = 825
    BEGIN
@@ -221,19 +225,29 @@ BEGIN
 			   SET @cZeroExists = 'N' --No SKUs without weight (All SKUS got weight)
 			END
 
+            SELECT 
+               @cLengthVal = ISNULL(NULLIF(MAX(CASE WHEN Code = 'Length' THEN Short END), ''), '0'),
+               @cHeightVal = ISNULL(NULLIF(MAX(CASE WHEN Code = 'Height' THEN Short END), ''), '0'),
+               @cWeightVal = ISNULL(NULLIF(MAX(CASE WHEN Code = 'Weight' THEN Short END), ''), '0'),
+               @cWidthVal  = ISNULL(NULLIF(MAX(CASE WHEN Code = 'Width'  THEN Short END), ''), '0')
+            FROM dbo.CODELKUP WITH (NOLOCK)
+            WHERE LISTNAME = 'JCB825VAL' 
+               AND Storerkey = @cStorerKey 
+               AND Code IN ('Length', 'Height', 'Weight', 'Width');
+
 			--Checking that dims are within reasonable values
 		    IF @nLength = '' 
-			   OR @nLength < 20 
+			   OR @nLength < @cLengthVal
 			   OR @nLength > 999 
 			   OR @nWidth = '' 
-			   OR @nWidth < 20 
+			   OR @nWidth < @cWidthVal
 			   OR @nWidth > 999 
 			   OR @nHeight = '' 
-			   OR @nHeight < 20 
+			   OR @nHeight < @cHeightVal
 			   OR @nHeight > 999
 		    BEGIN
 		       SET @nErrNo = 218094
-			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Dims NOT >=20 <=999'
+			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Dims NOT >=val <=999'
 			   UPDATE dbo.PALLET WITH(ROWLOCK)
                SET Length = 0, 
 			      Width = 0, 
@@ -252,10 +266,10 @@ BEGIN
 			   GOTO QUIT --Stopping the SP
 		    END
 
-			IF @nWeight < 20 --Checking that weight is within reasonable value
+			IF @nWeight < @cWeightVal --Checking that weight is within reasonable value
 		    BEGIN
 		       SET @nErrNo = 218096
-			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --'Weight is < 20 KG'
+			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --'Weight is < then val KG'
 			   UPDATE dbo.PALLET WITH(ROWLOCK)
                SET Length = 0, 
 			      Width = 0, 
@@ -295,7 +309,7 @@ BEGIN
 
 			   GOTO QUIT --Stopping the SP
 			END
-	
+
 		    IF @cZeroExists = 'Y' AND ISNULL(@nZeroSKUNo,0) > 1 --Checks that more than 1 SKU got no weight
 		    BEGIN
 			   SET @nErrNo = 218095
@@ -845,3 +859,4 @@ END
 GO
 GRANT EXECUTE ON [RDT].[rdt_825ExtUpdJCB] TO [NSQL]
 GO
+
