@@ -116,7 +116,8 @@ BEGIN
       SELECT TOP 1 @cGroupKey = Groupkey
       FROM dbo.TaskDetail T1 WITH (NOLOCK)
       JOIN dbo.LOC LOC WITH (NOLOCK) ON  T1.FromLoc = Loc.Loc
-      JOIN dbo.AreaDetail AD WITH (NOLOCK) ON  AD.Putawayzone = Loc.PutAwayZone     
+      JOIN dbo.AreaDetail AD WITH (NOLOCK) ON  AD.Putawayzone = Loc.PutAwayZone
+      JOIN dbo.Orders ORD WITH (NOLOCK) ON  ORD.Orderkey = T1.Orderkey     
       WHERE T1.Storerkey = @cStorerKey
       AND   T1.TaskType = @cTaskType
       AND   T1.UserKey = ''
@@ -134,7 +135,7 @@ BEGIN
                         WHERE T1.Groupkey = T2.Groupkey
                         AND   T2.[Status] > '0'
                         AND   T1.TaskType = T2.TaskType)
-      ORDER BY T1.Priority
+      ORDER BY ORD.Deliverydate, T1.Priority
 
       IF @@ROWCOUNT = 0
       BEGIN
