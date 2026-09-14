@@ -23,6 +23,8 @@ GO
 /* 2023-02-15  Wan      1.0   Created & DevOps Combine Script           */ 
 /* 2023-07-07  Wan01    1.1   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
+/* 2025-04-03  WyeChun  1.2   INC7876674 Enhancement for reprint (WC01) */
+/* 2026-07-13  CSC166   1.3   FCR-14541	Disable re-print PDF label		*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WM_Print_ItfDoc_Wrapper]
    @n_WMReportRowID      BIGINT 
@@ -106,6 +108,8 @@ BEGIN
          , @c_SQL                      NVARCHAR(MAX)     = ''
          , @c_SQLParms                 NVARCHAR(MAX)     = ''    
 
+		 , @c_EPACKDisableReprint      NVARCHAR(1)		 = '1'
+		 
    BEGIN TRY
       SELECT @c_ReportID               = w.ReportID
             ,@c_PrintType              = w.Printtype
@@ -152,8 +156,16 @@ BEGIN
       END
       
       SET @c_Reprint = 'Y'
-      SET @c_StorerConfig = dbo.fnc_GetParamValueFromString( '@c_Reprint', @c_PrintSettings, @c_Reprint)
+      --SET @c_StorerConfig = dbo.fnc_GetParamValueFromString( '@c_Reprint', @c_PrintSettings, @c_Reprint)    
+      SET @c_Reprint = dbo.fnc_GetParamValueFromString( '@c_Reprint', @c_PrintSettings, @c_Reprint) --WC01
 
+	  --FCR-14541 if storeconfig enabled set reprint to false
+	  SET @c_EPACKDisableReprint = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKDisableReprint') -- FCR-14541
+	  IF @c_EPACKDisableReprint = 1
+	  BEGIN
+		SET @c_Reprint = 'N'
+	  END
+	  
       IF @b_ContinuePrint = 1
       BEGIN
          IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = OBJECT_ID(@c_Authority) AND TYPE = 'P')

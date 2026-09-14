@@ -37,6 +37,7 @@ GO
 /* 15-Jul-2025 Sean     1.6   #FCR-6199 - Packing SKU Decode            */
 /* 29-Jan-2026 Sean02   1.7   UWP-47754 - Merge the unified SP          */
 /*                                 clone from  isp_Ecom_GetPackSku      */
+/* 03-Sep-2026 CSC166   FCR-13430 Pass PickSlipNo to Decode SP        	*/
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackSku]
             @c_OrderKey    NVARCHAR(10)
@@ -48,6 +49,7 @@ CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackSku]
          ,  @c_SerialNo    NVARCHAR(60)  = '' OUTPUT  --(Wan01)          
          ,  @c_TaskBatchNo NVARCHAR(10)  = '' --NJOW01
          ,  @c_SkuOtherInfo NVARCHAR(255) = '' OUTPUT   --WL03
+         ,  @c_PickSlipNo  NVARCHAR(10)   = '' --FCR-13430
 AS
 BEGIN
    SET NOCOUNT ON
@@ -121,6 +123,7 @@ BEGIN
       EXEC isp_SKUDecode_Wrapper
             @c_Storerkey = @c_Storerkey
          ,  @c_Sku       = @c_OriginalSku
+         ,  @c_PickslipNo= @c_PickslipNo	--FCR13430		 
          ,  @c_NewSku    = @c_Sku      OUTPUT
          ,  @b_Success   = @b_Success  OUTPUT
          ,  @n_Err       = @n_Err      OUTPUT
