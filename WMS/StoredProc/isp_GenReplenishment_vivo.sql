@@ -295,7 +295,7 @@ BEGIN
                                'WHERE   LOC.Facility = ''' + RTRIM(ISNULL(@c_Facility,'')) +''' ' +
                                'AND SKUxLOC.LocationType IN ( ''PICK'', ''CASE'' ) ' +
                                'AND LOC.LocationFlag NOT IN ( ''DAMAGE'', ''HOLD'' ) ' +
-                               'AND NOT (LOC.CommingleSku=''0'' AND EXISTS(SELECT TOP 1 1 FROM dbo.LotxLocxID a WITH (NOLOCK) WHERE a.Loc=SKUxLOC.Loc AND a.Qty - a.QtyPicked>0 AND a.Sku<>SKUxLOC.Sku)) ' +   --ML02
+                               'AND NOT (LOC.CommingleSku=''0'' AND EXISTS(SELECT TOP 1 1 FROM dbo.LotxLocxID a WITH (NOLOCK) WHERE a.Loc=SKUxLOC.Loc AND a.Qty - a.QtyPicked>0 AND (a.StorerKey<>SKUxLOC.StorerKey OR a.Sku<>SKUxLOC.Sku))) ' +   --ML02 
                                RTRIM(ISNULL(@c_SQLCondition,'')) + ' ' +
                                'ORDER BY SKUxLOC.ReplenishmentPriority, SKUxLOC.Loc '
 
