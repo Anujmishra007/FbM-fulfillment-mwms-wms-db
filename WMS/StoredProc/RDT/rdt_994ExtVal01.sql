@@ -177,11 +177,22 @@ BEGIN
 
             IF EXISTS (
                SELECT 1 FROM @tPKD t
-               JOIN rdt.RDTPTLPIECELOG WITH (NOLOCK) 
-                  ON SourceKey = t.DropID AND StorerKey = @cStorerKey
+               JOIN rdt.RDTPTLPIECELOG PTL WITH (NOLOCK) 
+                  ON PTL.CartonId = t.DropID AND PTL.StorerKey = @cStorerKey AND PTL.WaveKey = t.wavekey
             )
             BEGIN
                SET @nErrNo = 280865
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Sort Inicio en PTW
+               GOTO Quit
+            END
+
+            IF EXISTS (
+               SELECT 1 FROM @tPKD t
+               JOIN rdt.RDTPTLPIECELOG PTL WITH (NOLOCK) 
+                  ON PTL.DropId = t.DropID AND PTL.StorerKey = @cStorerKey AND PTL.WaveKey = t.wavekey
+            )
+            BEGIN
+               SET @nErrNo = 280867
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Sort Inicio en PTW
                GOTO Quit
             END
