@@ -93,7 +93,8 @@ GO
 /*                          Add suggest alternate LOC, reason code            */
 /*                          Add SerialNoUpdateLotLocID                        */
 /*                          Add SerialNoUniqueAtStorerLevel                   */
-/* 2026-01-26 5.7  Jackc    FCR-9756 Add ExtScn                               */   
+/* 2026-01-26 5.4.0  Jackc  FCR-9756 Add ExtScn, add extinfo to st4           */
+/* 2026-06-04 5.5.0  Dennis   UWP-58160 FCR-8674  Clear Barcode               */
 /* 2026-02-12 5.8  NYE018   FCR-10367 add loc check digit                     */  
 /* 2026-06-02 5.9  Dennis   UWP-52316 Remove Barcode in RDTMOBREC             */
 /* 2026-06-02 6.0  Sreeja   FCR-14094 Add DEFAULTCURSOR Config                */
@@ -566,7 +567,7 @@ BEGIN
                   @nErrNo OUTPUT, @cErrMsg OUTPUT   
 
             IF @nErrNo <> 0
-               GOTO Quit
+               GOTO Step_1_Fail
          END
       END
       ELSE
@@ -680,7 +681,7 @@ BEGIN
             SET @nErrNo = 73855
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID in multiLOC
             EXEC rdt.rdtSetFocusField @nMobile, 3 -- LOC
-            GOTO Quit
+            GOTO Step_1_Fail
          END
 
          -- -- Check ID with UCC
@@ -839,7 +840,7 @@ BEGIN
                @cID, @cUCC, @cLOC, @cSuggestSKU, @cSKU, @nQTY, @cSuggestedLOC, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
           IF @nErrNo <> 0
-               GOTO Quit
+               GOTO Step_1_Fail
          END
       END
 
@@ -883,6 +884,7 @@ BEGIN
       SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
       SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
       SET @cOutField08 = '' -- PieceScanQTY
+      SET @cOutField15 = '' -- ExtInfo
 
       -- Go to next screen
       SET @nScn = @nScn + 1
@@ -942,10 +944,11 @@ BEGIN
          SET @cOutfield15 = @cExtendedInfo1
       END
    END
-   
+   SET @cBarcode = ''
    GOTO Quit
 
    Step_1_Fail:
+      SET @cBarcode = ''
 
 END
 GOTO Quit
@@ -1530,6 +1533,7 @@ BEGIN
                               WHEN @cDefaultPutawayQTY = '1' THEN CAST( @nMQTY_PWY AS NVARCHAR( 6))
                               ELSE '' 
                          END
+      SET @cOutField15 = '' -- ExtInfo
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -1699,9 +1703,9 @@ BEGIN
          SET @cOutField05 = @cLottable02
          SET @cOutField06 = @cLottable03
          SET @cOutField07 = rdt.rdtFormatDate( @dLottable04)
+         SET @cOutField09 = CAST( @nRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
          SET @cOutField11 = CASE WHEN @cFieldAttr13 = 'O' THEN '' ELSE CAST( @nPQTY_PWY AS NVARCHAR( 5)) END
          SET @cOutField12 = CAST( @nMQTY_PWY AS NVARCHAR( 5))
-         SET @cOutField15 = CAST( @nRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
 
          -- Remain in current screen
          -- SET @nScn = @nScn + 1
@@ -1858,7 +1862,36 @@ BEGIN
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+   END
 
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Enable field
+      SET @cFieldAttr13 = '' -- @nPQTY_PWY
+
+      -- Prepare prev screen variable
+      SET @cPieceScanSKU = ''
+      SET @nPieceScanQTY = 0
+      SET @cSKU = ''
+      IF @cPASuggestSKU <> '1' SET @cSKUDesc = ''
+
+      SET @cOutField01 = @cID
+      SET @cOutField02 = @cUCC
+      SET @cOutField03 = @cLOC
+      SET @cOutField04 = @cSuggestSKU
+      SET @cBarcode    = '' -- SKU
+      SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
+      SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
+      SET @cOutField08 = '' -- Piece scan QTY
+      SET @cOutField15 = '' -- ExtInfo
+
+      -- Go to prev screen
+      SET @nScn = @nScn - 1
+      SET @nStep = @nStep - 1
+   END
+   
+   Step_3_Quit:
+   BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -1893,31 +1926,6 @@ BEGIN
             SET @cOutfield15 = @cExtendedInfo1
          END
       END
-   END
-
-   IF @nInputKey = 0 -- ESC
-   BEGIN
-      -- Enable field
-      SET @cFieldAttr13 = '' -- @nPQTY_PWY
-
-      -- Prepare prev screen variable
-      SET @cPieceScanSKU = ''
-      SET @nPieceScanQTY = 0
-      SET @cSKU = ''
-      IF @cPASuggestSKU <> '1' SET @cSKUDesc = ''
-
-      SET @cOutField01 = @cID
-      SET @cOutField02 = @cUCC
-      SET @cOutField03 = @cLOC
-      SET @cOutField04 = @cSuggestSKU
-      SET @cBarcode    = '' -- SKU
-      SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
-      SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cOutField08 = '' -- Piece scan QTY
-
-      -- Go to prev screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
    END
    GOTO Quit
 
@@ -2049,6 +2057,7 @@ BEGIN
          BEGIN
             -- Prepare next screen var
             SET @cOutField01 = '' -- Option
+            SET @cOutField15 = '' -- ExtInfo
 
             -- Go to LOC not match screen
             SET @nScn = @nScn + 2
@@ -2334,6 +2343,8 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
+      SET @cOutField15 = '' -- ExtInfo
+
       -- Go to next screen
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
@@ -2483,6 +2494,60 @@ BEGIN
          GOTO Step_2
       END
       
+      -- Get QTY (due to serial no deducted)
+      IF @cLabelType = 'UCC' -- No longer in used
+         SELECT
+            @nRec = 1,
+            @nTotalRec = 1
+            -- @nQTY_PWY = @nUCCQTY -- No longer in used
+      ELSE IF @cUCC <> ''
+         SELECT
+            @nRec = 1,
+            @nTotalRec = 1,
+            @nQTY_PWY = QTY
+         FROM dbo.UCC WITH (NOLOCK)
+         WHERE UCCNo = @cUCC
+            AND StorerKey = @cStorer
+            AND SKU = @cSKU
+            AND Status = '1'
+      ELSE IF @cPABySKUAndLOT = '1'
+         SELECT
+            @nRec = 1,
+            @nTotalRec = 1,
+            @nQTY_PWY = QTY - QTYAllocated - QTYPicked - ABS( QTYReplen)
+         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+         WHERE LOT = @cLOT
+            AND LOC = @cLOC
+            AND ID = @cID
+      ELSE
+         SELECT
+            @nRec = 1,
+            @nTotalRec = COUNT( DISTINCT LOT),
+            @nQTY_PWY = ISNULL( SUM( QTY - QTYAllocated - QTYPicked - ABS( QTYReplen)), 0)
+         FROM dbo.LOTxLOCxID WITH (NOLOCK)
+         WHERE ID = @cID
+            AND LOC = @cLOC
+            AND StorerKey = @cStorer
+            AND SKU = @cSKU
+            AND (QTY - QTYAllocated - QTYPicked - ABS( QTYReplen)) > 0
+
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0 -- UOM not setup
+      BEGIN
+         SET @cPUOM_Desc = ''
+         SET @nPQTY_PWY = 0
+         SET @nPQTY  = 0
+         SET @nMQTY_PWY = @nQTY_PWY
+         SET @cFieldAttr13 = 'O' -- @nPQTY_PWY
+         SET @cInField13 = ''
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY_PWY = @nQTY_PWY / @nPUOM_Div -- Calc QTY in preferred UOM
+         SET @nMQTY_PWY = @nQTY_PWY % @nPUOM_Div -- Calc the remaining in master unit
+      END
+      
       -- Prepare next screen variable
       SET @cOutField01 = @cSKU
       SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
@@ -2624,6 +2689,7 @@ BEGIN
          SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
          SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
          SET @cOutField08 = '' -- PieceScanQTY
+         SET @cOutField15 = '' -- ExtInfo
 
          -- Go back to SKU screen
          SET @nScn  = @nScn  - 3
@@ -2887,6 +2953,8 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Quit
 
+         SET @cOutField15 = '' -- ExtInfo
+
          -- Go to successful putaway screen
          SET @nScn = @nScn - 1
          SET @nStep = @nStep - 1
@@ -3040,6 +3108,7 @@ BEGIN
    SET @cOutField06 = SUBSTRING( @cSKUDesc, 1, 20)
    SET @cOutField07 = SUBSTRING( @cSKUDesc, 21, 20)
    SET @cOutField08 = '' -- PieceScanQTY
+   SET @cOutField15 = '' -- ExtInfo
 
    -- Go to SKU screen
    SET @nScn = @nFromScn
@@ -3177,6 +3246,8 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+      SET @cOutField15 = '' -- ExtInfo
+
       -- Go to successful putaway screen
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
@@ -3186,6 +3257,18 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      -- Get suggested LOC info
+      SELECT
+         @cQTY_Avail = ISNULL( SUM( LLI.QTY - LLI.QtyPicked), 0),
+         @cQTY_Alloc = ISNULL( SUM( LLI.QTYAllocated), 0),
+         @cQTY_PMoveIn = ISNULL( SUM( LLI.PendingMoveIn), 0)
+      FROM dbo.LotxLocxID LLI WITH (NOLOCK)
+         JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+      WHERE LOC.Facility = @cFacility
+         AND LLI.StorerKey = @cStorer
+         AND LLI.SKU = @cSKU
+         AND LLI.LOC = @cSuggestedLOC
+      
       -- Prepare next screen var
       SET @cOutField01 = @cSuggestedLOC
       SET @cOutField02 = '' -- FinalLOC
@@ -3335,6 +3418,8 @@ BEGIN
       IF @nScanSNO < @nQTY
          GOTO Quit
 
+      SET @cOutField15 = '' -- ExtInfo
+
       -- Go to successful putaway screen
       SET @nScn = 2884
       SET @nStep = @nStep - 4
@@ -3342,6 +3427,10 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      -- Reduce QTY
+      SET @nQTY = @nQTY - @nScanSNO
+      SET @nScanSNO = 0
+      
       -- Final LOC
       IF @nFromStep = 4 
       BEGIN
@@ -3364,9 +3453,6 @@ BEGIN
          SET @cOutField04 = @cQTY_Alloc
          SET @cOutField05 = @cQTY_PMoveIn
          SET @cOutfield15 = '' -- ExtInfo
-
-         -- Reduce total QTY
-         SET @nQTY = @nQTY - @nScanSNO
 
          -- Go to prev screen
          SET @nScn = 2883

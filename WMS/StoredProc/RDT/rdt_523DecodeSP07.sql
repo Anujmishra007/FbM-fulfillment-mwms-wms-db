@@ -120,30 +120,50 @@ BEGIN
                   GOTO Quit
                END
                
-               SET @cSKU = @cTempSKU
-
-               -- Only abstract SKU. 
-               -- The rest of info (SN, QTY, L01) is decode at serial no screen
-               /*
-               SET @cTempSNO = @cSNOP1 + @cSNOP2 + @cSNOP3
-               SET @nTempQTY = 1
+               -- Check LOC, ID
+               IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'SerialNoUpdateLotLocID') = '1'
+               BEGIN
+                  SET @cTempSNO = @cSNOP1 + @cSNOP2 + @cSNOP3
+                  SET @nTempQTY = 1
+                  
+                  -- Validate serial no
+                  EXEC RDT.rdtIsValidSerialNo @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
+                     @cTempSNO,
+                     @cStorerKey,
+                     @cStatus = '1', -- 1=Received
+                     @cChkSKU = @cTempSKU,
+                     @nChkQTY = @nTempQTY,
+                     @cChkLOC = @cLOC,
+                     @cChkID  = @cID
+                  IF @nErrNo <> 0
+                     GOTO Quit
+               END
                
-               -- Validate serial no
-               EXEC RDT.rdtIsValidSerialNo @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
-                  @cTempSNO,
-                  @cStorerKey,
-                  @cStatus = '1', -- 1=Received
-                  @cChkSKU = @cTempSKU,
-                  @nChkQTY = @nTempQTY,
-                  @cChkLOC = @cLOC,
-                  @cChkID  = @cID
-               IF @nErrNo <> 0
-                  GOTO Quit
-
-               SET @cSerialNo = @cTempSNO
-               SET @nQTY = @nTempQTY
-               SET @cLottable01 = @cL01P1 + @cL01P2
-               */
+               -- Check lottable01
+               ELSE
+               BEGIN
+                  -- Check Lottable01 in LOC and ID
+                  IF NOT EXISTS( SELECT TOP 1 1 
+                     FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                        JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
+                     WHERE LLI.StorerKey = @cStorerKey
+                        AND LLI.LOC = @cLOC
+                        AND LLI.ID = @cID
+                        AND LA.Lottable01 = @cL01P1 + @cL01P2
+                        AND LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked > 0)
+                  BEGIN
+                     SET @nErrNo = 253804
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --L01 NotInLOCID
+                     GOTO Quit
+                  END
+               END
+               
+               -- Only abstract SKU, L01
+               SET @cSKU = @cTempSKU
+               SET @cLottable01 = @cL01P1 + @cL01P2 
+               
+               -- QTY is decode at serial no screen
+               -- SET @nQTY = @nTempQTY
             END
             ELSE
                SET @cSKU = @cBarcode
