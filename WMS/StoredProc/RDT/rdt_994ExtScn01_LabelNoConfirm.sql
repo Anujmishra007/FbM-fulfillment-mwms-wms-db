@@ -17,6 +17,7 @@ GO
 /*                               Adapted from rdt_838ExtScn10_LabelNoConfirm           */
 /*                               Key diff: DropID filter uses @cPickSlipNo             */
 /*                               (set by rdt_994ExtScn01_MoveToPack) not @cFromDropID  */
+/* 2026-09-15  1.0.1  NYE018     FCR-16295 Merge PickDetail rows after notes update    */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_994ExtScn01_LabelNoConfirm] (
@@ -91,6 +92,32 @@ BEGIN
 
    DECLARE @tPickDetail TABLE (
       PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
+
+   DECLARE @tPD TABLE (
+      PickDetailKey   NVARCHAR( 18) NOT NULL PRIMARY KEY CLUSTERED,
+      CaseID          NVARCHAR( 20) NOT NULL,
+      OrderKey        NVARCHAR( 10) NOT NULL,
+      OrderLineNumber NVARCHAR(  5) NOT NULL,
+      UOM             NVARCHAR( 10) NOT NULL,
+      Lot             NVARCHAR( 10) NOT NULL,
+      SKU             NVARCHAR( 20) NOT NULL,
+      DropID          NVARCHAR( 20) NOT NULL,
+      Loc             NVARCHAR( 10) NOT NULL,
+      ID              NVARCHAR( 18) NOT NULL,
+      Qty             INT           NOT NULL
+   )
+
+   DECLARE @tMerged TABLE (
+      KeepPickDetailKey NVARCHAR( 18) NOT NULL PRIMARY KEY CLUSTERED,
+      OrderKey          NVARCHAR( 10) NOT NULL,
+      OrderLineNumber   NVARCHAR(  5) NOT NULL,
+      Loc               NVARCHAR( 10) NOT NULL,
+      ID                NVARCHAR( 18) NOT NULL,
+      CaseID            NVARCHAR( 20) NOT NULL,
+      Lot               NVARCHAR( 10) NOT NULL,
+      MergedQty         INT           NOT NULL,
+      RecordCount       INT           NOT NULL
    )
 
    SET @nErrNo  = 0
@@ -425,6 +452,77 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --GenTransLogFail
          GOTO RollBackTran
       END
+   END
+
+   -- Merge PickDetails for this pick slip
+   IF @nDebugFlag = 1
+      SELECT 'Merge PickDetail for PickSlip', @cPickSlipNo AS PickSlipNo
+
+   BEGIN TRY
+      INSERT INTO @tPD (PickDetailKey, OrderKey, OrderLineNumber, UOM, Lot, SKU, DropID, Loc, ID, CaseID, Qty)
+      SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber, PD.UOM, PD.Lot, PD.SKU, PD.DropID, PD.Loc, PD.ID, PD.CaseID, PD.Qty
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      WHERE PD.StorerKey = @cStorerKey
+         AND PD.DropID   = @cDropIDFilter
+         AND PD.Status   = @cPickStatus
+         AND PD.CaseID   = @cLabelNo
+         AND PD.Qty > 0
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo  = 281262
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPDFailed
+      GOTO RollBackTran
+   END CATCH
+
+   IF EXISTS (SELECT 1 FROM @tPD)
+   BEGIN
+      BEGIN TRY
+         INSERT INTO @tMerged (KeepPickDetailKey, OrderKey, OrderLineNumber, Loc, ID, CaseID, Lot, MergedQty, RecordCount)
+         SELECT MIN(PickDetailKey), OrderKey, OrderLineNumber, Loc, ID, CaseID, Lot, SUM(Qty), COUNT(1)
+         FROM @tPD
+         GROUP BY OrderKey, OrderLineNumber, Loc, ID, CaseID, Lot
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 281264
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --MergePickDetailFailed
+         GOTO RollBackTran
+      END CATCH
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT '@tPD to merge'
+         SELECT * FROM @tPD
+         SELECT '@tMerged'
+         SELECT * FROM @tMerged
+      END
+
+      BEGIN TRY
+         DELETE PD FROM dbo.PickDetail PD WITH (ROWLOCK)
+         JOIN @tPD tPD ON PD.PickDetailKey = tPD.PickDetailKey
+         LEFT JOIN @tMerged M ON PD.PickDetailKey = M.KeepPickDetailKey
+         WHERE M.KeepPickDetailKey IS NULL
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 281265
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --DeleteMergeDuplicatesFailed
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK) SET
+            PD.DropID   = @cDropIDFilter,
+            PD.Qty      = M.MergedQty,
+            PD.EditDate = GETDATE(),
+            PD.EditWho  = 'rdt.' + SUSER_SNAME()
+         FROM dbo.PickDetail PD
+         INNER JOIN @tMerged M ON PD.PickDetailKey = M.KeepPickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo  = 281266
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UpdateDropIDQtyFailed
+         GOTO RollBackTran
+      END CATCH
+
    END
 
    IF @nTranCount = 0
