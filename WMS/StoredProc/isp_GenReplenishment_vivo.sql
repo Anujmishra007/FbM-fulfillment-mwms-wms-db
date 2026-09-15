@@ -27,8 +27,10 @@ GO
 /* Date         Author     Ver   Purposes                                  */
 /* 24-oct-2025  ABS060     1.0   Generate replenishment only from Bulk     */
 /*                               type location                             */
-/* 20-Aug-2026  Michael    1.1   FCR-15122 - 1. Del O/S Task               */
-/*                               2. Chg Priority for AM Order (ML02)       */
+/* 20-Aug-2026  Michael    1.1   FCR-15122 (ML02) - 1. Del O/S Task        */
+/*                               2. Change Priority for morning Order      */
+/*                               3. Skip Non-CommingleSku PickFace that    */
+/*                                  already have other Sku                 */
 /***************************************************************************/
 
 CREATE OR ALTER  PROC [dbo].[isp_GenReplenishment_vivo]
@@ -293,6 +295,7 @@ BEGIN
                                'WHERE   LOC.Facility = ''' + RTRIM(ISNULL(@c_Facility,'')) +''' ' +
                                'AND SKUxLOC.LocationType IN ( ''PICK'', ''CASE'' ) ' +
                                'AND LOC.LocationFlag NOT IN ( ''DAMAGE'', ''HOLD'' ) ' +
+                               'AND NOT (LOC.CommingleSku=''0'' AND EXISTS(SELECT TOP 1 1 FROM dbo.LotxLocxID a WITH (NOLOCK) WHERE a.Loc=SKUxLOC.Loc AND a.Qty - a.QtyPicked>0 AND (a.StorerKey<>SKUxLOC.StorerKey OR a.Sku<>SKUxLOC.Sku))) ' +   --ML02 
                                RTRIM(ISNULL(@c_SQLCondition,'')) + ' ' +
                                'ORDER BY SKUxLOC.ReplenishmentPriority, SKUxLOC.Loc '
 
