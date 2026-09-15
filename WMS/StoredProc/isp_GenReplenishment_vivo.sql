@@ -28,7 +28,7 @@ GO
 /* 24-oct-2025  ABS060     1.0   Generate replenishment only from Bulk     */
 /*                               type location                             */
 /* 20-Aug-2026  Michael    1.1   FCR-15122 (ML02) - 1. Del O/S Task        */
-/*                               2. Chg Priority for AM Order              */
+/*                               2. Change Priority for morning Order      */
 /*                               3. Skip Non-CommingleSku PickFace that    */
 /*                                  already have other Sku                 */
 /***************************************************************************/
