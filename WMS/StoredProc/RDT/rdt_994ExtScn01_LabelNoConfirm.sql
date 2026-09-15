@@ -465,6 +465,7 @@ BEGIN
       WHERE PD.StorerKey = @cStorerKey
          AND PD.DropID   = @cDropIDFilter
          AND PD.Status   = @cPickStatus
+         AND PD.CaseID   = @cLabelNo
          AND PD.Qty > 0
    END TRY
    BEGIN CATCH
