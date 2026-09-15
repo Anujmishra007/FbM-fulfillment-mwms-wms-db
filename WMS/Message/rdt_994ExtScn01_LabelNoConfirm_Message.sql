@@ -16,5 +16,7 @@ execute rdt.rdtAddMsg 281261, 10, '281261^OrderNotFound',           'us_english'
 execute rdt.rdtAddMsg 281262, 10, '281262^InstPDFailed',            'us_english', 994, 0, '281262: Insert @tPD failed'
 execute rdt.rdtAddMsg 281263, 10, '281263^InstPDFailed',            'us_english', 994, 0, '281263: Insert @tPD failed'
 execute rdt.rdtAddMsg 281264, 10, '281264^MergePKDFailed',          'us_english', 994, 0, '281264: Merge pick detail failed'
+execute rdt.rdtAddMsg 281265, 10, '281265^DelMergeDupsFailed',       'us_english', 994, 0, '281265: Delete merge duplicates failed'
+execute rdt.rdtAddMsg 281266, 10, '281266^UpdDropIDQtyFailed',       'us_english', 994, 0, '281266: Update DropID/Qty on merged pick detail failed'
 
 select * from rdt.rdtmsg (nolock) where message_id between 281251 and 281300
