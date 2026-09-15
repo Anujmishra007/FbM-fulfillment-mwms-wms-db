@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.0                                                  */
+/* GitHub Version: 1.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 15-Jul-2026 WLChooi  1.0   Initial Version                           */
+/* 15-Sep-2026 WLChooi  1.1   UWP-66624 Fix Packdetail MERGE issue(WL01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
@@ -800,6 +801,12 @@ BEGIN
             USING (
                SELECT PD.PickSlipNo
                     , PD.CartonNo
+                    --WL01 S
+                    , PD.LabelNo
+                    , PD.LabelLine
+                    , PD.StorerKey
+                    , PD.SKU
+                    --WL01 E
                     , PackDetailQty = PD.ExpQty
                     , NewAllocQty   = ISNULL(W.StampedQty, 0)
                     , PickedQty     = CASE WHEN PD.ExpQty > SC.QtyMoved THEN PD.ExpQty - SC.QtyMoved ELSE 0 END
@@ -819,7 +826,14 @@ BEGIN
                            GROUP BY WIP.CaseID
                         ) W ON W.CaseID = SC.CaseID
             ) AS SRC
-            ON TGT.PickSlipNo = SRC.PickSlipNo AND TGT.CartonNo = SRC.CartonNo
+            --WL01 S
+            ON TGT.PickSlipNo = SRC.PickSlipNo
+            AND TGT.CartonNo = SRC.CartonNo
+            AND TGT.LabelNo = SRC.LabelNo
+            AND TGT.LabelLine = SRC.LabelLine
+            AND TGT.StorerKey = SRC.StorerKey
+            AND TGT.SKU = SRC.SKU
+            --WL01 E
             WHEN MATCHED AND SRC.ActiveQty = 0 THEN
                DELETE
             WHEN MATCHED AND SRC.ActiveQty > 0 AND SRC.ActiveQty < SRC.PackDetailQty THEN
