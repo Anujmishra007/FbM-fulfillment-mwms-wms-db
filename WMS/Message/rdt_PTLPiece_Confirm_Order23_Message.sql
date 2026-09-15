@@ -49,3 +49,6 @@ execute rdt.rdtAddMsg 272824, 10, '272824 Del RefKey0  ', 'us_english', 803, 0, 
 execute rdt.rdtAddMsg 272825, 10, '272825 Del PD Qty0  ', 'us_english', 803, 0, '272825 Failed to delete PickDetail (Qty=0)'
 --UWP-66208: Same LOC/ID validation
 execute rdt.rdtAddMsg 272827, 10, '272827 Same LOC ID  ', 'us_english', 803, 0, '272827 FromLOC/ID equals ToLOC/ID, cannot move'
+
+--Data issue: PickDetail mismatch after rdt_Move_PickDetail
+execute rdt.rdtAddMsg 272828, 10, '272828 PKD Mismatch ', 'us_english', 803, 0, '272828 PickDetail mismatch - duplicate records detected'

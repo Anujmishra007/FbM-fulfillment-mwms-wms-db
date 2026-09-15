@@ -10,13 +10,14 @@ GO
 /*                  - Full UCC sort (skip SKU scan)                           */
 /*                  - Unit-level SKU sorting with qty transfer                */
 /*                  - SortTote capture (tote-to-slot relationship)            */
-/*                  - Slot completion and inventory move                       */
+/*                  - Slot completion and inventory move                      */
 /*                  - Double-depth movement for non-ECOM                      */
 /*                  - PTL light activation                                    */
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 2026-07-06 1.0  Cuize    FCR-13139 Created                                 */
 /* 2026-08-20 1.1  Cuize    UWP-64610 Fix Full UCC detection in Screen 6920   */
+/* 2026-09-20 1.2  Cuize    UWP-66467 Add orderby split pickdetail            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Confirm_Order23] (
@@ -501,7 +502,7 @@ FullUCCSort:
      AND PD.SKU = @cSKU
      AND PD.Qty > 0
      AND PD.status = '3'
-   ORDER BY PD.OrderKey
+   Order by PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
 
    IF @cPickDetailKey IS NULL
    BEGIN
@@ -594,6 +595,7 @@ AfterToteAssign:
    END
 
    IF EXISTS (SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK) WHERE DeviceID = @cStation AND LOC = @cFromLOC AND StorerKey = @cStorerKey)
+      OR EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) WHERE ListName = 'AEO_PTWSTG' AND StorerKey = @cStorerKey AND Short = @cFromLOC AND Short <> '')
    BEGIN
       SET @nErrNo = 272820
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Can not move from PTLSlot
@@ -628,7 +630,7 @@ AfterToteAssign:
       @nErrNo        = @nErrNo OUTPUT,
       @cErrMsg       = @cErrMsg OUTPUT,
       @cTaskDetailKey = '',
-      @cOrderKey     = @cOrderKey,
+      @cOrderKey     = '',
       @cDropID       = @cDropID
       --@cCaseID       = @cVirtualCartonID
 
@@ -636,6 +638,25 @@ AfterToteAssign:
    BEGIN
       SET @nErrNo = 272805
       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- Move_PickDetail Fail
+      GOTO RollBackTran
+   END
+
+--- Here debugging for split pickdetail mismatch
+   DECLARE @cActualUpdatedPKD NVARCHAR(10)
+   SELECT TOP 1 @cActualUpdatedPKD = PickDetailKey
+   FROM dbo.PickDetail WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+     AND SKU = @cSKU
+     AND LOT = @cLOT
+     AND LOC = @cFromLOC
+     AND ID = @cFromID
+     AND EditWho = SUSER_SNAME()
+   ORDER BY EditDate DESC
+
+   IF @cActualUpdatedPKD <> @cPickDetailKey
+   BEGIN
+      SET @nErrNo = 272828
+      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- PKD Mismatch
       GOTO RollBackTran
    END
 
@@ -1100,6 +1121,18 @@ Quit:
       BEGIN TRY
          INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3)
          VALUES ('rdt_PTLPiece_Confirm_Order23', GETDATE(), @cPickDetailKey, @cSKU, @cLOT, @cFromID, @cDropID, @cFromLOC, @cFinalToLOC, @cSortToteID)
+      END TRY
+      BEGIN CATCH
+         -- Ignore TraceInfo insert failures
+      END CATCH
+   END
+
+   IF @nErrNo = 272828
+   BEGIN
+      -- Log PKD mismatch - duplicate PickDetail records detected (data issue)
+      BEGIN TRY
+         INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3)
+         VALUES ('rdt_PTLPiece_Confirm_Order23', GETDATE(), @cPickDetailKey, @cActualUpdatedPKD, @cSKU, @cLOT, @cDropID, @cFromLOC, @cFinalToLOC, @cSortToteID)
       END TRY
       BEGIN CATCH
          -- Ignore TraceInfo insert failures
