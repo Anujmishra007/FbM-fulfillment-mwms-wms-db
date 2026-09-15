@@ -2055,10 +2055,7 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
-   IF XACT_STATE() = -1
-      ROLLBACK TRAN
-   ELSE
-      ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
+   ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
