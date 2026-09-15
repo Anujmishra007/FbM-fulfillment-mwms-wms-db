@@ -12,6 +12,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2026-04-09   NYE018    1.0   FCR-11492 Created                       */
 /* 2026-07-03   NYE018    1.1   FCR-13937 use QC validation also        */
+/* 2026-09-11   NYE018    1.2   UWP-66363 fix the print bug for NOAUTO  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ConUpdAU03]
@@ -31,6 +32,11 @@ BEGIN
 
    DECLARE @nTranCount     INT
    DECLARE @bSuccess       INT
+
+   DECLARE @cUserName      NVARCHAR(18) = ''
+   DECLARE @cLabelPrinter  NVARCHAR(20) = ''
+   DECLARE @cPaperPrinter  NVARCHAR(20) = ''
+   DECLARE @nCartonNo      INT = 0
 
    DECLARE @cStorerKey     NVARCHAR(15)
    DECLARE @cSKU           NVARCHAR(20)
@@ -52,9 +58,12 @@ BEGIN
 
    -- Get session info
    SELECT
-      @cFacility = Facility,
-      @nStep = Step,
-      @nInputKey = InputKey
+      @cFacility     = Facility,
+      @nStep         = Step,
+      @nInputKey     = InputKey,
+      @cUserName     = UserName,
+      @cLabelPrinter = Printer,
+      @cPaperPrinter = Printer_Paper
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -162,10 +171,49 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPickHdrFail
             GOTO Fail
          END CATCH
-        
+
       END
 
-      GOTO Quit
+      -- Print label by TaskDetailKey
+      DECLARE @cReportType4 NVARCHAR(10) = ''
+      SELECT @cReportType4 = ISNULL(Code2, '')
+      FROM dbo.CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'RDTLBLRPT'
+        AND Code = '4'
+        AND StorerKey = @cStorerKey
+
+      IF @cReportType4 <> '' AND ISNULL(@cLabelPrinter, '') <> ''
+      BEGIN
+         DECLARE @tTaskLabel AS VariableTable
+         DELETE FROM @tTaskLabel
+
+         INSERT INTO @tTaskLabel (Variable, Value) VALUES
+            ('@cStorerKey',    @cStorerKey),
+            ('@cTaskDetailKey', @cTaskdetailKey)
+
+         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+            @cReportType4,
+            @tTaskLabel,
+            'rdt_1812ConUpdAU03',
+            @nErrNo OUTPUT,
+            @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
+
+      SET @nCartonNo = 0
+
+      IF EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE Pickslipno = @cPickSlipNo)
+      BEGIN
+         SET @nTranCount = @@TRANCOUNT
+         BEGIN TRAN
+         SAVE TRAN rdt_1812ConUpdAU03
+         GOTO PACKCFM
+      END
+      ELSE
+      BEGIN
+         GOTO Quit
+      END
    END
 
    SET @nTranCount = @@TRANCOUNT
@@ -232,7 +280,6 @@ BEGIN
    DECLARE @cSKUPackKey         NVARCHAR(50) = ''
 
    DECLARE @nSpecCartonNo       INT = 0
-   DECLARE @nCartonNo           INT = 0  -- Declared here for use in PACKCFM carrier interface call
    DECLARE @nMaxCartonNo        INT = 0
    DECLARE @cSpecLabelNo        NVARCHAR(20) = ''
    DECLARE @nLoopCnt            INT = 0
@@ -240,10 +287,6 @@ BEGIN
    DECLARE @cSpecCartonType     NVARCHAR(10) = ''
    DECLARE @cSpecReportType     NVARCHAR(10) = ''
    DECLARE @cTransmitLogKey     NVARCHAR(10) = ''
-   DECLARE @cUserName           NVARCHAR(18) = ''
-   DECLARE @cLabelPrinter       NVARCHAR(20) = ''
-   DECLARE @cPaperPrinter       NVARCHAR(20) = ''
-
    SELECT @cUserName = UserName,
           @cLabelPrinter = Printer,
           @cPaperPrinter = Printer_Paper
@@ -2012,7 +2055,7 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
-  ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
+   ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
