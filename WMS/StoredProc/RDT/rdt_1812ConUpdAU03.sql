@@ -177,7 +177,7 @@ BEGIN
       -- Print label by TaskDetailKey
       DECLARE @cReportType4 NVARCHAR(10) = ''
       SELECT @cReportType4 = ISNULL(Code2, '')
-      FROM CODELKUP WITH (NOLOCK)
+      FROM dbo.CODELKUP WITH (NOLOCK)
       WHERE ListName = 'RDTLBLRPT'
         AND Code = '4'
         AND StorerKey = @cStorerKey
@@ -2055,7 +2055,10 @@ BEGIN
    GOTO Quit
 
 RollBackTran:
-  ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
+   IF XACT_STATE() = -1
+      ROLLBACK TRAN
+   ELSE
+      ROLLBACK TRAN rdt_1812ConUpdAU03 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
