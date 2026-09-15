@@ -6,16 +6,17 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*********************************************************************************/
-/* Store procedure: rdt_994ExtScn01_MoveToPack                                   */
-/* Copyright      : Maersk                                                       */
-/* Customer       : AEOMX                                                        */
-/*                                                                               */
-/*                                                                               */
-/* Date        Rev    Author     Purposes                                        */
-/* 2026-09-10  1.0.0  JackC      FCR-16295 Move Inv to pack, Upd pkd.dropid      */
-/*                                to one dummy value                             */
-/*********************************************************************************/
+/*******************************************************************************************************/
+/* Store procedure: rdt_994ExtScn01_MoveToPack                                                         */
+/* Copyright      : Maersk                                                                             */
+/* Customer       : AEOMX                                                                              */
+/*                                                                                                     */
+/*                                                                                                     */
+/* Date        Rev    Author     Purposes                                                              */
+/* 2026-09-10  1.0.0  JackC      FCR-16295 Move Inv to pack, Upd pkd.dropid                            */
+/*                                to one dummy value                                                   */
+/* 2026-09-15  1.0.1  JackC      FCR-16295 Skip move inventory, update dropid and set UCC status to 6  */
+/*******************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_994ExtScn01_MoveToPack] (
    @nMobile        INT,
@@ -57,6 +58,8 @@ BEGIN
       @nMoveQty       INT,
       @nCounter       INT
 
+   --V1.0.1 remove inventory movement
+   /*
    DECLARE @tMoveList TABLE (
       RowNumber   INT IDENTITY(1,1) PRIMARY KEY,
       FromLoc     NVARCHAR( 10) NOT NULL,
@@ -69,18 +72,25 @@ BEGIN
       OrderKey    NVARCHAR( 10) NOT NULL,
       REMARK      NVARCHAR( 100)
    )
+   */
 
    DECLARE @tPD TABLE (
       PickDetailKey   NVARCHAR( 18) NOT NULL PRIMARY KEY CLUSTERED,
       CaseID          NVARCHAR( 20) NOT NULL,
       OrderKey        NVARCHAR( 10) NOT NULL,
       OrderLineNumber NVARCHAR( 5)  NOT NULL,
+      UOM             NVARCHAR( 10)  NOT NULL,
       Lot             NVARCHAR( 10) NOT NULL,
       SKU             NVARCHAR( 20) NOT NULL,
       DropID          NVARCHAR( 20) NOT NULL,
       Loc             NVARCHAR( 10) NOT NULL,
       ID              NVARCHAR( 18) NOT NULL,
       Qty             INT           NOT NULL
+   )
+
+   DECLARE @tUCC TABLE (
+      UCCNo       NVARCHAR( 20) NOT NULL,
+      UCCRowRef   INT NOT NULL PRIMARY KEY CLUSTERED
    )
 
    DECLARE @tMerged TABLE (
@@ -95,6 +105,7 @@ BEGIN
       RecordCount       INT           NOT NULL
    )
 
+   /* --1.0.1 remove inventory movment
    -- Determine Pack Staging location by wave type
    SET @cPackSTGLoc = ''
 
@@ -204,6 +215,7 @@ BEGIN
 
    IF @nDebugFlag = 1
       SELECT 'MoveList', * FROM @tMoveList
+   */
 
    -- Execute moves
    -- Handling transaction
@@ -214,6 +226,8 @@ BEGIN
 
    SET @nCounter = 0
 
+   --V1.0.1 remove inventory movement
+   /*
    WHILE 1 = 1
    BEGIN
       SELECT TOP 1
@@ -303,24 +317,26 @@ BEGIN
             SELECT 'Ins Event log failed'
       END CATCH
    END -- end loop
+   */
 
-   -- Phase 2: Merge PickDetail DropIDs to @cPickSlipNo
+   -- Merge PickDetail DropIDs to @cPickSlipNo
    IF @nDebugFlag = 1
       SELECT 'Merge PickDetail DropID to PickSlipNo', @cPickSlipNo AS NewDropID
 
    IF @cOrderKey <> ''
    BEGIN
       BEGIN TRY
-         INSERT INTO @tPD (PickDetailKey, OrderKey, OrderLineNumber, Lot, SKU, DropID, Loc, ID, CaseID, Qty)
-         SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber, PD.Lot, PD.SKU, PD.DropID, PD.Loc, PD.ID, PD.CaseID, PD.Qty
+         INSERT INTO @tPD (PickDetailKey, OrderKey, OrderLineNumber, UOM, Lot, SKU, DropID, Loc, ID, CaseID, Qty)
+         SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber, PD.UOM, PD.Lot, PD.SKU, PD.DropID, PD.Loc, PD.ID, PD.CaseID, PD.Qty
          FROM dbo.PickDetail PD WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND PD.OrderKey  = @cOrderKey
             AND PD.Status    = @cPickStatus
             AND PD.Qty > 0
+            AND PD.CaseID <> PD.ID -- get rid of the packed but not PackConfirmed pickdetails
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 281262
+         SET @nErrNo = 281001
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPDFailed
          GOTO RollbackTran
       END CATCH
@@ -328,17 +344,18 @@ BEGIN
    ELSE IF @cLoadKey <> ''
    BEGIN
       BEGIN TRY
-         INSERT INTO @tPD (PickDetailKey, OrderKey, OrderLineNumber, Lot, SKU, DropID, Loc, ID, CaseID, Qty)
-         SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber, PD.Lot, PD.SKU, PD.DropID, PD.Loc, PD.ID, PD.CaseID, PD.Qty
+         INSERT INTO @tPD (PickDetailKey, OrderKey, OrderLineNumber, UOM, Lot, SKU, DropID, Loc, ID, CaseID, Qty)
+         SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber, PD.UOM, PD.Lot, PD.SKU, PD.DropID, PD.Loc, PD.ID, PD.CaseID, PD.Qty
          FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
          JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = LPD.OrderKey
          WHERE PD.StorerKey = @cStorerKey
             AND LPD.LoadKey  = @cLoadKey
             AND PD.Status    = @cPickStatus
             AND PD.Qty > 0
+            AND PD.CaseID <> PD.ID -- get rid of the packed but not PackConfirmed pickdetails
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 281263
+         SET @nErrNo = 281002
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsPDFailed
          GOTO RollbackTran
       END CATCH
@@ -346,6 +363,23 @@ BEGIN
 
    IF EXISTS (SELECT 1 FROM @tPD) 
    BEGIN
+      --V1.0.1 Get all UCCs
+      BEGIN TRY
+         INSERT INTO @tUCC (UCCNo, UCCRowRef)
+         SELECT DISTINCT UCCNo, UCC_RowRef
+         FROM dbo.UCC WITH (NOLOCK)
+         JOIN @tPD PD 
+            ON UCC.UCCNo = PD.DropID
+            AND PD.UOM = '2'
+         WHERE StorerKey = @cStorerKey
+            AND UCC.Status <> '6'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 281003
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --InsUCCFailed
+         GOTO RollbackTran
+      END CATCH
+
       BEGIN TRY
          INSERT INTO @tMerged (KeepPickDetailKey, OrderKey, OrderLineNumber, Loc, ID, CaseID, Lot, MergedQty, RecordCount)
          SELECT MIN(PickDetailKey), OrderKey,OrderLineNumber, Loc, ID, CaseID, Lot, SUM(Qty), COUNT(1)
@@ -353,8 +387,8 @@ BEGIN
          GROUP BY OrderKey, OrderLineNumber, Loc, ID, CaseID, Lot
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 281264
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --MergePKDFailed
+         SET @nErrNo = 281011
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --Merge PickDetail failed
          GOTO RollbackTran
       END CATCH
 
@@ -364,23 +398,8 @@ BEGIN
          SELECT * FROM @tPD
          SELECT '@tMerged'
          SELECT * FROM @tMerged
-      END
-
-      IF (SELECT COUNT(1) FROM @tMerged) = (SELECT COUNT(1) FROM @tPD) 
-      AND NOT EXISTS (SELECT 1 FROM @tPD WHERE DropID <> @cPickSlipNo)
-      BEGIN
-         IF @nDebugFlag = 1
-            SELECT 'Skipping PKD merging'
-         BEGIN TRY
-            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Col1)
-            VALUES ('rdt_994ExtScn01_MoveToPack', GETDATE(), '1', @cPickSlipNo, ISNULL(TRY_CAST(@nMobile AS NVARCHAR(10)), ''), 
-                     'Skip PKD Merge')
-         END TRY
-         BEGIN CATCH
-            SELECT 'Insert TraceInfo failed'
-         END CATCH
-
-         GOTO CommitTran
+         SELECT '@tUCC'
+         SELECT * FROM @tUCC
       END
 
       BEGIN TRY
@@ -409,7 +428,21 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update DropID/Qty failed
          GOTO RollbackTran
       END CATCH
-      
+
+      BEGIN TRY
+         UPDATE UCC WITH (ROWLOCK) SET
+            UCC.Status   = '6',
+            UCC.EditDate = GETDATE(),
+            UCC.EditWho  = 'rdt.' + SUSER_SNAME()
+         FROM dbo.UCC UCC
+         INNER JOIN @tUCC tUCC ON UCC.UCC_RowRef = tUCC.UCCRowRef
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 281010
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update UCC status failed
+         GOTO RollbackTran
+      END CATCH
+
       CommitTran:
          COMMIT TRANSACTION rdt_994ExtScn01_MoveToPack
       GOTO Quit
