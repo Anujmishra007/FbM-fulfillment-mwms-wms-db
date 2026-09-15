@@ -197,6 +197,8 @@ BEGIN
             'rdt_1812ConUpdAU03',
             @nErrNo OUTPUT,
             @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
       END
 
       SET @nCartonNo = 0
