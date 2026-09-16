@@ -433,14 +433,14 @@ BEGIN
             BEGIN
                SET @nErrNo = 280832
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --OrderKey and LoadKey both empty
-               GOTO Quit
+               GOTO Fail_St1toSt2
             END
 
             IF ISNULL(@cWaveKey, '') = ''
             BEGIN
                SET @nErrNo = 280834
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --WaveKey is empty
-               GOTO Quit
+               GOTO Fail_St1toSt2
             END
             --V1.0.0 end
 
