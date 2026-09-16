@@ -21,6 +21,7 @@ GO
 /* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop     */
 /* 06-Nov-2025 1.6.0 NickT   UWP-43698 Check duplicate request             */
 /* 2026-06-15  1.7.0 JackC   UWP-57695 Add TraceID when call rdtGetXMLHttp */
+/* 2026-08-28  1.8.0 DennisA FCR-15406 Call CollectDataSP if SCN has V_DATA*/
 /***************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -392,7 +393,8 @@ BEGIN
       -- Get the new screen and function, after executed the stor proc
       SELECT
          @nScn = Scn,
-         @nFunction = Func
+         @nFunction = Func,
+         @nStep = Step
       FROM RDT.rdtMobRec (NOLOCK)
       WHERE Mobile = @InMobile
 
@@ -404,6 +406,8 @@ BEGIN
          EXEC RDT.rdtGetMenuHttp @InMobile, @cXML OUTPUT    -- Menu
       ELSE
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional
+
+      EXEC rdt.rdt_HandleCollectData @InMobile, @nStep, @nScn, @cXML OUTPUT
 
       -- Wrap the XML with header and footer
       EXEC RDT.rdtGetXMLHttp @InMobile, @cXML OUTPUT, @cTraceID

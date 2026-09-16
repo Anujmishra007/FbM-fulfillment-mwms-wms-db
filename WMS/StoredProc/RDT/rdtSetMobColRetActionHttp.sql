@@ -33,6 +33,7 @@ GO
 /* 2023-10-26   JLC042   2.6  Reset default vaule of storer-faclity           */
 /* 2025-07-23   Dennis   2.7  Add Trace ID                                    */
 /* 2025-11-06   NickT    2.8  UWP-43698 Block deuplicate request              */
+/* 2026-09-09   Dennis   2.9  FCR-15406 Support V_DATA                        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtSetMobColRetActionHttp] (
@@ -323,7 +324,8 @@ BEGIN
       I_Field19 = ISNULL( Rw.value('(input[@id="I_Field19"]/@value)[1]','nvarchar(60)'), I_Field19),
       I_Field20 = ISNULL( Rw.value('(input[@id="I_Field20"]/@value)[1]','nvarchar(60)'), I_Field20),
       V_Max = ISNULL( Rw.value('(input[@id="V_Max"]/@value)[1]','nvarchar(max)'), V_Max),
-      V_Barcode = ISNULL( Rw.value('(input[@id="V_Barcode"]/@value)[1]','nvarchar(max)'), V_Barcode)
+      V_Barcode = ISNULL( Rw.value('(input[@id="V_Barcode"]/@value)[1]','nvarchar(max)'), V_Barcode),
+      V_DATA    = ISNULL( Rw.value('(input[@id="V_DATA"]/@value)[1]',   'nvarchar(max)'), V_DATA)
    FROM rdt.rdtMobRec r
       JOIN @xInMessage.nodes('/fromRDT') AS A(Rw) ON (1=1)
    WHERE Mobile = @nMobile

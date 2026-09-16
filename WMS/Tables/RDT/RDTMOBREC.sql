@@ -154,6 +154,7 @@ BEGIN
    [V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
    [V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
    [V_Barcode] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Barcode] DEFAULT (''),
+   [V_DATA] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DATA] DEFAULT (''),
    [RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
    [DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_DeviceID] DEFAULT (''),
    [LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_LightMode] DEFAULT (''),
@@ -1101,6 +1102,13 @@ BEGIN
                WHERE Name = 'V_Barcode' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
    BEGIN
       ALTER TABLE [RDT].[RDTMOBREC] ADD  V_Barcode [nvarchar](MAX)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Barcode] DEFAULT ('')
+   END
+
+   IF NOT EXISTS (SELECT 1
+               FROM sys.columns
+               WHERE Name = 'V_DATA' AND Object_ID = Object_ID('RDT.RDTMOBREC'))
+   BEGIN
+      ALTER TABLE [RDT].[RDTMOBREC] ADD  V_DATA [nvarchar](MAX)  NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DATA] DEFAULT ('')
    END
 
 END
