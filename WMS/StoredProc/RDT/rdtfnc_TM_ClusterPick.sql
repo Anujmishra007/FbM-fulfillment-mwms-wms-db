@@ -25,6 +25,7 @@ GO
 /*                            Allow different UOM qty input (james04)      */
 /* 2026-04-10   1.6  Dennis   Check status='5' task go to ToLoc screen     */
 /* 2026-06-09   1.7  NYE018   UWP-58460 Check Infield01 in Step_Option     */
+/* 2026-09-16   1.8  NYE018   UWP-64723 - Handle null or empty ToLoc       */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_ClusterPick](  
@@ -3252,7 +3253,7 @@ BEGIN
       IF @cSkipToLoc = '0'
       BEGIN
          -- Check blank FromLOC    
-         IF @cToLOC = ''    
+         IF @cToLOC = '' OR @cToLOC IS NULL   
          BEGIN    
             SET @nErrNo = 148918    
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC needed    
