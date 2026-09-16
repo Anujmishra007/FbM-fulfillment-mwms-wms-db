@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/
-/* Stored Procedure: ispPAKCF32                                            */
+/* Stored Procedure: isp_ECOMP_PAKCF01                                     */
 /* Creation Date: 15-JUN-2026                                              */
 /* Copyright: IDS                                                          */
 /* Written by:                                                             */
@@ -22,9 +22,10 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
-/* 15-Jun-2026  CSC166  1.0   FCR-13430 - Initial						   */
+/* 15-Jun-2026  CSC166  1.0   FCR-13430 - Initial						         */
+/* 16-Sep-2026  SRD041  1.1   FCR-13430 - fix duplicate name					*/
 /***************************************************************************/
-CREATE OR ALTER   PROC [dbo].[ispPAKCF32]
+CREATE OR ALTER   PROC [dbo].[isp_ECOMP_PAKCF01]
 (     @c_PickSlipNo  NVARCHAR(10)
   ,   @c_Storerkey   NVARCHAR(15)
   ,   @b_Success     INT           OUTPUT
@@ -74,7 +75,7 @@ BEGIN
 	BEGIN
 		SELECT @n_Continue = 3
 		SELECT @n_Err = 38020
-		SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update PACKDETAIL Failed. (ispPAKCF32)'
+		SELECT @c_Errmsg='NSQL'+CONVERT(varchar(5),@n_Err)+': Update PACKDETAIL Failed. (isp_ECOMP_PAKCF01)'
 		GOTO QUIT_SP
 	END
 
@@ -88,7 +89,7 @@ BEGIN
       BEGIN
          ROLLBACK TRAN
       END
-      EXECUTE nsp_logerror @n_err, @c_errmsg, 'ispPAKCF32'
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'isp_ECOMP_PAKCF01'
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
