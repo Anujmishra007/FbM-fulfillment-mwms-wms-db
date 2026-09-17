@@ -1078,37 +1078,37 @@ BEGIN
             END CATCH
          END
       END
+   END
 
-      SET @nLoopIndex = -1
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1
-            @nLoopIndex = RowIndex,
-            @cPickDetailKey = PickDetailKey
-         FROM @tPiecePickDetailKey
-         WHERE RowIndex > @nLoopIndex
-         ORDER BY RowIndex
+   SET @nLoopIndex = -1
+   WHILE 1 = 1
+   BEGIN
+      SELECT TOP 1
+         @nLoopIndex = RowIndex,
+         @cPickDetailKey = PickDetailKey
+      FROM @tPiecePickDetailKey
+      WHERE RowIndex > @nLoopIndex
+      ORDER BY RowIndex
 
-         IF @@ROWCOUNT = 0
-            BREAK
+      IF @@ROWCOUNT = 0
+         BREAK
 
-         BEGIN TRY
-            INSERT INTO dbo.PickSerialNo (PickDetailKey, StorerKey, SKU, SerialNo, QTY)
-            SELECT DISTINCT @cPickDetailKey, @cStorerKey, RPL.SKU, RPL.Remarks, 1
-            FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-            WHERE RPL.PickDetailKey = @cPickDetailKey
-               AND RPL.StorerKey = @cStorerKey
-               AND RPL.PickSlipNo = @cPickSlipNo
-               AND RPL.PickMethod = 'Pick-P'
-               AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
-               AND ISNULL(RPL.Remarks, '') <> ''
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 255650
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert pick SerialNo failed
-            GOTO RollBackTran
-         END CATCH
-      END
+      BEGIN TRY
+         INSERT INTO dbo.PickSerialNo (PickDetailKey, StorerKey, SKU, SerialNo, QTY)
+         SELECT DISTINCT @cPickDetailKey, @cStorerKey, RPL.SKU, RPL.Remarks, 1
+         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+         WHERE RPL.PickDetailKey = @cPickDetailKey
+            AND RPL.StorerKey = @cStorerKey
+            AND RPL.PickSlipNo = @cPickSlipNo
+            AND RPL.PickMethod = 'Pick-P'
+            AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
+            AND ISNULL(RPL.Remarks, '') <> ''
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 255650
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert pick SerialNo failed
+         GOTO RollBackTran
+      END CATCH
    END
 
    IF @cType <> 'SHORT'
