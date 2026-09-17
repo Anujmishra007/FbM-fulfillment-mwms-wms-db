@@ -6,10 +6,12 @@ GO
 /************************************************************************/
 /* Store procedure: rdt_898ExtVal11                                     */
 /* Copyright      : Maersk                                              */
-/* Customer: For PAGE                                                   */
+/* Customer       : For PAGE                                            */
 /*                                                                      */
 /* Date        Author   Ver.     Purposes                               */
-/* 2025-09-19  1.0      JackC    FCR-7818 Created                       a*/
+/* 2025-09-19  1.0      JackC    FCR-7818 Created                       */
+/* 2026-09-14  1.1      NickT    FCR-15183 Add UCC validation           */
+/* 2026-09-17  1.2      NickT    FCR-15183 Move Step 6 to rdt_898UCCExtVal16 */
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal11]
@@ -70,7 +72,7 @@ BEGIN
             )
             BEGIN
                SET @nErrNo = 247101 
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Rcpt group not allowed
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Receipt Group not allowed
                GOTO Quit
             END
          END
