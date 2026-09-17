@@ -468,7 +468,7 @@ BEGIN
               , @c_Username
 --ML01              , '0'                 --SG01
               --ML01-S
-              , ISNULL(RTRIM(STG.ExternStatus),'0')
+              , ISNULL(NULLIF(RTRIM(STG.ExternStatus),''),'0')
               , ISNULL(RTRIM(STG.HUdef04),'')
               , ISNULL(RTRIM(STG.HUdef05),'')
               , NULLIF(STG.HUdef06,'')
