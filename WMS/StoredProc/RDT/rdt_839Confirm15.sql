@@ -220,6 +220,21 @@ BEGIN
       PickDetailKey NVARCHAR(18) PRIMARY KEY
    )
 
+   DECLARE @tSerialNo TABLE
+   (
+      RowIndex             INT IDENTITY(1,1),
+      SKU                  NVARCHAR( 20),
+      SerialNo             NVARCHAR( 30)
+   )
+
+   DECLARE @tSNMapping TABLE 
+   (
+      RowIndex             INT IDENTITY(1,1),
+      SerialNo             NVARCHAR(30), 
+      OldPickDetailKey     NVARCHAR(10),
+      NewPickDetailKey     NVARCHAR(10)
+   )
+
    -- Get lottable filter
    EXEC rdt.rdt_Lottable_GetCurrentSQL @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLottableCode, 4, 'LA',
       @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
@@ -339,174 +354,9 @@ BEGIN
       WHERE PickDetailKey = @cPickDetailKey
          AND StorerKey = @cStorerKey
 
-      IF @cStatus = '9'
+      IF @cType = 'SHORT'
       BEGIN
-         IF @cUCC = @cOriUCC
-         BEGIN
-            BEGIN TRY
-               UPDATE dbo.UCC WITH(ROWLOCK)
-               SET
-                  Status = '5',
-                  OrderKey = @cLoopOrderKey,
-                  OrderLineNumber = @cLoopOrderKeyLineNumber,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE UCCNo = @cUCC
-                  AND StorerKey = @cStorerkey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255643
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update UCC failed
-               GOTO RollBackTran
-            END CATCH
-
-            BEGIN TRY
-               UPDATE dbo.SerialNo WITH(ROWLOCK)
-               SET
-                  Status = '5',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME(),
-                  TrafficCop = NULL
-               WHERE UCCNo = @cUCC
-                  AND StorerKey = @cStorerkey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255648
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
-               GOTO RollBackTran
-            END CATCH
-
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  Status = @cPickConfirmStatus,
-                  Notes = DropID,
-                  DropID = @cLoopDropID,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255604
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
-         END
-         ELSE
-         BEGIN
-            -- Unallocate PickDetail
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  Qty = 0,
-                  Status = '0',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255605
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
-
-            -- Mark UCC as 1
-            BEGIN TRY
-               UPDATE dbo.UCC WITH(ROWLOCK)
-               SET
-                  Status = 1,
-                  OrderKey = '',
-                  OrderLineNumber = '',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE UCCNo = @cOriUCC
-                  AND StorerKey = @cStorerkey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255606
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC failed
-               GOTO RollBackTran
-            END CATCH
-
-            SELECT TOP 1
-               @cScannedUCCID = Id,
-               @cScannedUCCLot = LOT
-            FROM dbo.UCC WITH(NOLOCK)
-            WHERE UCCNo = @cUCC
-               AND StorerKey = @cStorerKey
-            
-            -- re-allcoate to scanned UCC
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  ID = @cScannedUCCID,
-                  DropID = @cUCC,
-                  Qty = @nQty,
-                  LOT = @cScannedUCCLot,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255607
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
-
-            -- Mark UCC as 5
-            BEGIN TRY
-               UPDATE dbo.UCC WITH(ROWLOCK)
-               SET
-                  Status = '5',
-                  OrderKey = @cLoopOrderKey,
-                  OrderLineNumber = @cLoopOrderKeyLineNumber,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE UCCNo = @cUCC
-                  AND StorerKey = @cStorerkey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255608
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC failed
-               GOTO RollBackTran
-            END CATCH
-
-            BEGIN TRY
-               UPDATE dbo.SerialNo WITH(ROWLOCK)
-               SET
-                  Status = '5',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME(),
-                  TrafficCop = NULL
-               WHERE UCCNo = @cUCC
-                  AND StorerKey = @cStorerkey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255649
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
-               GOTO RollBackTran
-            END CATCH
-
-            -- Confirm PickDetail
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-                  Status = @cPickConfirmStatus,
-                  Notes = DropID,
-                  DropID = @cLoopDropID,
-                  EditDate = GETDATE(),
-                  EditWho  = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255609
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PickDetail failed
-               GOTO RollBackTran
-            END CATCH
-         END
-      END
-      ELSE
-      BEGIN
-         IF @cType = 'SHORT'
+         IF @cStatus = '4'
          BEGIN
             BEGIN TRY
                UPDATE dbo.PickDetail WITH(ROWLOCK)
@@ -519,14 +369,197 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255603
+               SET @nErrNo = 255601
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
                GOTO RollBackTran
             END CATCH
          END
       END
-   END
+      ELSE 
+      BEGIN
+         IF @cStatus = '9'
+         BEGIN
+            IF @cUCC = @cOriUCC
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.UCC WITH(ROWLOCK)
+                  SET
+                     Status = '5',
+                     OrderKey = @cLoopOrderKey,
+                     OrderLineNumber = @cLoopOrderKeyLineNumber,
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE UCCNo = @cUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255602
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update UCC failed
+                  GOTO RollBackTran
+               END CATCH
 
+               BEGIN TRY
+                  UPDATE dbo.SerialNo WITH(ROWLOCK)
+                  SET
+                     Status = '5',
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME(),
+                     TrafficCop = NULL
+                  WHERE UCCNo = @cUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255603
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH(ROWLOCK)
+                  SET
+                     Status = @cPickConfirmStatus,
+                     Notes = DropID,
+                     DropID = @cLoopDropID,
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255604
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+                  GOTO RollBackTran
+               END CATCH
+            END
+            ELSE
+            BEGIN
+               -- Unallocate PickDetail
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH(ROWLOCK)
+                  SET
+                     Qty = 0,
+                     Status = '0',
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255605
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+                  GOTO RollBackTran
+               END CATCH
+
+               -- Mark UCC as 1
+               BEGIN TRY
+                  UPDATE dbo.UCC WITH(ROWLOCK)
+                  SET
+                     Status = 1,
+                     OrderKey = '',
+                     OrderLineNumber = '',
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE UCCNo = @cOriUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255606
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC failed
+                  GOTO RollBackTran
+               END CATCH
+
+               SELECT TOP 1
+                  @cScannedUCCID = Id,
+                  @cScannedUCCLot = LOT
+               FROM dbo.UCC WITH(NOLOCK)
+               WHERE UCCNo = @cUCC
+                  AND StorerKey = @cStorerKey
+               
+               -- re-allcoate to scanned UCC
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH(ROWLOCK)
+                  SET
+                     ID = @cScannedUCCID,
+                     DropID = @cUCC,
+                     Qty = @nQty,
+                     LOT = @cScannedUCCLot,
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255607
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+                  GOTO RollBackTran
+               END CATCH
+
+               -- Mark UCC as 5
+               BEGIN TRY
+                  UPDATE dbo.UCC WITH(ROWLOCK)
+                  SET
+                     Status = '5',
+                     OrderKey = @cLoopOrderKey,
+                     OrderLineNumber = @cLoopOrderKeyLineNumber,
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE UCCNo = @cUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255608
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update UCC failed
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
+                  UPDATE dbo.SerialNo WITH(ROWLOCK)
+                  SET
+                     Status = '5',
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME(),
+                     TrafficCop = NULL
+                  WHERE UCCNo = @cUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255609
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
+                  UPDATE dbo.SerialNo WITH(ROWLOCK)
+                  SET
+                     Status = '1',
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME(),
+                     TrafficCop = NULL
+                  WHERE UCCNo = @cOriUCC
+                     AND StorerKey = @cStorerkey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255610
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update SerialNo failed
+                  GOTO RollBackTran
+               END CATCH
+
+               -- Confirm PickDetail
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                     Status = @cPickConfirmStatus,
+                     Notes = DropID,
+                     DropID = @cLoopDropID,
+                     EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255611
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update PickDetail failed
+                  GOTO RollBackTran
+               END CATCH
+            END
+         END
+      END
+   END
 
    /***********************************************************************************************
                                               Piece confirm
@@ -574,160 +607,188 @@ BEGIN
          BREAK
 
       -- Piece short confirm
-      IF @cStatus = '4'
-      BEGIN
-         -- I. IF @nPickedQty = 0, then just update the qty to 0
-         IF @nPickedQty = 0
-         BEGIN
-            -- 1. Reduce the qty for PickDetail
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  Status = '4',
-                  QtyMoved = Qty,
-                  Qty = 0,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255636
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
-         END
-         -- II. ELSE IF @nPickedQty > 0, then update the picked qty, and create new pickdetail for short qty
-         ELSE
-         BEGIN
-            -- 1. Reduce the qty for PickDetail
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  Qty = @nPickedQty,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255641
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
+      -- IF @cStatus = '4'
+      -- BEGIN
+      --    IF @cType = 'SHORT'
+      --    BEGIN
+      --       -- I. IF @nPickedQty = 0, then just update the qty to 0
+      --       IF @nPickedQty = 0
+      --       BEGIN
+      --          -- 1. Reduce the qty for PickDetail
+      --          BEGIN TRY
+      --             UPDATE dbo.PickDetail WITH(ROWLOCK)
+      --             SET
+      --                Status = '4',
+      --                QtyMoved = Qty,
+      --                Qty = 0,
+      --                EditDate = GETDATE(),
+      --                EditWho = SUSER_SNAME()
+      --             WHERE PickDetailKey = @cPickDetailKey
+      --          END TRY
+      --          BEGIN CATCH
+      --             SET @nErrNo = 255636
+      --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+      --             GOTO RollBackTran
+      --          END CATCH
+      --       END
+      --       -- II. ELSE IF @nPickedQty > 0, then update the picked qty, and create new pickdetail for short qty
+      --       ELSE
+      --       BEGIN
+      --          -- 1. Reduce the qty for PickDetail
+      --          BEGIN TRY
+      --             UPDATE dbo.PickDetail WITH(ROWLOCK)
+      --             SET
+      --                Qty = @nPickedQty,
+      --                Status = @cPickConfirmStatus,
+      --                EditDate = GETDATE(),
+      --                EditWho = SUSER_SNAME()
+      --             WHERE PickDetailKey = @cPickDetailKey
+      --          END TRY
+      --          BEGIN CATCH
+      --             SET @nErrNo = 255641
+      --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+      --             GOTO RollBackTran
+      --          END CATCH
 
-            -- 2. Create new pickdetail for short qty
-            SET @cNewPickDetailKey = ''
+      --          -- 2. Create new pickdetail for short qty
+      --          SET @cNewPickDetailKey = ''
 
-            EXECUTE dbo.nspg_GetKey
-               'PICKDETAILKEY',
-               10 ,
-               @cNewPickDetailKey OUTPUT,
-               @bSuccess          OUTPUT,
-               @nErrNo            OUTPUT,
-               @cErrMsg           OUTPUT
+      --          EXECUTE dbo.nspg_GetKey
+      --             'PICKDETAILKEY',
+      --             10 ,
+      --             @cNewPickDetailKey OUTPUT,
+      --             @bSuccess          OUTPUT,
+      --             @nErrNo            OUTPUT,
+      --             @cErrMsg           OUTPUT
 
-            IF @bSuccess <> 1
-            BEGIN
-               SET @nErrNo = 255637
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate key failed
-               GOTO RollBackTran
-            END
+      --          IF @bSuccess <> 1
+      --          BEGIN
+      --             SET @nErrNo = 255637
+      --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate key failed
+      --             GOTO RollBackTran
+      --          END
 
-            BEGIN TRY
-               INSERT INTO PickDetail (
-                  CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
-                  UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-                  ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, SourceType,
-                  PickDetailKey,
-                  Status,
-                  QTY,
-                  TrafficCop,
-                  OptimizeCop,
-                  Channel_ID )
-               SELECT
-                  CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
-                  UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
-                  ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-                  EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, Notes, @cPickDetailKey,
-                  @cNewPickDetailKey,
-                  Status,
-                  @nQTY_PD - @nPickedQty,
-                  TrafficCop,
-                  OptimizeCop,
-                  Channel_ID
-               FROM dbo.PickDetail WITH (NOLOCK)
-               WHERE PickDetailKey = @cPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255638
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
-               GOTO RollBackTran
-            END CATCH
+      --          BEGIN TRY
+      --             INSERT INTO dbo.PickDetail (
+      --                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
+      --                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
+      --                ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+      --                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, SourceType,
+      --                PickDetailKey,
+      --                Status,
+      --                QTY,
+      --                TrafficCop,
+      --                OptimizeCop,
+      --                Channel_ID )
+      --             SELECT
+      --                CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM,
+      --                UOMQTY, QTYMoved, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType,
+      --                ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
+      --                EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, @cReasonKey, Notes, @cPickDetailKey,
+      --                @cNewPickDetailKey,
+      --                Status,
+      --                @nQTY_PD - @nPickedQty,
+      --                TrafficCop,
+      --                OptimizeCop,
+      --                Channel_ID
+      --             FROM dbo.PickDetail WITH (NOLOCK)
+      --             WHERE PickDetailKey = @cPickDetailKey
+      --          END TRY
+      --          BEGIN CATCH
+      --             SET @nErrNo = 255638
+      --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
+      --             GOTO RollBackTran
+      --          END CATCH
 
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH(ROWLOCK)
-               SET
-                  Status = '4',
-                  QtyMoved = Qty,
-                  Qty = 0,
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME()
-               WHERE PickDetailKey = @cNewPickDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255639
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
-               GOTO RollBackTran
-            END CATCH
-         END
+      --          BEGIN TRY
+      --             UPDATE dbo.PickDetail WITH(ROWLOCK)
+      --             SET
+      --                Status = '4',
+      --                QtyMoved = Qty,
+      --                Qty = 0,
+      --                EditDate = GETDATE(),
+      --                EditWho = SUSER_SNAME()
+      --             WHERE PickDetailKey = @cNewPickDetailKey
+      --          END TRY
+      --          BEGIN CATCH
+      --             SET @nErrNo = 255639
+      --             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+      --             GOTO RollBackTran
+      --          END CATCH
+      --       END
 
-         -- 3. Reduce the qty for RDT pick log
-         SELECT TOP 1
-            @nRowRef = RowRef
-         FROM RDT.rdtPickLog WITH(NOLOCK)
-         WHERE PickDetailKey = @cPickDetailKey
-            AND PickSlipNo = @cPickSlipNo
-            AND (Mobile = @nMobile OR AddWho = @cUserName)
-            AND PickMethod = 'GetTask-P'
-         
-         IF @@ROWCOUNT = 1
-         BEGIN
-            -- If picked qty = 0, it is full short delete the pick log
-            IF @nPickedQty = 0
-            BEGIN
-               BEGIN TRY
-                  DELETE FROM RDT.rdtPickLog WITH(ROWLOCK)
-                  WHERE RowRef = @nRowRef
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 255642
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete rdtPickLog failed
-                  GOTO RollBackTran
-               END CATCH
-            END
-            --  Else update the picked qty
-            ELSE
-            BEGIN
-               BEGIN TRY
-                  UPDATE RDT.rdtPickLog WITH(ROWLOCK)
-                  SET
-                     ActQty = @nPickedQty,
-                     Status = IIF(@nPickedQty = PickLockQty, '9', '0')
-                  WHERE RowRef = @nRowRef
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 255640
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
-                  GOTO RollBackTran
-               END CATCH
-            END
-         END
-      END
-      -- Normal piece confirm
-      ELSE
+      --       -- 3. Reduce the qty for RDT pick log
+      --       SELECT TOP 1
+      --          @nRowRef = RowRef
+      --       FROM RDT.rdtPickLog WITH(NOLOCK)
+      --       WHERE PickDetailKey = @cPickDetailKey
+      --          AND PickSlipNo = @cPickSlipNo
+      --          AND (Mobile = @nMobile OR AddWho = @cUserName)
+      --          AND PickMethod = 'GetTask-P'
+            
+      --       IF @@ROWCOUNT = 1
+      --       BEGIN
+      --          -- If picked qty = 0, it is full short delete the pick log
+      --          IF @nPickedQty = 0
+      --          BEGIN
+      --             BEGIN TRY
+      --                DELETE FROM RDT.rdtPickLog WITH(ROWLOCK)
+      --                WHERE RowRef = @nRowRef
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 255642
+      --                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Delete rdtPickLog failed
+      --                GOTO RollBackTran
+      --             END CATCH
+      --          END
+      --          --  Else update the picked qty
+      --          ELSE
+      --          BEGIN
+      --             BEGIN TRY
+      --                UPDATE RDT.rdtPickLog WITH(ROWLOCK)
+      --                SET
+      --                   ActQty = @nPickedQty
+      --                WHERE RowRef = @nRowRef
+      --             END TRY
+      --             BEGIN CATCH
+      --                SET @nErrNo = 255640
+      --                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update rdtPickLog failed
+      --                GOTO RollBackTran
+      --             END CATCH
+      --          END
+      --       END
+      --    END
+      -- END
+      -- -- Normal piece confirm
+      -- ELSE
       BEGIN
          SET @nIDLotNotMatchedQty = 0
          SET @nIDLotMatchedQty = 0
+
+         IF @cStatus = '4' AND @cType = 'SHORT'
+         BEGIN
+            IF @nPickedQty = 0
+            BEGIN
+               -- 1. Reduce the qty for PickDetail
+               BEGIN TRY
+                  UPDATE dbo.PickDetail WITH(ROWLOCK)
+                  SET
+                     Status = '4',
+                     QtyMoved = Qty,
+                     Qty = 0,
+                     EditDate = GETDATE(),
+                     EditWho = SUSER_SNAME()
+                  WHERE PickDetailKey = @cPickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 255612
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
+                  GOTO RollBackTran
+               END CATCH
+
+               BREAK
+            END
+         END
 
          SELECT 
             @cSuggestedPieceLOT = LOT,
@@ -780,8 +841,11 @@ BEGIN
                   AND ISNULL(RPL.Status, '') <> '9'
                ORDER BY IIF(SN.LOT = @cSuggestedPieceLOT, 1, 2)
 
+               -- If no Pick-P record found, update PickDetail to status 4 (short)
                IF @@ROWCOUNT = 0
+               BEGIN
                   BREAK
+               END
 
                SET @cPieceLotUCC = ISNULL(@cPieceLotUCC, '')
             END
@@ -803,7 +867,7 @@ BEGIN
 
                   IF @bSuccess <> 1
                   BEGIN
-                     SET @nErrNo = 255621
+                     SET @nErrNo = 255613
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate key failed
                      GOTO RollBackTran
                   END
@@ -836,7 +900,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                   END TRY
                   BEGIN CATCH
-                     SET @nErrNo = 255610
+                     SET @nErrNo = 255614
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
                      GOTO RollBackTran
                   END CATCH
@@ -846,8 +910,18 @@ BEGIN
                      VALUES(@cNewPickDetailKey)
                   END TRY
                   BEGIN CATCH
-                     SET @nErrNo = 255647
+                     SET @nErrNo = 255615
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Insert into @tPickedKeys failed
+                     GOTO RollBackTran
+                  END CATCH
+
+                  BEGIN TRY
+                     INSERT INTO @tSNMapping (SerialNo, OldPickDetailKey, NewPickDetailKey)
+                     VALUES(@cPieceSN, @cPickDetailKey, @cNewPickDetailKey)
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 255616
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Insert into @tSNMapping failed
                      GOTO RollBackTran
                   END CATCH
                END
@@ -863,8 +937,26 @@ BEGIN
                         AND Lot = @cPieceLot
                   END TRY
                   BEGIN CATCH
-                     SET @nErrNo = 255626
+                     SET @nErrNo = 255617
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update @tNewPickDetail failed
+                     GOTO RollBackTran
+                  END CATCH
+
+                  SELECT @cNewPickDetailKey = PickDetailKey
+                  FROM @tNewPickDetail
+                  WHERE SourceType = @cPickDetailKey
+                     AND Loc = @cPieceLotLoc
+                     AND Id = @cPieceLotId
+                     AND DropID = @cPieceLotUCC
+                     AND Lot = @cPieceLot
+
+                  BEGIN TRY
+                     INSERT INTO @tSNMapping (SerialNo, OldPickDetailKey, NewPickDetailKey)
+                     VALUES(@cPieceSN, @cPickDetailKey, @cNewPickDetailKey)
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 255618
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Insert into @tSNMapping failed
                      GOTO RollBackTran
                   END CATCH
                END
@@ -876,22 +968,6 @@ BEGIN
                SET @nIDLotMatchedQty = @nIDLotMatchedQty + 1
             END
 
-            BEGIN TRY
-               UPDATE dbo.SerialNo WITH(ROWLOCK)
-               SET UCCNo = '',
-                  Status = '5',
-                  EditDate = GETDATE(),
-                  EditWho = SUSER_SNAME(),
-                  TrafficCop = NULL
-               WHERE SerialNo = @cPieceSN
-                  AND StorerKey = @cStorerKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 255644
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
-               GOTO RollBackTran
-            END CATCH
-
             -- for partil pick UCC, mark it as 6, the ops team discards the UCC box and keeps the material without the UCC
             BEGIN TRY
                UPDATE dbo.UCC WITH(ROWLOCK)
@@ -902,7 +978,7 @@ BEGIN
                WHERE UCCNo = @cPieceLotUCC
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255646
+               SET @nErrNo = 255619
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update UCC failed
                GOTO RollBackTran
             END CATCH
@@ -911,9 +987,10 @@ BEGIN
                UPDATE RDT.rdtPickLog WITH(ROWLOCK)
                SET Status = '9'
                WHERE RowRef= @nRowRef
+                  AND Status NOT IN ('4', '9')
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255627
+               SET @nErrNo = 255620
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --   Update rdtPickLog failed
                GOTO RollBackTran
             END CATCH
@@ -934,7 +1011,7 @@ BEGIN
 
             IF @bSuccess <> 1
             BEGIN
-               SET @nErrNo = 255628
+               SET @nErrNo = 255621
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate key failed
                GOTO RollBackTran
             END
@@ -967,7 +1044,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255629
+               SET @nErrNo = 255622
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
                GOTO RollBackTran
             END CATCH
@@ -983,7 +1060,7 @@ BEGIN
             WHERE PickDetailKey = @cPickDetailKey
          END TRY
          BEGIN CATCH
-            SET @nErrNo = 255630
+            SET @nErrNo = 255623
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
             GOTO RollBackTran
          END CATCH
@@ -999,7 +1076,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255631
+               SET @nErrNo = 255624
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update pickdetail failed
                GOTO RollBackTran
             END CATCH
@@ -1011,7 +1088,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255632
+               SET @nErrNo = 255625
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- delete pickdetail failed
                GOTO RollBackTran
             END CATCH
@@ -1041,7 +1118,7 @@ BEGIN
             FROM @tNewPickDetail
          END TRY
          BEGIN CATCH
-            SET @nErrNo = 255617
+            SET @nErrNo = 255626
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
             GOTO RollBackTran
          END CATCH
@@ -1063,22 +1140,34 @@ BEGIN
                SET 
                   Status = CASE 
                               WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPickConfirmStatus 
-                              ELSE Status 
+                              ELSE CASE @cStatus WHEN '4' THEN '4' ELSE Status END
                            END,
                   DropID = CASE 
                               WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN @cPieceLotDropId
                               ELSE DropID  
-                           END
+                           END,
+                  QtyMoved = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN QtyMoved
+                              ELSE CASE @cStatus WHEN '4' THEN Qty ELSE QtyMoved END
+                           END,
+                  Qty = CASE 
+                              WHEN EXISTS (SELECT 1 FROM @tPickedKeys WHERE PickDetailKey = @cPickDetailKey) THEN Qty
+                              ELSE CASE @cStatus WHEN '4' THEN 0 ELSE Qty END
+                           END,
+                  EditWho = @cUserName,
+                  EditDate = GETDATE()
                WHERE PickDetailKey = @cPickDetailKey
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 255633
+               SET @nErrNo = 255627
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Insert pickdetail failed
                GOTO RollBackTran
             END CATCH
          END
       END
    END
+
+   DECLARE @cSNPickDetailKey NVARCHAR(10)
 
    SET @nLoopIndex = -1
    WHILE 1 = 1
@@ -1093,60 +1182,116 @@ BEGIN
       IF @@ROWCOUNT = 0
          BREAK
 
-      BEGIN TRY
-         INSERT INTO dbo.PickSerialNo (PickDetailKey, StorerKey, SKU, SerialNo, QTY)
-         SELECT DISTINCT @cPickDetailKey, @cStorerKey, RPL.SKU, RPL.Remarks, 1
-         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-         WHERE RPL.PickDetailKey = @cPickDetailKey
-            AND RPL.StorerKey = @cStorerKey
-            AND RPL.PickSlipNo = @cPickSlipNo
-            AND RPL.PickMethod = 'Pick-P'
-            AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
-            AND ISNULL(RPL.Remarks, '') <> ''
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 255650
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert pick SerialNo failed
-         GOTO RollBackTran
-      END CATCH
+      DELETE FROM @tSerialNo
+      INSERT INTO @tSerialNo (SKU, SerialNo)
+      SELECT RPL.SKU, RPL.Remarks
+      FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+      WHERE RPL.PickDetailKey = @cPickDetailKey
+         AND RPL.PickSlipNo = @cPickSlipNo
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
+         AND RPL.PickMethod = 'Pick-P'
+         AND RPL.Remarks IS NOT NULL
+         AND RPL.Remarks <> ''
+
+      SET @nLoopIndex1 = -1
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @cPieceSN = SerialNo,
+            @cSKU = SKU,
+            @nLoopIndex1 = RowIndex
+         FROM @tSerialNo
+         WHERE RowIndex > @nLoopIndex1
+         ORDER BY RowIndex
+
+         SET @cSNPickDetailKey = ''
+         SELECT TOP 1
+            @cSNPickDetailKey = NewPickDetailKey
+         FROM @tSNMapping
+         WHERE SerialNo = @cPieceSN
+         ORDER BY RowIndex
+
+         SET @cSNPickDetailKey = IIF(ISNULL(@cSNPickDetailKey, '') = '', @cPickDetailKey, @cSNPickDetailKey)
+
+         BEGIN TRY
+            UPDATE dbo.SerialNo WITH(ROWLOCK)
+            SET UCCNo = '',
+               Status = '5',
+               EditDate = GETDATE(),
+               EditWho = SUSER_SNAME(),
+               TrafficCop = NULL
+            WHERE SerialNo = @cPieceSN
+               AND StorerKey = @cStorerKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 255628
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Update SerialNo failed
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            IF NOT EXISTS(SELECT 1 FROM dbo.PickSerialNo PSN WITH(NOLOCK) WHERE PSN.PickDetailKey = @cPickDetailKey AND PSN.SerialNo = @cPieceSN)
+            BEGIN
+               INSERT INTO dbo.PickSerialNo (PickDetailKey, StorerKey, SKU, SerialNo, QTY)
+               SELECT @cSNPickDetailKey, @cStorerKey, @cSKU, @cPieceSN, 1
+            END
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 255629
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert pick SerialNo failed
+            GOTO RollBackTran
+         END CATCH
+      END
    END
 
    IF @cType <> 'SHORT'
    BEGIN
+      DELETE FROM @tPiecePickDetailKey
       INSERT INTO @tPiecePickDetailKey ( PickDetailKey )
       SELECT DISTINCT RPL.PickDetailKey
       FROM RDT.rdtPickLog RPL WITH(NOLOCK)
       WHERE RPL.PickSlipNo = @cPickSlipNo
          AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
          AND ISNULL(RPL.DropID, '') LIKE IIF(@cDropID = 'ALLDROPID', '%%', @cDropID)
-      --    AND ISNULL(RPL.Status, '') IN( '4', '9')
+   END
+   ELSE
+   BEGIN
+      DELETE FROM @tPiecePickDetailKey
+      INSERT INTO @tPiecePickDetailKey ( PickDetailKey )
+      SELECT DISTINCT PickDetailKey
+      FROM RDT.rdtPickLog WITH(NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND PickSlipNo = @cPickSlipNo
+         AND (Mobile = @nMobile OR AddWho = @cUserName)
+         AND ISNULL(Status, '') = '4'
+         AND PickMethod IN ('GetTask-U', 'GetTask-P')
+   END
 
-      -- For normal confirm, delete all pick log records
-      SET @nLoopIndex = -1
-      WHILE 1 = 1
-      BEGIN
-         SELECT TOP 1
-            @nLoopIndex = RPL.RowRef
-         FROM RDT.rdtPickLog RPL WITH(NOLOCK)
-         INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
-         WHERE RPL.PickSlipNo = @cPickSlipNo
-            AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
-            AND RowRef > @nLoopIndex
-         ORDER BY RPL.RowRef
+   -- delete pick log records
+   SET @nLoopIndex = -1
+   WHILE 1 = 1
+   BEGIN
+      SELECT TOP 1
+         @nLoopIndex = RPL.RowRef
+      FROM RDT.rdtPickLog RPL WITH(NOLOCK)
+      INNER JOIN @tPiecePickDetailKey TPPDK ON RPL.PickDetailKey = TPPDK.PickDetailKey
+      WHERE RPL.PickSlipNo = @cPickSlipNo
+         AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
+         AND RowRef > @nLoopIndex
+      ORDER BY RPL.RowRef
 
-         IF @@ROWCOUNT = 0
-            BREAK
-         
-         BEGIN TRY
-            DELETE FROM RDT.rdtPickLog
-            WHERE RowRef = @nLoopIndex
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 255618
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Delete rdtPickLog failed
-            GOTO RollBackTran
-         END CATCH
-      END
+      IF @@ROWCOUNT = 0
+         BREAK
+      
+      BEGIN TRY
+         DELETE FROM RDT.rdtPickLog
+         WHERE RowRef = @nLoopIndex
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 255630
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --  Delete rdtPickLog failed
+         GOTO RollBackTran
+      END CATCH
    END
 
    /*        New Logic End          */
