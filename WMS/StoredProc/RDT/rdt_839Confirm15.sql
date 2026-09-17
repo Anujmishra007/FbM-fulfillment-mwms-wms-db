@@ -1090,6 +1090,7 @@ BEGIN
             WHERE RPL.PickDetailKey = @cPickDetailKey
                AND RPL.StorerKey = @cStorerKey
                AND RPL.PickSlipNo = @cPickSlipNo
+               AND RPL.PickMethod = 'Pick-P'
                AND (RPL.Mobile = @nMobile OR RPL.AddWho = @cUserName)
                AND ISNULL(RPL.Remarks, '') <> ''
          END TRY
