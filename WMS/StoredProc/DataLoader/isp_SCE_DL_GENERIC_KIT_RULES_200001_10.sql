@@ -350,21 +350,21 @@ BEGIN
            , K.ExternKitKey = STG.ExternKitKey
            , K.EditWho = @c_Username
            --ML01-S
-           , K.ExternStatus = ISNULL(STG.ExternStatus,'0')
-           , K.USRDEF4  = STG.HUdef04
-           , K.USRDEF5  = STG.HUdef05
-           , K.USRDEF6  = STG.HUdef06
-           , K.USRDEF7  = STG.HUdef07
-           , K.USRDEF8  = STG.HUdef08
-           , K.USRDEF9  = STG.HUdef09
-           , K.USRDEF10 = STG.HUdef10
-           , K.USRDEF11 = STG.HUdef11
-           , K.USRDEF12 = STG.HUdef12
-           , K.USRDEF13 = STG.HUdef13
-           , K.USRDEF14 = STG.HUdef14
-           , K.USRDEF15 = STG.HUdef15
-           , K.GenerateHOCharges    = STG.GenerateHOCharges
-           , K.GenerateIS_HiCharges = STG.GenerateIS_HiCharges
+           , K.ExternStatus = ISNULL(NULLIF(STG.ExternStatus,''), K.ExternStatus)
+           , K.USRDEF4  = ISNULL(RTRIM(STG.HUdef04),'')
+           , K.USRDEF5  = ISNULL(RTRIM(STG.HUdef05),'')
+           , K.USRDEF6  = NULLIF(STG.HUdef06,'')
+           , K.USRDEF7  = NULLIF(STG.HUdef07,'')
+           , K.USRDEF8  = ISNULL(RTRIM(STG.HUdef08),'')
+           , K.USRDEF9  = ISNULL(RTRIM(STG.HUdef09),'')
+           , K.USRDEF10 = ISNULL(RTRIM(STG.HUdef10),'')
+           , K.USRDEF11 = ISNULL(RTRIM(STG.HUdef11),'')
+           , K.USRDEF12 = ISNULL(RTRIM(STG.HUdef12),'')
+           , K.USRDEF13 = ISNULL(RTRIM(STG.HUdef13),'')
+           , K.USRDEF14 = NULLIF(STG.HUdef14,'')
+           , K.USRDEF15 = NULLIF(STG.HUdef15,'')
+           , K.GenerateHOCharges    = ISNULL(RTRIM(STG.GenerateHOCharges),'NO')
+           , K.GenerateIS_HiCharges = ISNULL(RTRIM(STG.GenerateIS_HiCharges),'NO')
            --ML01-E
          FROM dbo.KIT                  K
          INNER JOIN dbo.SCE_DL_KIT_STG STG WITH (NOLOCK)
@@ -468,21 +468,21 @@ BEGIN
               , @c_Username
 --ML01              , '0'                 --SG01
               --ML01-S
-              , ISNULL(STG.ExternStatus,'0')
-              , STG.HUdef04
-              , STG.HUdef05
-              , STG.HUdef06
-              , STG.HUdef07
-              , STG.HUdef08
-              , STG.HUdef09
-              , STG.HUdef10
-              , STG.HUdef11
-              , STG.HUdef12
-              , STG.HUdef13
-              , STG.HUdef14
-              , STG.HUdef15
-              , STG.GenerateHOCharges
-              , STG.GenerateIS_HiCharges
+              , ISNULL(NULLIF(RTRIM(STG.ExternStatus),''),'0')
+              , ISNULL(RTRIM(STG.HUdef04),'')
+              , ISNULL(RTRIM(STG.HUdef05),'')
+              , NULLIF(STG.HUdef06,'')
+              , NULLIF(STG.HUdef07,'')
+              , ISNULL(RTRIM(STG.HUdef08),'')
+              , ISNULL(RTRIM(STG.HUdef09),'')
+              , ISNULL(RTRIM(STG.HUdef10),'')
+              , ISNULL(RTRIM(STG.HUdef11),'')
+              , ISNULL(RTRIM(STG.HUdef12),'')
+              , ISNULL(RTRIM(STG.HUdef13),'')
+              , NULLIF(STG.HUdef14,'')
+              , NULLIF(STG.HUdef15,'')
+              , ISNULL(RTRIM(STG.GenerateHOCharges),'NO')
+              , ISNULL(RTRIM(STG.GenerateIS_HiCharges),'NO')
               --ML01-E
          FROM dbo.SCE_DL_KIT_STG STG WITH (NOLOCK)
          WHERE RowRefNo = @n_RowRefNo;
@@ -529,10 +529,10 @@ BEGIN
            , ISNULL(TRIM(Lot), '')   --WL01
            , ISNULL(TRIM(Loc), '')   --WL01
            , ISNULL(TRIM(ID ), '')   --WL01
-           , ExternLineNo --ML01
-           , Channel      --ML01
-           , Channel_ID   --ML01
-           , PalletType   --ML01
+           , ISNULL(RTRIM(ExternLineNo),'') --ML01
+           , ISNULL(RTRIM(Channel),'')      --ML01
+           , ISNULL(Channel_ID,0)           --ML01
+           , ISNULL(RTRIM(PalletType),'')   --ML01
       FROM dbo.SCE_DL_KIT_STG WITH (NOLOCK)
       WHERE STG_BatchNo       = @n_BatchNo
       AND   STG_Status          = '1'
@@ -1221,8 +1221,10 @@ BEGIN
            , Lottable01
            , Lottable02
            , Lottable03
-           , Lottable04
-           , Lottable05
+--ML01           , Lottable04
+--ML01           , Lottable05
+           , NULLIF(Lottable04,'')   --ML01
+           , NULLIF(Lottable05,'')   --ML01
            , ExternKitkey
            , CASE WHEN @c_GetKitLineNo = ''
                   AND  @c_ExternLineNo = '' THEN CAST(FORMAT(iID, 'D5') AS NVARCHAR(5))
@@ -1237,9 +1239,12 @@ BEGIN
            , Lottable10
            , Lottable11
            , Lottable12
-           , Lottable13
-           , Lottable14
-           , Lottable15
+--ML01           , Lottable13
+--ML01           , Lottable14
+--ML01           , Lottable15
+           , NULLIF(Lottable13,'')   --ML01
+           , NULLIF(Lottable14,'')   --ML01
+           , NULLIF(Lottable15,'')   --ML01
            , Qty   --WL01
            , Channel      --ML01
            , Channel_ID   --ML01

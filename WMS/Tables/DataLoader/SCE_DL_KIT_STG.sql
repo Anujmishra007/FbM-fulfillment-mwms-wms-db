@@ -112,6 +112,10 @@ BEGIN
 ALTER TABLE [dbo].[SCE_DL_KIT_STG] ADD CONSTRAINT [DF_SCE_DL_KIT_STG_AddDate]  DEFAULT (getdate()) FOR [AddDate]
 END
 
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DF_SCE_DL_KIT_STG_Qty]') AND type = 'D')
+BEGIN
+ALTER TABLE [dbo].[SCE_DL_KIT_STG] ADD CONSTRAINT [DF_SCE_DL_KIT_STG_Qty]  DEFAULT (0) FOR [Qty]
+END
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DF_SCE_DL_KIT_STG_HUdef04]') AND type = 'D')
 BEGIN
 ALTER TABLE [dbo].[SCE_DL_KIT_STG] ADD CONSTRAINT [DF_SCE_DL_KIT_STG_HUdef04]  DEFAULT ('') FOR [HUdef04]
@@ -166,7 +170,12 @@ END
 END
 ELSE
 BEGIN
-
+    IF NOT EXISTS (SELECT 1
+                   FROM sys.columns
+                   WHERE Name = 'Qty' AND Object_ID = Object_ID('SCE_DL_KIT_STG'))
+    BEGIN
+        ALTER TABLE SCE_DL_KIT_STG ADD Qty NVARCHAR(30)  NULL CONSTRAINT [DF_SCE_DL_KIT_STG_Qty]  DEFAULT (0);
+    END
     IF NOT EXISTS (SELECT 1
                    FROM sys.columns
                    WHERE Name = 'HUdef04' AND Object_ID = Object_ID('SCE_DL_KIT_STG'))
