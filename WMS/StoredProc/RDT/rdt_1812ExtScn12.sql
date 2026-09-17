@@ -364,7 +364,7 @@ BEGIN
          GOTO Quit
       END
 
-      IF @nMobRecStep = 5 AND @nMobRecScn = 6624 -- Close Pallet screen 
+      IF @nMobRecStep = 5 AND @nMobRecScn = 4024 -- Close Pallet screen 
       BEGIN
          IF @nInputKey = 1
          BEGIN
