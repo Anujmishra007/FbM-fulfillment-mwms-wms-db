@@ -112,71 +112,6 @@ AS
    BEGIN
       IF @nInputKey = '1'
       BEGIN
-
-         SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT Code, Long
-            FROM dbo.CodeLKUP WITH (NOLOCK)
-            WHERE ListName  = 'REFNOLKUP'
-               AND StorerKey = @cStorerKey
-               AND Code2     = @cFacility
-               AND Notes2    = @nFunc
-            ORDER BY Short
-         OPEN @curSearch
-         FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-         WHILE @@FETCH_STATUS = 0
-         BEGIN
-
-            -- Check column valid
-            IF NOT EXISTS( SELECT 1
-               FROM INFORMATION_SCHEMA.COLUMNS
-               WHERE TABLE_NAME  = @cTableName
-                  AND COLUMN_NAME = @cColumnName
-                  AND DATA_TYPE   = 'nvarchar')
-            BEGIN
-               SET @nErrNo  = 278107
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InvColumn
-               EXEC rdt.rdtSetFocusField @nMobile, 2
-               GOTO Quit
-            END
-
-            SET @cSQL =
-               ' SELECT ' +
-                  ' @cReceiptKey = Receipt.ReceiptKey ' +
-               ' FROM dbo.Receipt Receipt WITH (NOLOCK)  LEFT JOIN ' +
-               '      dbo.PO  PO WITH (NOLOCK) ON PO.POKey = Receipt.POKey AND PO.StorerKey = Receipt.StorerKey ' +
-               ' WHERE Receipt.Facility = @cFacility ' +
-                  ' AND Receipt.StorerKey = @cStorerKey ' +
-                  ' AND ' + @cTableName + '.' + @cColumnName + ' = @cRef1 '
-
-            SET @cSQLParam =
-               ' @cFacility      NVARCHAR(5),  ' +
-               ' @cStorerKey     NVARCHAR(15), ' +
-               ' @cRef1          NVARCHAR(60) OUTPUT, ' +
-               ' @cReceiptKey    NVARCHAR(10) OUTPUT, ' +
-               ' @nRowCount      INT          OUTPUT, ' +
-               ' @nErrNo         INT          OUTPUT  '
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @cFacility,
-               @cStorerKey,
-               @cRef1        OUTPUT,
-               @cReceiptKey  OUTPUT,
-               @nRowCount    OUTPUT,
-               @nErrNo       OUTPUT
-
-            IF @cReceiptKey <> ''
-               BREAK
-
-            FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-         END
-
-         IF ISNULL(@cReceiptKey, '') = ''
-         BEGIN
-            SET @nErrNo  = 278103
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InvContNo
-            EXEC rdt.rdtSetFocusField @nMobile, 2
-            GOTO Quit
-         END
-
          -- FCR-13166: Read RDTVASLOG once — used for both HYFUN pre-validation and @cBookStatus
          SELECT TOP 1 @cLatestStatus = Status
          FROM rdt.RDTVASLOG (NOLOCK)
@@ -257,8 +192,8 @@ AS
          BEGIN
 
             BEGIN TRY
-               INSERT INTO rdt.RDTVASLOG (Type, UserName, Facility, StartDate, EndDate, Status, qty, ref1)
-               VALUES (@cActivityStatus, SUSER_SNAME(), @cFacility, GETDATE(), GETDATE(), @cNewStatus, 1, @cRef1)
+               INSERT INTO rdt.RDTVASLOG (Type, UserName, Facility, StartDate, EndDate, Status, qty, ref1, Ref2, Ref3, Ref4, Ref5)
+               VALUES (@cActivityStatus, SUSER_SNAME(), @cFacility, GETDATE(), GETDATE(), @cNewStatus, 1, @cRef1, @cInput01, @cInput02, @cInput03, @cInput04)
             END TRY
             BEGIN CATCH
                SET @nErrNo  = 278105
@@ -266,81 +201,6 @@ AS
                EXEC rdt.rdtSetFocusField @nMobile, 2
                GOTO Quit
             END CATCH
-
-            IF @cOption = '9' -- Unloading End
-            BEGIN
-
-               SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                  SELECT Code, Long
-                  FROM dbo.CodeLKUP WITH (NOLOCK)
-                  WHERE ListName  = 'REFNOLKUP'
-                     AND StorerKey = @cStorerKey
-                     AND Code2     = @cFacility
-                     AND Notes2    = @nFunc
-                  ORDER BY Short
-               OPEN @curSearch
-               FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-               WHILE @@FETCH_STATUS = 0
-               BEGIN
-
-                  SET @cSQL =
-                     ' SELECT ' +
-                        ' Receipt.ReceiptKey ' +
-                     ' FROM dbo.Receipt Receipt WITH (NOLOCK)  LEFT JOIN ' +
-                     '      dbo.PO  PO WITH (NOLOCK) ON PO.POKey = Receipt.POKey AND PO.StorerKey = Receipt.StorerKey ' +
-                     ' WHERE Receipt.Facility = @cFacility ' +
-                        ' AND Receipt.StorerKey = @cStorerKey ' +
-                        ' AND ' + @cTableName + '.' + @cColumnName + ' = @cRef1 '
-
-                  -- Open cursor
-                  SET @cSQL =
-                     ' SET @curRD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +
-                        @cSQL +
-                     ' OPEN @curRD '
-
-                  SET @cSQLParam =
-                     ' @curRD          CURSOR OUTPUT, ' +
-                     ' @cFacility      NVARCHAR(5),  ' +
-                     ' @cStorerKey     NVARCHAR(15), ' +
-                     ' @cRef1          NVARCHAR(60) OUTPUT, ' +
-                     ' @cReceiptKey    NVARCHAR(10) OUTPUT, ' +
-                     ' @nRowCount      INT          OUTPUT, ' +
-                     ' @nErrNo         INT          OUTPUT  '
-
-                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @curRD       OUTPUT,
-                     @cFacility,
-                     @cStorerKey,
-                     @cRef1       OUTPUT,
-                     @cReceiptKey OUTPUT,
-                     @nRowCount   OUTPUT,
-                     @nErrNo      OUTPUT
-
-                  -- Loop Receipt
-                  FETCH NEXT FROM @curRD INTO @cReceiptKey
-                  WHILE @@FETCH_STATUS = 0
-                  BEGIN
-
-                     BEGIN TRY
-                        UPDATE dbo.Receipt WITH (ROWLOCK)
-                        SET ASNStatus = 'UNL'
-                        WHERE ReceiptKey = @cReceiptKey
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo  = 278106
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UpdRecptFail
-                        GOTO Quit
-                     END CATCH
-
-                     FETCH NEXT FROM @curRD INTO @cReceiptKey
-                  END
-                  CLOSE  @curRD
-                  DEALLOCATE @curRD
-
-                  FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-               END
-
-            END
 
             SELECT @cGroup = OpsPosition
             FROM rdt.rdtuser (NOLOCK)
@@ -361,7 +221,6 @@ AS
             SET @nScn  = @nScn  - 1
 
             GOTO Quit
-
          END
          ELSE
          BEGIN
@@ -626,79 +485,6 @@ AS
                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- InsVasFail
                GOTO Quit
             END CATCH
-
-            IF @cOption = '9' -- Unloading End
-            BEGIN
-
-               SET @curSearch = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                  SELECT Code, Long
-                  FROM dbo.CodeLKUP WITH (NOLOCK)
-                  WHERE ListName  = 'REFNOLKUP'
-                     AND StorerKey = @cStorerKey
-                     AND Code2     = @cFacility
-                     AND Notes2    = @nFunc
-                  ORDER BY Short
-               OPEN @curSearch
-               FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-               WHILE @@FETCH_STATUS = 0
-               BEGIN
-
-                  SET @cSQL =
-                     ' SELECT ' +
-                        ' Receipt.ReceiptKey ' +
-                     ' FROM dbo.Receipt Receipt WITH (NOLOCK)  LEFT JOIN ' +
-                     '      dbo.PO  PO WITH (NOLOCK) ON PO.POKey = Receipt.POKey AND PO.StorerKey = Receipt.StorerKey ' +
-                     ' WHERE Receipt.Facility = @cFacility ' +
-                        ' AND Receipt.StorerKey = @cStorerKey ' +
-                        ' AND ' + @cTableName + '.' + @cColumnName + ' = @cRef1 '
-
-                  -- Open cursor
-                  SET @cSQL =
-                     ' SET @curRD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +
-                        @cSQL +
-                     ' OPEN @curRD '
-
-                  SET @cSQLParam =
-                     ' @curRD          CURSOR OUTPUT, ' +
-                     ' @cFacility      NVARCHAR(5),  ' +
-                     ' @cStorerKey     NVARCHAR(15), ' +
-                     ' @cRef1          NVARCHAR(60) OUTPUT, ' +
-                     ' @cReceiptKey    NVARCHAR(10) OUTPUT, ' +
-                     ' @nErrNo         INT          OUTPUT  '
-
-                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @curRD       OUTPUT,
-                     @cFacility,
-                     @cStorerKey,
-                     @cRef1       OUTPUT,
-                     @cReceiptKey OUTPUT,
-                     @nErrNo      OUTPUT
-
-                  -- Loop Receipt
-                  FETCH NEXT FROM @curRD INTO @cReceiptKey
-                  WHILE @@FETCH_STATUS = 0
-                  BEGIN
-
-                     BEGIN TRY
-                        UPDATE dbo.Receipt WITH (ROWLOCK)
-                        SET ASNStatus = 'UNL'
-                        WHERE ReceiptKey = @cReceiptKey
-                     END TRY
-                     BEGIN CATCH
-                        SET @nErrNo  = 278118
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- UpdRecptFail
-                        GOTO Quit
-                     END CATCH
-
-                     FETCH NEXT FROM @curRD INTO @cReceiptKey
-                  END
-                  CLOSE  @curRD
-                  DEALLOCATE @curRD
-
-                  FETCH NEXT FROM @curSearch INTO @cColumnName, @cTableName
-               END
-
-            END
          END
 
          SET @cOutField01  = ''
