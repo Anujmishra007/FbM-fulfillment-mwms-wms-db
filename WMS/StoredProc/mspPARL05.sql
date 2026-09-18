@@ -166,18 +166,10 @@ BEGIN
                  , @n_PickMinQty = SL.QtyLocationMinimum
                  , @n_PickMaxQty = SL.QtyLocationLimit
                  , @n_PickQty = SL.Qty
-                              + ISNULL(TD.Qty, 0) 
                               + ISNULL(SLEX.PendingMoveIn, 0)
                  , @b_HasPickFace = 1
             FROM dbo.SKUxLOC SL WITH (NOLOCK)
             JOIN dbo.LOC L WITH (NOLOCK) ON L.Loc = SL.Loc
-            OUTER APPLY (SELECT Qty = SUM(ISNULL(TD.Qty, 0))
-                         FROM dbo.TaskDetail TD WITH (NOLOCK)
-                         WHERE TD.TaskType = @c_TaskType
-                         AND   TD.ToLoc = SL.Loc
-                         AND   TD.Sku = SL.Sku
-                         AND   TD.StorerKey = SL.StorerKey
-                         AND   TD.[Status] NOT IN ('9', 'X') ) AS TD
             OUTER APPLY dbo.fnc_SKUXLOC_Extended( SL.StorerKey
                                                 , SL.Sku
                                                 , SL.Loc
@@ -239,18 +231,11 @@ BEGIN
                   BEGIN
                      SELECT TOP 1 @c_SuggestLoc = L.Loc
                      FROM dbo.LOC L WITH (NOLOCK)
-                     CROSS APPLY (  SELECT OccupiedLPNCount = COUNT(DISTINCT Occupied.Id)
-                                    FROM (  SELECT LLI.Id
-                                            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                                            WHERE LLI.Loc = L.Loc 
-                                            AND LLI.Qty + LLI.PendingMoveIN > 0
-                                            UNION
-                                            SELECT TD.ToID
-                                            FROM dbo.TaskDetail TD WITH (NOLOCK)
-                                            WHERE TD.ToLoc = L.Loc 
-                                            AND TD.TaskType = @c_TaskType 
-                                            AND TD.[Status] NOT IN ( '9', 'X' )) Occupied 
-                                         ) Occupancy
+                     OUTER APPLY ( SELECT TotalPallet = COUNT(DISTINCT LLI.ID)
+                                   FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                                   WHERE LLI.Loc = L.Loc
+                                   AND   LLI.ID > ''
+                                   AND   LLI.Qty + LLI.PendingMoveIn > 0 ) Occupancy
                      WHERE L.Facility = @c_Facility
                      AND   L.Status = 'OK'
                      AND   L.MaxPallet > 0
@@ -259,7 +244,7 @@ BEGIN
                                      WHERE TRIM(PAZone.[value]) = L.PutawayZone )
                      AND   L.LocBay = @c_PickBay
                      AND   ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT)) <= 2
-                     AND   Occupancy.OccupiedLPNCount < L.MaxPallet
+                     AND   Occupancy.TotalPallet < L.MaxPallet
                      ORDER BY ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT))
                             , L.LogicalLocation
                             , L.Loc
@@ -315,25 +300,18 @@ BEGIN
                BEGIN
                   SELECT TOP 1 @c_SuggestLoc = L.Loc
                   FROM dbo.LOC L WITH (NOLOCK)
-                  CROSS APPLY (  SELECT OccupiedLPNCount = COUNT(DISTINCT Occupied.Id)
-                                 FROM (  SELECT LLI.Id
-                                         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                                         WHERE LLI.Loc = L.Loc 
-                                         AND LLI.Qty + LLI.PendingMoveIN > 0
-                                         UNION
-                                         SELECT TD.ToID
-                                         FROM dbo.TaskDetail TD WITH (NOLOCK)
-                                         WHERE TD.ToLoc = L.Loc 
-                                         AND TD.TaskType = @c_TaskType 
-                                         AND TD.[Status] NOT IN ( '9', 'X' )) Occupied 
-                                      ) Occupancy
+                    OUTER APPLY ( SELECT TotalPallet = COUNT(DISTINCT LLI.ID)
+                        FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                        WHERE LLI.Loc = L.Loc
+                        AND   LLI.ID > ''
+                        AND   LLI.Qty + LLI.PendingMoveIn > 0 ) Occupancy
                   WHERE L.Facility = @c_Facility
                   AND   L.Status = 'OK'
                   AND   L.MaxPallet > 0
                   AND   EXISTS (  SELECT 1
                                   FROM STRING_SPLIT(@c_BulkPAZone, ',') PAZone
                                   WHERE TRIM(PAZone.[value]) = L.PutawayZone )
-                  AND   Occupancy.OccupiedLPNCount < L.MaxPallet
+                  AND   Occupancy.TotalPallet < L.MaxPallet
                   ORDER BY CASE WHEN @b_HasPickFace = 1 THEN ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT))
                                 ELSE 0 END
                          , L.LogicalLocation
@@ -378,6 +356,7 @@ BEGIN
                                               , @c_SourceType = @c_SourceType
                                               , @c_SourceKey = @c_SourceKey
                                               , @n_SystemQty = @n_QtyReceived
+                                              , @c_ReservePendingMoveIn = 'Y'
                                               , @c_AreaKey = '?F'
                                               , @c_CallSource = 'ASN'
                                               , @b_Success = @b_Success OUTPUT
