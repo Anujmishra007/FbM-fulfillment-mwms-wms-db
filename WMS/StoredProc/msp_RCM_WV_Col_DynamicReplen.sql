@@ -58,6 +58,10 @@ GO
 /* 2026-04-22         JHT029      2.7         Hotfix for lenght of LogicalLocation (JH17)       */
 /* 2026-05-08         JHT029      2.8         Remove invalid rfputaway if found (JH18)          */
 /* 2026-05-08         JHT029      2.9         FCR-13080 Show SKU without PickFace in error msg(JH19)*/
+/* 2026-09-15         JHT029      3.0         FCR-15623 Single-item carton replen to        */
+/*                                            PickFace + align PickDetail.UOM to 6 for      */
+/*                                            ECOM single order (JH20)                      */
+/* 2026-09-15         JHT029      3.1         FCR-15623 Configurable DPP carton limit (JH21)*/
 /************************************************************************************************/             
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_Col_DynamicReplen]                
       @c_WaveKey NVARCHAR(10),             
@@ -161,7 +165,12 @@ BEGIN
       @n_TotalOrderForSameUCC    INT,          
       @n_TotalAllocQtyForSameUCC INT,                              /*JH08*/          
       @c_GetTaskdetailkey        NVARCHAR(10) = '',                /*JH18*/   
-      @c_UserName                NVARCHAR(100) = SUSER_SNAME()     /*JH18*/   
+      @c_UserName                NVARCHAR(100) = SUSER_SNAME(),    /*JH18*/   
+      @n_MaxCartonPerDPP         INT = 4,                          /*JH21*/   
+      @c_DPPMaxCarton            NVARCHAR(30) = '',                /*JH21*/   
+      @b_SuccessCfg              INT = 0,                          /*JH21*/   
+      @n_ErrCfg                  INT = 0,                          /*JH21*/   
+      @c_ErrMsgCfg               NVARCHAR(250) = ''                /*JH21*/   
           
       SET @c_SourceType = 'msp_RCM_WV_Col_DynamicReplen'            
         
@@ -211,6 +220,29 @@ BEGIN
          END;             
       END            
             
+      /*JH21 Start - FCR-15623 : Get configurable max carton per DPP location, default 4*/
+      BEGIN TRY
+         EXEC dbo.nspGetRight @c_Facility  = @c_Facility       -- nvarchar(5)
+                            , @c_StorerKey = @c_StorerKey      -- nvarchar(15)
+                            , @c_sku       = N''               -- nvarchar(20)
+                            , @c_ConfigKey = N'DPPMaxCarton'   -- nvarchar(30)
+                            , @b_Success   = @b_SuccessCfg   OUTPUT
+                            , @c_authority = @c_DPPMaxCarton OUTPUT
+                            , @n_err       = @n_ErrCfg       OUTPUT
+                            , @c_errmsg    = @c_ErrMsgCfg    OUTPUT
+      END TRY
+      BEGIN CATCH
+         SET @c_DPPMaxCarton = ''
+      END CATCH
+
+      SET @n_MaxCartonPerDPP = TRY_CAST(RTRIM(@c_DPPMaxCarton) AS INT)
+      IF ISNULL(@n_MaxCartonPerDPP,0) <= 0
+         SET @n_MaxCartonPerDPP = 4
+
+      IF @n_debug = 1
+         SELECT '@n_MaxCartonPerDPP', @n_MaxCartonPerDPP
+      /*JH21 End*/
+
   -- Error check for WaveKey existence             
       IF @n_continue = 1 OR @n_continue = 2              
       BEGIN              
@@ -585,7 +617,7 @@ BEGIN
       --END             /*JH07*/  
                  
       IF EXISTS (  SELECT 1 FROM #TMP_PICK TP WITH (NOLOCK)               
-                  WHERE UOM IN ('6', '7') AND FromLocType <> 'DPP'              
+                  WHERE UOM IN ('2','6', '7') AND FromLocType <> 'DPP'   /*JH20*/
                )              
       BEGIN              
           INSERT INTO #TMP_LOC_DPP              
@@ -760,6 +792,74 @@ BEGIN
             END          
             ELSE          
             BEGIN          
+               /*JH20 Start - FCR-15623 : Single-item carton allocated to ECOM single order*/
+               /*             -> replenish to PickFace instead of Conveyor                   */
+               IF @n_UCCQty = 1
+                  AND EXISTS (SELECT 1
+                              FROM PICKDETAIL PD WITH (NOLOCK)
+                              JOIN ORDERS     O  WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
+                              WHERE PD.Storerkey = @c_Storerkey
+                                AND PD.DropID    = @c_DropID
+                                AND PD.Sku       = @c_Sku
+                                AND PD.UOM       = '2'
+                                AND PD.Status    < '5'
+                                AND PD.OrderKey IN (SELECT OrderKey FROM WAVEDETAIL WITH (NOLOCK) WHERE WaveKey = @c_WaveKey)
+                                AND RTRIM(O.OrderGroup)       = 'eCOM'
+                                AND RTRIM(O.ECOM_SINGLE_Flag) = 'S'
+                                AND RTRIM(O.DocType)          = 'E')
+               BEGIN
+                  SET @c_ToLocType = 'PICK'
+
+                  SELECT TOP 1 @c_ToLoc = ISNULL(RTRIM(LOC.Loc),'')
+                  FROM #TMP_LOC_DPP LOC WITH (NOLOCK)
+                  JOIN SKUxLOC      SL  WITH (NOLOCK) ON SL.Loc = LOC.Loc
+                  WHERE LOC.LocationType = 'PICK'
+                    AND LOC.Facility     = @c_Facility
+                    AND SL.Storerkey     = @c_Storerkey
+                    AND SL.Sku           = @c_Sku
+                    AND SL.LocationType  = 'PICK'
+
+                  IF @c_ToLoc = ''
+                  BEGIN
+                     SELECT @n_continue = 3;
+                     SELECT @n_err = 94717;
+                     SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ' SKU:' + @c_Sku + ' No PickFace (msp_RCM_WV_Col_DynamicReplen)';
+                     GOTO RETURN_SP;
+                  END
+
+                  --Align PickDetail.UOM with case 2 so that mspRLWAV10_CPK (WHERE pw.UOM >= '6')
+                  --picks it up and generates the ASTCPK task. TrafficCop = NULL to bypass trigger.
+                  UPDATE PD
+                  SET PD.UOM        = '6'
+                    , PD.TrafficCop = NULL
+                  FROM PICKDETAIL PD WITH (ROWLOCK)
+                  JOIN ORDERS     O  WITH (NOLOCK) ON O.OrderKey = PD.OrderKey
+                  WHERE PD.Storerkey = @c_Storerkey
+                    AND PD.DropID    = @c_DropID
+                    AND PD.Sku       = @c_Sku
+                    AND PD.UOM       = '2'
+                    AND PD.Status    < '5'
+                    AND PD.OrderKey IN (SELECT OrderKey FROM WAVEDETAIL WITH (NOLOCK) WHERE WaveKey = @c_WaveKey)
+                    AND RTRIM(O.OrderGroup)       = 'eCOM'
+                    AND RTRIM(O.ECOM_SINGLE_Flag) = 'S'
+                    AND RTRIM(O.DocType)          = 'E'
+
+                  SET @n_err = @@ERROR
+                  IF @n_err <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_Err = 94726
+                     SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update PICKDETAIL.UOM Failed. (msp_RCM_WV_Col_DynamicReplen)'
+                     GOTO RETURN_SP
+                  END
+
+                  SET @c_UOM = '6'
+
+
+                  GOTO ADD_TASK
+               END
+               /*JH20 End*/
+
                 SET @c_ToLocType = 'PS'  -- Pack Station              
                 SELECT TOP 1 @c_ToLoc = L.Loc FROM Loc L WITH (NOLOCK)             
                 WHERE L.Facility = @c_Facility AND             
@@ -897,7 +997,7 @@ BEGIN
                   GOTO RETURN_SP;             
                END;          
                         
-               --1. Check DPP loc with same sku A from same wave + DPP locLevel > 0 + No of carton < 4          
+               --1. Check DPP loc with same sku A from same wave + DPP locLevel > 0 + No of carton < @n_MaxCartonPerDPP          
                SELECT TOP 1 @c_ToLoc = LOC.LOC --ISNULL(RTRIM(TD.ToLoc),'')              
                FROM #TMP_LOC_DP LOC WITH (NOLOCK)                                               
                JOIN TASKDETAIL  TD  WITH (NOLOCK) ON (LOC.Loc = TD.ToLoc)       
@@ -916,12 +1016,12 @@ BEGIN
                      AND   TD.Wavekey  = @c_Wavekey              
                      AND   TD.Storerkey= @c_Storerkey              
                      AND   TD.Sku      = @c_Sku       
-                     AND   TD2.TotalCaseID < 4  
+                     AND   TD2.TotalCaseID < @n_MaxCartonPerDPP   /*JH21*/
                GROUP BY LOC.LOC, LOC.LogicalLocation, TD2.TotalCaseID           
                --HAVING COUNT(DISTINCT LLI.CaseID) < 4          
                ORDER BY LOC.LogicalLocation          
           
-               --2. DPP loc with different sku B from same wave + DPP locLevel > 0 + No of carton < 4          
+               --2. DPP loc with different sku B from same wave + DPP locLevel > 0 + No of carton < @n_MaxCartonPerDPP          
                IF @c_ToLoc = ''          
                BEGIN      
                   SELECT TOP 1 @c_ToLoc = LOC.LOC         
@@ -935,7 +1035,7 @@ BEGIN
                 AND LOC.LocLevel > 0          
                         AND LOC.Facility = @c_Facility            
                         AND LOC.PickZone = @c_PutawayZone       
-                        AND TD2.TotalCaseID < 4  
+                        AND TD2.TotalCaseID < @n_MaxCartonPerDPP   /*JH21*/
                         AND TD2.SKU = 1
                   GROUP BY LOC.LOC, LOC.LogicalLocation, TD2.TotalCaseID , TD2.SKU  
                   --HAVING COUNT(DISTINCT TD2.SKU) = 1         
