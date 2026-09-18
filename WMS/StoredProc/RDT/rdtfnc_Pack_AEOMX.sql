@@ -3,13 +3,14 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************************************/
-/* Store procedure: rdtfnc_Pack_AEOMX                                                           */
-/* Copyright      : Maersk                                                                      */
-/*                                                                                              */
-/* Date         Rev   Author     Purposes                                                       */
-/* 2026-09-10   1.0.0 JACKC      FCR-16295 AEOMX Pack (based on 838)                            */
-/************************************************************************************************/
+/******************************************************************************************/
+/* Store procedure: rdtfnc_Pack_AEOMX                                                     */
+/* Copyright      : Maersk                                                                */
+/*                                                                                        */
+/* Date         Rev   Author     Purposes                                                 */
+/* 2026-09-10   1.0.0 JACKC      FCR-16295 AEOMX Pack (based on 838)                      */
+/* 2026-09-18   1.1.0 JACKC      UWP-66709 Make PSNO uppercase                            */
+/******************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack_AEOMX] (
    @nMobile    INT,
@@ -491,7 +492,7 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
-      SET @cPickSlipNo = @cInField01
+      SET @cPickSlipNo = UPPER(@cInField01) --V1.1.0
       SET @cFromDropID = @cInField02
       SET @cPackDtlDropID = @cInField03
       SET @cBarcode = @cInField02
@@ -604,7 +605,7 @@ BEGIN
          IF @cPickSlipNo = ''
          BEGIN
             -- Get discrete pick slip
-            SELECT @cPickSlipNo = PickHeaderKey
+            SELECT @cPickSlipNo = UPPER(PickHeaderKey) --V1.1.0
             FROM PickHeader WITH (NOLOCK)
             WHERE OrderKey = @cOrderKey
 
@@ -616,7 +617,7 @@ BEGIN
                SELECT @cLoadKey = LoadKey FROM LoadPlanDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
 
                IF @cLoadKey <> ''
-                  SELECT @cPickSlipNo = PickHeaderKey
+                  SELECT @cPickSlipNo = UPPER(PickHeaderKey) --V1.1.0
                   FROM PickHeader WITH (NOLOCK)
                   WHERE ExternOrderKey = @cLoadKey
                      AND OrderKey = ''

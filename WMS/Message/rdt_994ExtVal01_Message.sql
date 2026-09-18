@@ -18,8 +18,9 @@ execute rdt.rdtAddMsg 280861, 10, '280861PickingPendiente', 'us_english', 994, 0
 execute rdt.rdtAddMsg 280862, 10, '280862PackParcial',      'us_english', 994, 0, '280862: Pack Parcial'
 execute rdt.rdtAddMsg 280863, 10, '280863PickDetailNotFnd', 'us_english', 994, 0, '280863: PickDetail not found'
 execute rdt.rdtAddMsg 280864, 10, '280864InvalidPKDStatus', 'us_english', 994, 0, '280864: Invalid PickDetail Status'
-execute rdt.rdtAddMsg 280865, 10, '280865SortInicioPTW',   'us_english', 994, 0, '280865: Sort Inicio en PTW'
+execute rdt.rdtAddMsg 280865, 10, '280865SortInicioPTW',    'us_english', 994, 0, '280865: Sort Inicio en PTW'
 execute rdt.rdtAddMsg 280866, 10, '280866ECOMQtyMismatch',  'us_english', 994, 0, '280866: ECOM SKU qty mismatch'
 execute rdt.rdtAddMsg 280867, 10, '280867SortInicioPTW',    'us_english', 994, 0, '280867: Sort Inicio en PTW'
+execute rdt.rdtAddMsg 280868, 10, '280868ESC para cerrar',  'us_english', 994, 0, '280868: ESC para cerrar'
 
 select * from rdt.rdtmsg (nolock) where message_id between 280851 and 280900

@@ -13,6 +13,7 @@ GO
 /* Date       Rev    Author      Purposes                                              */
 /* 2026/09/10 1.0.0  Jackc       FCR-16295 Created (copied from 838ExtScn10)           */
 /* 2026/09/12 1.0.1  Jackc       FCR-16295 For ECOM M, PickedQty must be = ExpectedQty */
+/* 2026/09/18 1.1.0  Jackc       UWP-66709 Block Enter at st2 if PSNO is full packed   */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_994ExtVal01 (
@@ -64,8 +65,13 @@ BEGIN
       @cWaveSubType        NVARCHAR( 20),
       @cDropIDLoc          NVARCHAR( 10),
       @cOrderKey           NVARCHAR( 10),
-      @cLoadKey            NVARCHAR( 10),   
-      @nRowCount           INT
+      @cLoadKey            NVARCHAR( 10),
+      @cMsg01              NVARCHAR( 20),
+      @cMsg02              NVARCHAR( 20),
+      @cMsg03              NVARCHAR( 20),
+      @nRowCount           INT,
+      @nPickQTY            INT,
+      @nPackQty            INT
 
    DECLARE @tPKD TABLE (
       PickDetailKey  NVARCHAR( 18) PRIMARY KEY,
@@ -235,6 +241,56 @@ BEGIN
             SELECT @cWaveType = C_String2
             FROM rdt.RDTMOBREC WITH (NOLOCK)
             WHERE Mobile = @nMobile
+
+            --V1.1.0 Cannot continue if PSNO is full packed
+            -- Get PickHeader info
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cLoadKey  = ExternOrderKey
+            FROM dbo.PickHeader WITH (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+
+            -- Calc total packed qty
+            SELECT @nPackQTY = ISNULL(SUM(QTY), 0)
+            FROM dbo.PackDetail WITH (NOLOCK)
+            WHERE PickSlipNo = @cPickSlipNo
+
+            IF @cOrderKey <> ''
+            BEGIN
+               SELECT @nPickQTY = ISNULL(SUM(PD.QTY), 0)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND Status <> '4'
+            END
+            ELSE IF @cLoadKey <> ''
+            BEGIN
+               SELECT @nPickQTY = ISNULL(SUM(PD.QTY), 0)
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+               WHERE LPD.LoadKey = @cLoadKey
+                  AND PD.Status <> '4'
+            END
+
+            IF @nPickQTY = @nPackQTY
+            BEGIN
+               SET @cMsg01 = '280868 - Full packed'
+               SET @cMsg02 = 'ESC para cerrar'
+               SET @cMsg03 = ''
+
+               EXEC rdt.rdtInsertMsgQueue
+                  @nMobile = @nMobile,  
+                  @nErrNo = @nErrNo OUTPUT,  
+                  @cErrMsg = @cErrMsg OUTPUT, -- screen limitation, 20 char max  
+                  @cLine01 = @cMsg01,  
+                  @cLine02 = @cMsg02,  
+                  @cLine03 = @cMsg03,
+                  @nDisplayMsg = 0 
+
+               SET @nErrNo = 280868
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Quit
+            END
+            --V1.1.0 end
 
             IF @cWaveType = 'ECOM' AND @cOption <> '2'
             BEGIN

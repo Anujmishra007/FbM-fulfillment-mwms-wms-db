@@ -6,20 +6,21 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*********************************************************************************/
-/* Store procedure: rdt_838ExtScn10                                              */
-/* Copyright      : Maersk                                                       */
-/* Customer       : AEOMX                                                        */
-/*                                                                               */
-/*                                                                               */
-/* Date        Rev    Author     Purposes                                        */
-/* 2026-06-30  1.0.0  JackC      FCR-12984 Created                               */
-/* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic                  */
-/* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic      */
-/* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic              */
-/* 2026-07-27  1.2.2  JackC      FCR-12984 Get Packed Qty from open PSNO         */
-/* 2026-07-29  1.2.3  JackC      FCR-12984 Ins packdetail back for pre-pack data */
-/*********************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdt_838ExtScn10                                                 */
+/* Copyright      : Maersk                                                          */
+/* Customer       : AEOMX                                                           */
+/*                                                                                  */
+/*                                                                                  */
+/* Date        Rev    Author     Purposes                                           */
+/* 2026-06-30  1.0.0  JackC      FCR-12984 Created                                  */
+/* 2026-07-08  1.1.0  NickT      FCR-14763 Add B2C Single logic                     */
+/* 2026-07-16  1.2.0  JackC      FCR-12984 Update getting carton type logic         */
+/* 2026-07-22  1.2.1  JackC      FCR-12984 Update carton cube logic                 */
+/* 2026-07-27  1.2.2  JackC      FCR-12984 Get Packed Qty from open PSNO            */
+/* 2026-07-29  1.2.3  JackC      FCR-12984 Ins packdetail back for pre-pack data    */
+/* 2026-09-18  1.3.0  JackC      UWP-66709 Remove Notes <> packed when getting PKD  */
+/************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn10] (
    @nMobile      INT,
@@ -433,7 +434,7 @@ BEGIN
                   AND StorerKey = @cStorerKey
                   AND Status = @cPickStatus
                   AND Qty > 0
-                  AND CHARINDEX('[PACKED]', ISNULL(NOTES, '')) = 0
+                  --AND CHARINDEX('[PACKED]', ISNULL(NOTES, '')) = 0 --V1.3.0 Move packed check to step2
 
             IF @@ROWCOUNT = 0
             BEGIN
