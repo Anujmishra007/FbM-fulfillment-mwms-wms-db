@@ -13,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: Q-Commander                                               */
 /*                                                                      */
-/* GitHub Version: 1.1                                                  */
+/* GitHub Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 15-Jul-2026 WLChooi  1.0   Initial Version                           */
 /* 15-Sep-2026 WLChooi  1.1   UWP-66624 Fix Packdetail MERGE issue(WL01)*/
+/* 18-Sep-2026 WLChooi  1.2   UWP-66932 Fix CaseId stamping (WL02)      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc07] (    
@@ -66,7 +67,6 @@ BEGIN
          , @c_HoldUCC                  NVARCHAR(20) = ''
          , @CUR_UNALLOC                CURSOR
          , @n_TotalNewAllocQty         INT = 0
-         , @n_TotalShortCaseQty        INT = 0
          , @n_TotalShortPickQty        INT = 0
          , @c_outstring                NVARCHAR(255) = ''
          , @c_UserKey                  NVARCHAR(18) = ''
@@ -78,6 +78,20 @@ BEGIN
          , @c_CCKey                    NVARCHAR(10) = ''
          , @n_UCCRowRef                BIGINT = 0
          , @n_SkipProcess              INT = 0
+
+   --WL02 S
+   DECLARE @c_CurrPickdetailkey        NVARCHAR(18) = N''
+         , @c_Orderkey                 NVARCHAR(10) = N''
+         , @c_OrderLn                  NVARCHAR(5)  = N''
+         , @c_CartonType               NVARCHAR(10) = N''
+         , @c_DoCartonize              NVARCHAR(1)  = N''
+         , @c_PickSlipNo               NVARCHAR(10) = N''
+         , @c_CaseID                   NVARCHAR(20) = N''
+         , @c_NewPickdetailKey         NVARCHAR(18) = N''
+         , @n_PickQty                  INT          = 0
+         , @n_CaseQty                  INT          = 0
+         , @n_SplitQty                 INT          = 0
+   --WL02 E
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
@@ -173,17 +187,29 @@ BEGIN
        , WaveKey    NVARCHAR(10)
       )
       CREATE NONCLUSTERED INDEX IDX_TRW_WAVEKEY ON #T_RelatedWaves (WaveKey)
+      
+      --WL02 S
+      CREATE TABLE #T_StampCase (
+         CaseID         NVARCHAR(20) NOT NULL
+       , Storerkey      NVARCHAR(15) NOT NULL
+       , SKU            NVARCHAR(20) NOT NULL
+       , Orderkey       NVARCHAR(10) NOT NULL
+       , OrderLn        NVARCHAR(5)  NOT NULL
+       , QtyMoved       INT NOT NULL
+       , CartonType     NVARCHAR(10) NULL
+       , DoCartonize    NVARCHAR(1)  NULL
+       , PickSlipNo     NVARCHAR(10) NULL
+      , PRIMARY KEY (Storerkey, SKU, Orderkey, OrderLn, CaseID)
+      )
 
       CREATE TABLE #T_ShortCases (
          CaseID     NVARCHAR(20) NOT NULL
        , Storerkey  NVARCHAR(15) NOT NULL
        , SKU        NVARCHAR(20) NOT NULL
        , QtyMoved   INT NOT NULL
-       , CartonType  NVARCHAR(10) NULL
-       , DoCartonize NVARCHAR(1)  NULL
-       , PickSlipNo  NVARCHAR(10) NULL
        , PRIMARY KEY (Storerkey, SKU, CaseID)
       )
+      --WL02 E
 
       CREATE TABLE #T_NewLines (
          PickDetailKey NVARCHAR(18) NOT NULL PRIMARY KEY
@@ -676,10 +702,14 @@ BEGIN
       --   ActiveQty = Packdetail.ExpQty or > : no change;
       --   0 < ActiveQty < Packdetail.ExpQty : update ExpQty;
       --   ActiveQty = 0 (all shorted, realloc failed) : delete Packdetail.
-      INSERT INTO #T_ShortCases (CaseID, Storerkey, SKU, QtyMoved, CartonType, DoCartonize, PickSlipNo)
+      --WL02 S
+      INSERT INTO #T_StampCase (CaseID, Storerkey, SKU, Orderkey, OrderLn
+                              , QtyMoved, CartonType, DoCartonize, PickSlipNo)
       SELECT SP.CaseID
            , SP.Storerkey
            , SP.SKU
+           , SP.OrderKey
+           , SP.OrderLineNumber
            , QtyMoved = SUM(SP.QtyMoved)
            , CartonType  = MAX(SP.CartonType)
            , DoCartonize = MAX(SP.DoCartonize)
@@ -692,8 +722,14 @@ BEGIN
       AND EXISTS ( SELECT 1
                   FROM #T_PICKDETAIL_SHORT T
                   WHERE T.Pickdetailkey = SP.PickDetailKey )
-      GROUP BY SP.CaseID, SP.Storerkey, SP.SKU
+      GROUP BY SP.CaseID, SP.Storerkey, SP.SKU, SP.OrderKey, SP.OrderLineNumber
 
+      INSERT INTO #T_ShortCases (CaseID, Storerkey, SKU, QtyMoved)
+      SELECT CaseID, Storerkey, SKU, SUM(QtyMoved) AS QtyMoved
+      FROM #T_StampCase
+      GROUP BY CaseID, Storerkey, SKU
+      --WL02 E
+      
       INSERT INTO #T_NewLines (PickDetailKey, Qty)
       SELECT PD.PickDetailKey
            , PD.Qty
@@ -705,11 +741,11 @@ BEGIN
                      FROM #T_PICKDETAIL_SHORT T
                      WHERE T.Pickdetailkey = PD.PickDetailKey )
       AND (PD.CaseID IS NULL OR PD.CaseID = '')
-
-      SELECT @n_TotalNewAllocQty = ISNULL(N.TotalQty, 0)
-           , @n_TotalShortCaseQty = ISNULL(S.TotalQty, 0)
-      FROM ( SELECT TotalQty = SUM(Qty) FROM #T_NewLines ) N
-      CROSS JOIN ( SELECT TotalQty = SUM(QtyMoved) FROM #T_ShortCases ) S
+      
+      --WL02 S
+      SELECT @n_TotalNewAllocQty = ISNULL(SUM(Qty), 0)
+      FROM #T_NewLines
+      --WL02 E
 
       -- Post allocation validation
       IF @n_TotalNewAllocQty = 0
@@ -722,33 +758,173 @@ BEGIN
             BEGIN TRAN
          END
 
-         IF @n_TotalNewAllocQty > 0 AND @n_TotalNewAllocQty <= @n_TotalShortCaseQty
+         --WL02 S
+         IF @n_TotalNewAllocQty > 0
          BEGIN
-            -- Stamp by qty bucket: each short case owns a contiguous range (e.g. 1-8, 9-16).
-            -- New line inherits CaseID where its CumStart falls within that range.
-            ;WITH NewLinesRunning AS (
-               SELECT PickDetailKey
-                    , CumStart = SUM(Qty) OVER (ORDER BY PickDetailKey) - Qty + 1
-               FROM #T_NewLines
-            ),
-            ShortCasesRunning AS (
-               SELECT CaseID
-                    , CartonType
-                    , DoCartonize
-                    , PickSlipNo
-                    , CumStart = SUM(QtyMoved) OVER (ORDER BY CaseID) - QtyMoved + 1
-                    , CumEnd   = SUM(QtyMoved) OVER (ORDER BY CaseID)
-               FROM #T_ShortCases
-            )
-            UPDATE PD
-            SET CaseID      = SC.CaseID
-              , CartonType  = SC.CartonType
-              , DoCartonize = SC.DoCartonize
-              , PickSlipNo  = SC.PickSlipNo
-            FROM #PickDetail_WIP PD
-            JOIN NewLinesRunning NL ON PD.PickDetailKey = NL.PickDetailKey
-            JOIN ShortCasesRunning SC ON NL.CumStart BETWEEN SC.CumStart AND SC.CumEnd
+            --NEW LINE
+            DECLARE CUR_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT NL.PickDetailKey
+                 , NL.Qty
+                 , PD.OrderKey
+                 , PD.OrderLineNumber
+            FROM #T_NewLines NL
+            JOIN #PickDetail_WIP PD ON PD.PickDetailKey = NL.PickDetailKey
+            ORDER BY NL.PickDetailKey
+
+            OPEN CUR_Pick
+
+            FETCH NEXT FROM CUR_Pick
+            INTO @c_CurrPickdetailkey
+               , @n_PickQty
+               , @c_Orderkey
+               , @c_OrderLn
+
+            WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
+            BEGIN
+               WHILE @n_PickQty > 0 AND @n_Continue = 1
+               BEGIN
+                  SELECT TOP 1
+                         @c_CaseID = CaseID
+                       , @n_CaseQty = QtyMoved
+                       , @c_CartonType = CartonType
+                       , @c_DoCartonize = DoCartonize
+                       , @c_PickSlipNo = PickSlipNo
+                  FROM #T_StampCase
+                  WHERE Storerkey = @c_StorerKey
+                  AND   SKU = @c_SKU
+                  AND   Orderkey = @c_Orderkey
+                  AND   OrderLn = @c_OrderLn
+                  AND   QtyMoved > 0
+                  ORDER BY CaseID
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     -- No matching CaseID capacity remains; leave the current WIP quantity unassigned.
+                     BREAK
+                  END
+                  ELSE IF @n_PickQty <= @n_CaseQty
+                  BEGIN
+                     UPDATE #PickDetail_WIP
+                     SET CaseID = @c_CaseID
+                       , CartonType = @c_CartonType
+                       , DoCartonize = @c_DoCartonize
+                       , PickSlipNo = @c_PickSlipNo
+                     WHERE PickDetailKey = @c_CurrPickdetailkey
+
+                     UPDATE #T_StampCase
+                     SET QtyMoved = QtyMoved - @n_PickQty
+                     WHERE Storerkey = @c_StorerKey
+                     AND   SKU = @c_SKU
+                     AND   Orderkey = @c_Orderkey
+                     AND   OrderLn = @c_OrderLn
+                     AND   CaseID = @c_CaseID
+
+                     SET @n_PickQty = 0
+                  END
+                  ELSE -- New line crosses the current old CaseID capacity.
+                  BEGIN -- pickqty > taskqty
+                     SET @n_SplitQty = @n_PickQty - @n_CaseQty
+
+                     EXECUTE nspg_GetKey 'PICKDETAILKEY'
+                                       , 10
+                                       , @c_NewPickdetailKey OUTPUT
+                                       , @b_Success OUTPUT
+                                       , @n_Err OUTPUT
+                                       , @c_ErrMsg OUTPUT
+
+                     IF NOT @b_Success = 1
+                     BEGIN
+                        SET @n_Continue = 3
+                     END
+
+                     IF @n_Continue = 1
+                     BEGIN
+                        INSERT INTO #PickDetail_WIP ( [PickDetailKey], [CaseID], [PickHeaderKey], [OrderKey], [OrderLineNumber]
+                                                    , [Lot], [Storerkey], [Sku], [AltSku], [UOM], [UOMQty], [Qty], [QtyMoved]
+                                                    , [Status], [DropID], [Loc], [ID], [PackKey], [UpdateSource], [CartonGroup]
+                                                    , [CartonType], [ToLoc], [DoReplenish], [ReplenishZone], [DoCartonize]
+                                                    , [PickMethod], [WaveKey], [EffectiveDate], [OptimizeCop], [ShipFlag]
+                                                    , [PickSlipNo], [TaskDetailKey], [TaskManagerReasonKey], [Notes]
+                                                    , [MoveRefKey], [WIP_Refno], [Channel_ID] )
+                        SELECT PickdetailKey = @c_NewPickdetailKey
+                             , CaseID = ''
+                             , pw.PickHeaderKey
+                             , pw.OrderKey
+                             , pw.OrderLineNumber
+                             , pw.Lot
+                             , pw.Storerkey
+                             , pw.Sku
+                             , pw.AltSku
+                             , pw.UOM
+                             , pw.UOMQty
+                             , Qty = @n_SplitQty
+                             , pw.QtyMoved
+                             , pw.[Status]
+                             , pw.DropID
+                             , pw.Loc
+                             , pw.ID
+                             , pw.PackKey
+                             , pw.UpdateSource
+                             , pw.CartonGroup
+                             , pw.CartonType
+                             , pw.ToLoc
+                             , pw.DoReplenish
+                             , pw.ReplenishZone
+                             , pw.DoCartonize
+                             , pw.PickMethod
+                             , pw.WaveKey
+                             , pw.EffectiveDate
+                             , OptimizeCop = '9'
+                             , pw.ShipFlag
+                             , pw.PickSlipNo
+                             , pw.TaskDetailKey
+                             , pw.TaskManagerReasonKey
+                             , Notes = 'Ref Pickdetailkey: ' + @c_CurrPickdetailkey + ', Qty: '
+                                       + CONVERT(NVARCHAR(10), @n_PickQty)
+                             , pw.MoveRefKey
+                             , pw.WIP_Refno
+                             , pw.Channel_ID
+                        FROM #PickDetail_WIP AS pw
+                        WHERE pw.PickDetailKey = @c_CurrPickdetailkey
+
+                        INSERT INTO #T_NewLines ( PickDetailKey, Qty )
+                        VALUES ( @c_NewPickdetailKey, @n_SplitQty )
+                     END
+
+                     IF @n_Continue = 1
+                     BEGIN
+                        UPDATE #PickDetail_WIP
+                        SET CaseID = @c_CaseID
+                          , CartonType = @c_CartonType
+                          , DoCartonize = @c_DoCartonize
+                          , PickSlipNo = @c_PickSlipNo
+                          , Qty = @n_CaseQty
+                        WHERE PickDetailKey = @c_CurrPickdetailkey
+
+                        UPDATE #T_StampCase
+                        SET QtyMoved = 0
+                        WHERE Storerkey = @c_StorerKey
+                        AND   SKU = @c_SKU
+                        AND   Orderkey = @c_Orderkey
+                        AND   OrderLn = @c_OrderLn
+                        AND   CaseID = @c_CaseID
+
+                        SET @n_PickQty = @n_SplitQty
+                        SET @c_CurrPickdetailkey = @c_NewPickdetailKey
+                     END
+                  END
+               END -- While PickQty > 0
+
+               FETCH NEXT FROM CUR_Pick
+               INTO @c_CurrPickdetailkey
+                  , @n_PickQty
+                  , @c_Orderkey
+                  , @c_OrderLn
+            END
+            CLOSE CUR_Pick
+            DEALLOCATE CUR_Pick
          END
+         --WL02 E
 
          -- Clear CaseID on shorted lines before persisting WIP
          UPDATE SP
@@ -1043,6 +1219,11 @@ BEGIN
 
    IF OBJECT_ID('tempdb..#T_NewLines ','u') IS NOT NULL 
       DROP TABLE #T_NewLines
+
+   --WL02 S
+   IF OBJECT_ID('tempdb..#T_StampCase ','u') IS NOT NULL 
+      DROP TABLE #T_StampCase
+   --WL02 E
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
