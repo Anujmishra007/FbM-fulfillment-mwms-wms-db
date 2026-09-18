@@ -133,10 +133,8 @@ AS
             AND @cDocType = 'E'
             AND @cShipFlag = 'M')
         BEGIN
-
-            SET @cMessage = 'ENVIA PTW STATION M'
+			SET @cMessage = 'ENVIA PTW ECOM M'
             SET @cSingleDesc = 'ECOM - MULTI - B2C'
-
         END
   
         -- E-COMMERCE SINGLE
@@ -144,28 +142,23 @@ AS
             AND @cDocType = 'E'
             AND @cShipFlag = 'S')
         BEGIN
-
-            SET @cMessage = 'ENVIA PACK ECOM S'
+			SET @cMessage = 'ENVIA PACK ECOM S'
             SET @cSingleDesc = 'ECOM - SINGLE - B2C'
-
         END
 
         -- RETAIL
         IF (@cType = 'RTL'
             AND @cDocType = 'N')
         BEGIN
-
-            SET @cMessage = 'ENVIA PTW STATION RTL'
+			SET @cMessage = 'ENVIA PTW RETAIL'
             SET @cSingleDesc = 'RETAIL'
-
         END
 
         -- WHOLESALE
         IF (@cType = 'WHSL'
             AND @cDocType = 'N')
         BEGIN
-
-            SET @cMessage = 'ENVIA PTW STATION WHSL'
+			SET @cMessage = 'ENVIA PTW WHOLESALE'
             SET @cSingleDesc = 'WHOLESALE'
         END
 
