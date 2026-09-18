@@ -86,7 +86,9 @@ BEGIN
         @cLOT                   NVARCHAR( 10),  -- LOTxLOCxID.Lot
         @cLot03                 NVARCHAR( 18),  -- LOTATTRIBUTE.Lottable03 (avoid conflict with @cLottable03 param)
         @cReceiptKey            NVARCHAR( 10),  -- RECEIPTDETAIL.ReceiptKey (GRN path)
-        @cReceiptLineNo         NVARCHAR(  5)   -- RECEIPTDETAIL.ReceiptLineNumber (GRN path)
+        @cReceiptLineNo         NVARCHAR(  5),   -- RECEIPTDETAIL.ReceiptLineNumber (GRN path)
+        @cTransmitflag          NVARCHAR(  5),   -- TRANSMITLOG2.Transmitflag (GRN path)
+        @cTransmitLogKey2       NVARCHAR( 10)   -- TRANSMITLOG2.TransmitLogKey (GRN path)
 
     -- Initialize output parameters
     SET @nAfterScn = @nScn
@@ -123,8 +125,8 @@ BEGIN
 
                 IF @nRowCount = 0
                 BEGIN
-                    SET @nErrNo = 280555
-                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280555 Inventory not found for PalletKey
+                    SET @nErrNo = 280551
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280551 Inventory not found for PalletKey
                     GOTO SCN_6829_Fail
                 END
 
@@ -149,8 +151,8 @@ BEGIN
                     @cErrMsg         OUTPUT
                 IF @bSuccess <> 1
                 BEGIN
-                    SET @nErrNo = 280551
-                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280551 TransmitLog2 key generation failed
+                    SET @nErrNo = 280552
+                    SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280552 TransmitLog2 key generation failed
                     GOTO SCN_6829_Fail
                 END
 
@@ -168,27 +170,62 @@ BEGIN
 
                     IF NULLIF(@cReceiptKey, '') IS NULL
                     BEGIN
-                        SET @nErrNo = 280552
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280552 Receipt detail not found for pallet
+                        SET @nErrNo = 280553
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280553 Receipt detail not found for pallet
                         GOTO SCN_6829_Fail
                     END
 
-                    BEGIN TRY
-                        IF NOT EXISTS(SELECT 1 FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-                                       WHERE TableName = 'WSNSCPRECCFM'
-                                         AND Key1 = @cReceiptKey
-                                         AND Key2 = @cReceiptLineNo
-                                         AND Key3 = @cStorerKey)
-                        BEGIN
+                    SET @cTransmitflag = ''
+                    SET @cTransmitLogKey2 = ''
+                    SELECT
+                        @cTransmitflag = Transmitflag,
+                        @cTransmitLogKey2 = TransmitLogKey
+                    FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                    WHERE TableName = 'WSNSCPRECCFM'
+                        AND Key1 = @cReceiptKey
+                        AND Key2 = @cReceiptLineNo
+                        AND Key3 = @cStorerKey
+                    ORDER BY transmitlogkey DESC
+
+                    SELECT @nRowCount = @@ROWCOUNT
+                    SET @cTransmitflag = ISNULL(@cTransmitflag, '')  -- Avoid NULL for comparison
+                    SET @cTransmitLogKey2 = ISNULL(@cTransmitLogKey2, '')  -- Avoid NULL for comparison
+
+                    IF @nRowCount > 1
+                    BEGIN
+                        SET @nErrNo = 280554
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280554 Multiple TransmitLog2 records found (GRN)
+                        GOTO SCN_6829_Fail
+                    END
+
+                    IF @nRowCount = 1 AND @cTransmitflag = '9'
+                    BEGIN
+                        BEGIN TRY
+                            UPDATE dbo.TRANSMITLOG2 WITH (ROWLOCK)
+                            SET 
+                                Transmitflag = 0,
+                                EditDate = GETDATE(),
+                                EditWho = SUSER_SNAME()
+                            WHERE TransmitLogKey = @cTransmitLogKey2
+                        END TRY
+                        BEGIN CATCH
+                            SET @nErrNo = 280555
+                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280555 TransmitLog2 update failed (GRN)
+                            GOTO SCN_6829_Fail
+                        END CATCH
+                    END
+                    ELSE
+                    BEGIN
+                        BEGIN TRY
                             INSERT INTO dbo.TRANSMITLOG2 (TransmitLogKey, TableName, Key1, Key2, Key3, TransmitFlag)
                             VALUES (@cTransmitLogKey, 'WSNSCPRECCFM', @cReceiptKey, @cReceiptLineNo, @cStorerKey, '0')
-                        END
-                    END TRY
-                    BEGIN CATCH
-                        SET @nErrNo = 280553
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280553 TransmitLog2 insert failed (GRN)
-                        GOTO SCN_6829_Fail
-                    END CATCH
+                        END TRY
+                        BEGIN CATCH
+                            SET @nErrNo = 280556
+                            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280556 TransmitLog2 insert failed (GRN)
+                            GOTO SCN_6829_Fail
+                        END CATCH
+                    END
                 END
                 ELSE
                 BEGIN
@@ -205,8 +242,8 @@ BEGIN
                         END
                     END TRY
                     BEGIN CATCH
-                        SET @nErrNo = 280554
-                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280554 TransmitLog2 insert failed (GRN Patch)
+                        SET @nErrNo = 280557
+                        SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- 280557 TransmitLog2 insert failed (GRN Patch)
                         GOTO SCN_6829_Fail
                     END CATCH
                 END
