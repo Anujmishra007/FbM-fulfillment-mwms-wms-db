@@ -203,7 +203,7 @@ BEGIN
                         BEGIN TRY
                             UPDATE dbo.TRANSMITLOG2 WITH (ROWLOCK)
                             SET 
-                                Transmitflag = 0,
+                                Transmitflag = '0',
                                 EditDate = GETDATE(),
                                 EditWho = SUSER_SNAME()
                             WHERE TransmitLogKey = @cTransmitLogKey2
