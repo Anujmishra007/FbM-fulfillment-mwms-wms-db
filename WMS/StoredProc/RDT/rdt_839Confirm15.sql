@@ -234,8 +234,8 @@ BEGIN
    (
       RowIndex             INT IDENTITY(1,1),
       SerialNo             NVARCHAR(30), 
-      OldPickDetailKey     NVARCHAR(10),
-      NewPickDetailKey     NVARCHAR(10)
+      OldPickDetailKey     NVARCHAR(18),
+      NewPickDetailKey     NVARCHAR(18)
    )
 
    -- Get lottable filter
