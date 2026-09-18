@@ -244,7 +244,7 @@ BEGIN
                                      WHERE TRIM(PAZone.[value]) = L.PutawayZone )
                      AND   L.LocBay = @c_PickBay
                      AND   ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT)) <= 2
-                     AND   Occupancy.TotalPallet < L.MaxPallet
+                     AND   ISNULL(Occupancy.TotalPallet, 0) < L.MaxPallet
                      ORDER BY ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT))
                             , L.LogicalLocation
                             , L.Loc
@@ -311,7 +311,7 @@ BEGIN
                   AND   EXISTS (  SELECT 1
                                   FROM STRING_SPLIT(@c_BulkPAZone, ',') PAZone
                                   WHERE TRIM(PAZone.[value]) = L.PutawayZone )
-                  AND   Occupancy.TotalPallet < L.MaxPallet
+                  AND   ISNULL(Occupancy.TotalPallet, 0) < L.MaxPallet
                   ORDER BY CASE WHEN @b_HasPickFace = 1 THEN ABS(TRY_CAST(L.LogicalLocation AS INT) - TRY_CAST(@c_PickLogicalLoc AS INT))
                                 ELSE 0 END
                          , L.LogicalLocation
