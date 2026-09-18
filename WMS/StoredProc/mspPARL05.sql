@@ -329,7 +329,7 @@ BEGIN
                END
 
                SELECT @c_ToID = IIF(LOC.LoseID = '1', '', @c_FromID)
-               FROM dbo.LOC (NOLOCK)
+               FROM dbo.LOC WITH (NOLOCK)
                WHERE LOC.Loc = @c_SuggestLoc
                AND LOC.Facility = @c_Facility
 
@@ -421,7 +421,7 @@ BEGIN
    BEGIN
       IF @n_NoOfTasks > 0  
       BEGIN
-         SET @c_errmsg = 'Total ' + @c_TaskType + ' Task: ' + CONVERT(NVARCHAR(5), @n_NoOfTasks)+ ' released sucessfully.'
+         SET @c_errmsg = 'Total ' + @c_TaskType + ' Task: ' + CONVERT(NVARCHAR(5), @n_NoOfTasks)+ ' released successfully.'
       END
       ELSE IF @n_NoOfTasks = 0  
       BEGIN
