@@ -87,7 +87,7 @@ BEGIN
          , @c_DoCartonize              NVARCHAR(1)  = N''
          , @c_PickSlipNo               NVARCHAR(10) = N''
          , @c_CaseID                   NVARCHAR(20) = N''
-         , @c_NewPickdetailKey         NVARCHAR(10) = N''
+         , @c_NewPickdetailKey         NVARCHAR(18) = N''
          , @n_PickQty                  INT          = 0
          , @n_CaseQty                  INT          = 0
          , @n_SplitQty                 INT          = 0
