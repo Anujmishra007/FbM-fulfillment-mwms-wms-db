@@ -80,7 +80,7 @@ BEGIN
          , @n_SkipProcess              INT = 0
 
    --WL02 S
-   DECLARE @c_CurrPickdetailkey        NVARCHAR(10) = N''
+   DECLARE @c_CurrPickdetailkey        NVARCHAR(18) = N''
          , @c_Orderkey                 NVARCHAR(10) = N''
          , @c_OrderLn                  NVARCHAR(5)  = N''
          , @c_CartonType               NVARCHAR(10) = N''
