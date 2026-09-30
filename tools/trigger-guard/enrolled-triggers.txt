@@ -1,0 +1,26 @@
+# WMS FN839 Phase 2 — triggers enrolled for the dual-run migration guard.
+#
+# Format:  <triggerName><whitespace><path relative to repo root>
+# Lines beginning with '#' are comments.
+#
+# Enrollment ONLY adds the dormant guard line; it does NOT cut a trigger over to Java.
+# Cutover happens separately, by adding the trigger name to a service's
+# WM.lsp_SetTriggerOwner CSV (see application.yml connection-init-sql) once its Java
+# handler is deployed and parity-passed. See memory dual-run-trigger-routing.
+#
+# Owner column is documentation only (which service reproduces the body in Phase 2):
+#   allocation = mcl-mwms-inventory-allocation-service
+#   inventory  = mcl-mwms-inventory-service
+#   order      = mcl-mwms-order-service
+
+# name                    path
+# --- allocation (pilot; guard applied BY HAND, listed here so --check verifies it) ---
+ntrPickDetailUpdate       WMS/Trigger/ntrPickDetailUpdate.sql
+
+# --- inventory (children of ntrPickDetailUpdate's LOTxLOCxID / LOT writes) ---
+ntrLOTXLOCXIDUpdate       WMS/Trigger/ntrLOTXLOCXIDUpdate.sql
+ntrLotUpdate              WMS/Trigger/ntrLotUpdate.sql
+
+# --- order (children of ntrPickDetailUpdate's ORDERDETAIL write) ---
+ntrOrderDetailUpdate      WMS/Trigger/ntrOrderDetailUpdate.sql
+ntrOrderHeaderUpdate      WMS/Trigger/ntrOrderHeaderUpdate.sql
