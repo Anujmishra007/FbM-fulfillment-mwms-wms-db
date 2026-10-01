@@ -24,3 +24,13 @@ ntrLotUpdate              WMS/Trigger/ntrLotUpdate.sql
 # --- order (children of ntrPickDetailUpdate's ORDERDETAIL write) ---
 ntrOrderDetailUpdate      WMS/Trigger/ntrOrderDetailUpdate.sql
 ntrOrderHeaderUpdate      WMS/Trigger/ntrOrderHeaderUpdate.sql
+
+# --- putaway (FN1819 Phase 2; owner column = mcl-mwms-putaway-service) ---
+# ntrRFPutawayDelete is anchored (--apply). Add/Update have no `IF @@ROWCOUNT = 0` preamble, so the guard was
+# inserted BY HAND right after the trigger's outer `AS BEGIN`, byte-identical to GUARD_BLOCK.
+# The repo has two ntrRFPutawayUpdate bodies (same object name dbo.ntrRFPutawayUpdate). Which one is deployed
+# is pilot probe P5 (docs/functions/FN1819/pilot-probes.md), so both are guarded and both are listed here.
+ntrRFPutawayAdd           WMS/Trigger/ntrRFPutawayAdd.sql
+ntrRFPutawayUpdate        WMS/Trigger/ntrRFPutawayUpdate.sql
+ntrRFPutawayUpdate        WMS/Trigger/RDT/RDT.ntrRFPutawayUpdate.sql
+ntrRFPutawayDelete        WMS/Trigger/ntrRFPutawayDelete.sql
