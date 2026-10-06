@@ -32,6 +32,19 @@ ON  [dbo].[RFPutaway]
 FOR INSERT
 AS
 BEGIN
+
+/* ---- WMS-MIGRATION GUARD (FN839 Phase 2 dual-run) - codegen-managed, do not hand-edit. ----
+   Skip this trigger's body ONLY when the request is from the MODERN app AND this trigger is
+   already migrated to Java (its wms.skip.<name> flag is set for the session). Every other case
+   - legacy caller, or trigger not yet migrated - falls through and runs the body as today.
+   Placed AFTER the @@ROWCOUNT check so that check still sees the row count untouched.
+   Signals are set once per connection by WM.lsp_SetTriggerOwner. See memory dual-run-trigger-routing. */
+IF CONVERT(NVARCHAR(20), SESSION_CONTEXT(N'wms.app_source')) = N'MODERN'
+   AND CONVERT(INT, ISNULL(SESSION_CONTEXT(CONCAT(N'wms.skip.', OBJECT_NAME(@@PROCID))), 0)) = 1
+BEGIN
+   RETURN
+END
+/* ---- END WMS-MIGRATION GUARD ---- */
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
