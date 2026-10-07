@@ -24,3 +24,8 @@ ntrLotUpdate              WMS/Trigger/ntrLotUpdate.sql
 # --- order (children of ntrPickDetailUpdate's ORDERDETAIL write) ---
 ntrOrderDetailUpdate      WMS/Trigger/ntrOrderDetailUpdate.sql
 ntrOrderHeaderUpdate      WMS/Trigger/ntrOrderHeaderUpdate.sql
+
+# --- FN1864 (pallet pick-confirm) — inventory; SKUxLOC audit-stamp own-body (Tier A).
+#     Guard is DORMANT: ntrSKUxLOCUpdate stays owner=DB (Team-A-locked). See
+#     WMS-Modernization/docs/functions/FN1864/phase2-trigger-plan.md ---
+ntrSKUxLOCUpdate          WMS/Trigger/ntrSkuXLocUpdate.sql
