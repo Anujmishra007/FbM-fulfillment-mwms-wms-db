@@ -36,3 +36,7 @@ ntrReceiptDetailAdd       WMS/Trigger/ntrReceiptDetailAdd.sql
 ntrReceiptDetailUpdate    WMS/Trigger/ntrReceiptDetailUpdate.sql
 # ntrReceiptHeaderUpdate fires as a CHILD of every detail OpenQty / ASNStatus write; flip together with the detail triggers.
 ntrReceiptHeaderUpdate    WMS/Trigger/ntrReceiptHeaderUpdate.sql
+# ntrUCCUpdate (inventory-domain table) is guarded for inbound's own UCC writes (ReceiptDetailUpdateOwnBody, interim
+# I-9). It stays DB-owned: nspItrnAddDepositCheck.sql:1155 updates UCC on inbound's connection without TrafficCop, and
+# its hold block writes TRANSMITLOG2/3 (docs/functions/FN600/trigger-migration-plan.md, ledger T5-*).
+ntrUCCUpdate              WMS/Trigger/ntrUCCUpdate.sql
