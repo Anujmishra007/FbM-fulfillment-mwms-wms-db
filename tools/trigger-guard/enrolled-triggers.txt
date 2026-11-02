@@ -44,3 +44,12 @@ ntrSKUxLOCUpdate          WMS/Trigger/ntrSkuXLocUpdate.sql
 ntrSKUxLOCAdd             WMS/Trigger/ntrSKUxLOCAdd.sql
 ntrPalletHeaderUpdate     WMS/Trigger/ntrPalletHeaderUpdate.sql
 ntrUCCUpdate              WMS/Trigger/ntrUCCUpdate.sql
+
+# FN1819 E2E wave 1 (2026-11-02): the UCC / serial / hold / pick branches of the putaway-by-ID move chain are ported
+# to Java, so the triggers on the tables they write go owner MODERN on putaway's connection too.
+ntrSerialNoUpdate         WMS/Trigger/ntrSerialNoUpdate.sql
+# FN1819 E2E wave 2: ispSXL01 (SKUXLOCTrigger_SP hook) updates LOC on the putaway move.
+ntrLocUpdate              WMS/Trigger/ntrLocUpdate.sql
+# FN1819 E2E wave 2: ispGenTransmitLog2 / the TBLREGMV insert of the ntrItrnAdd MV interfaces write TRANSMITLOG2.
+# No IF @@ROWCOUNT = 0 preamble: guard placed by hand right after BEGIN (as ntrItrnAdd).
+ntrTransmitlog2Add        WMS/Trigger/ntrTransmitlog2Add.sql
