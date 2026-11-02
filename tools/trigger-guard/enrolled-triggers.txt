@@ -34,3 +34,13 @@ ntrRFPutawayAdd           WMS/Trigger/ntrRFPutawayAdd.sql
 ntrRFPutawayUpdate        WMS/Trigger/ntrRFPutawayUpdate.sql
 ntrRFPutawayUpdate        WMS/Trigger/RDT/RDT.ntrRFPutawayUpdate.sql
 ntrRFPutawayDelete        WMS/Trigger/ntrRFPutawayDelete.sql
+
+# FN1819 Pattern A, Java route (2026-11-02): every trigger the putaway-by-ID move chain fires is owner MODERN on
+# putaway's connection (PATTERN_A_JAVA_MODERN_PLAN.md). ntrItrnAdd and ntrSKUxLOCAdd have no IF @@ROWCOUNT = 0
+# preamble, so their guard is placed by hand right after the trigger's BEGIN (same as ntrRFPutawayAdd).
+ntrItrnAdd                WMS/Trigger/ntrItrnAdd.sql
+ntrIDUpdate               WMS/Trigger/ntrIDUpdate.sql
+ntrSKUxLOCUpdate          WMS/Trigger/ntrSkuXLocUpdate.sql
+ntrSKUxLOCAdd             WMS/Trigger/ntrSKUxLOCAdd.sql
+ntrPalletHeaderUpdate     WMS/Trigger/ntrPalletHeaderUpdate.sql
+ntrUCCUpdate              WMS/Trigger/ntrUCCUpdate.sql
