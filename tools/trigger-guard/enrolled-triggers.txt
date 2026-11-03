@@ -53,3 +53,6 @@ ntrLocUpdate              WMS/Trigger/ntrLocUpdate.sql
 # FN1819 E2E wave 2: ispGenTransmitLog2 / the TBLREGMV insert of the ntrItrnAdd MV interfaces write TRANSMITLOG2.
 # No IF @@ROWCOUNT = 0 preamble: guard placed by hand right after BEGIN (as ntrItrnAdd).
 ntrTransmitlog2Add        WMS/Trigger/ntrTransmitlog2Add.sql
+# FN1819 E2E wave 3b: isp_ReplenSwapLot's PICKDETAIL split inserts a row (PickDetailAdded). No BEGIN / @@ROWCOUNT
+# preamble: guard placed by hand right after AS.
+ntrPickDetailAdd          WMS/Trigger/ntrPickDetailAdd.sql
