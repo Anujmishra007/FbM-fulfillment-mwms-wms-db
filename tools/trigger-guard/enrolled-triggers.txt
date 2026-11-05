@@ -59,3 +59,10 @@ ntrPickDetailAdd          WMS/Trigger/ntrPickDetailAdd.sql
 # FN1819 E2E wave 3c-1: the DP chain's nsp_lotgen inserts LOTATTRIBUTE (DepositChain.lotGen). No @@ROWCOUNT
 # preamble: guard placed by hand right after BEGIN.
 ntrLotattributeAdd        WMS/Trigger/ntrLotattributeAdd.sql
+
+# FN839 / FN1864 PickingInfo A2 (2026-11-05): scan-in (rdtfnc_PickPiece / rdtfnc_PickPallet_NEW) and the auto
+# scan-out (rdt_PickPiece_ScanOut / rdt_PickPallet_ScanOut) write dbo.PickingInfo from allocation's connection;
+# both PickingInfo triggers are owner MODERN there. ntrPickingInfoAdd has no IF @@ROWCOUNT = 0 preamble: guard
+# placed by hand right after BEGIN. ntrPickingInfoUpdate has the preamble: guard applied by the codegen.
+ntrPickingInfoAdd         WMS/Trigger/ntrPickingInfoAdd.sql
+ntrPickingInfoUpdate      WMS/Trigger/ntrPickingInfoUpdate.sql
