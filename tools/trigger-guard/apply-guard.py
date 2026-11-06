@@ -59,7 +59,9 @@ ANCHOR_RE = re.compile(
     r"(?P<anchor>^[ \t]*IF[ \t]+@@ROWCOUNT[ \t]*=[ \t]*0[ \t]*\r?\n"
     r"(?:[ \t]*BEGIN[ \t]*\r?\n)?"
     r"[ \t]*RETURN[ \t]*\r?\n"
-    r"(?:[ \t]*END[ \t]*\r?\n)?)",
+    # END may carry a trailing comment (ntrSKUxLOCUpdate: "END -- @@ROWCOUNT = 0"). Without it the guard lands
+    # inside the IF block after RETURN, as dead code, and the DB body is never skipped.
+    r"(?:[ \t]*END\b[^\r\n]*\r?\n)?)",
     re.IGNORECASE | re.MULTILINE,
 )
 
